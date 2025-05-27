@@ -47,6 +47,7 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
          -e AWS_REGION=us-east-1 \
          -e PDF_PATH=data/fsi_data.pdf \
          -e "DOMAIN=International Finance" \
+         .....
          qa-extractor \
          python processing_local.py
      ```
@@ -69,6 +70,7 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
          -e AWS_REGION=us-east-1 ^
          -e PDF_PATH=data/fsi_data.pdf ^
          -e "DOMAIN=International Finance" ^
+         .....
          qa-extractor ^
          python processing_local.py
      ```
@@ -79,7 +81,7 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
 Unstructured-qa-extractor 이미지는 Amazon SageMaker Processing Jobs를 통해 배치 작업으로 실행할 수 있습니다:
 
 1. ECR에 이미지 푸시:
-    아래 명령어들은 각각 ECR 인증, 이미지 태깅, 저장소 생성, 이미지 푸시 과정을 수행합니다. 로컬에서 빌드한 Docker 이미지를 AWS ECR에 등록하여 SageMaker에서 사용할 수 있게 합니다.```
+    터미널에서 아래 명령어들은 각각 ECR 인증, 이미지 태깅, 저장소 생성, 이미지 푸시 과정을 수행합니다. 로컬에서 빌드한 Docker 이미지를 AWS ECR에 등록하여 SageMaker에서 사용할 수 있게 합니다.```
      ```bash
      # ECR 로그인 - AWS 인증 수행
      aws ecr get-login-password --region <your-region> | docker login --username AWS --password-stdin <your-account-id>.dkr.ecr.<your-region>.amazonaws.com

@@ -9,6 +9,7 @@ from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 import json 
 import boto3
 import os
+import argparse  # 추가: 명령줄 인자 처리를 위한 모듈
 
 """
 SageMaker Processing Job용 PDF 파싱 및 질문 생성 스크립트
@@ -20,6 +21,9 @@ SageMaker Processing Job용 PDF 파싱 및 질문 생성 스크립트
 4) 체인 구성(Runnable 파이프라인)
 5) PDF 요소들에 대해 체인 실행 & 질의응답 생성
 6) 최종 JSONL 파일로 S3에 저장
+
+processing_local.py와 다른점은 LLM 객체 생성 부분을 전역에서 함수 내부로 이동하고 domain, num_questions, model_id을 인자로 받을 수 있도록 argparse 및 main 함수 수정
+
 """
 
 # -------------------------------------------------------------------
@@ -67,7 +71,7 @@ def extract_elements_from_pdf(filepath):
         filename=filepath,
         extract_images_in_pdf=True, 
         infer_table_structure=True,  
-        chunking_strategy="by_title",  #"by_page"
+        chunking_strategy="by_title",  #see : https://docs.unstructured.io/api-reference/partition/chunking
         #page_numbers=list(range(1, 7)),  # 1~6 페이지 명시
         max_characters=4000,  
         new_after_n_chars=3800, 
@@ -100,49 +104,29 @@ ANSWER should be a complete sentence.
 #Format:
 ```json
 {{
-    "QUESTION": "바이든 대통령이 서명한 '안전하고 신뢰할 수 있는 AI 개발과 사용에 관한 행정명령'의 주요 목적 중 하나는 무엇입니까?",
-    "ANSWER": "바이든 대통령이 서명한 행정명령의 주요 목적은 AI의 안전 마련과 보안 기준 마련을 위함입니다."
+    "QUESTION": "테슬라가 공개한 차세대 로봇 '옵티머스 2.0'의 핵심 개선점 중 하나는 무엇입니까?",
+    "ANSWER": "테슬라가 공개한 차세대 로봇 옵티머스 2.0의 핵심 개선점은 자체 설계한 근전도 센서를 활용해 정밀한 손동작을 구현한 것입니다."
 }},
 {{
-    "QUESTION": "메타의 라마2가 오픈소스 모델 중에서 어떤 유형의 작업에서 가장 우수한 성능을 발휘했습니까?",
-    "ANSWER": "메타의 라마2는 RAG 없는 질문과 답변 및 긴 형식의 텍스트 생성에서 오픈소스 모델 중 가장 우수한 성능을 발휘했습니다."    
+    "QUESTION": "오픈AI가 발표한 GPT-5 연구 방향에서 가장 강조된 목표는 무엇입니까?",
+    "ANSWER": "오픈AI가 발표한 GPT-5 연구 방향에서 가장 강조된 목표는 장기적 추론 능력 향상입니다."
 }},
 {{
-    "QUESTION": "IDC 예측에 따르면 2027년까지 생성 AI 플랫폼과 애플리케이션 시장의 매출은 얼마로 전망되나요?",
-    "ANSWER": "IDC 예측에 따르면 2027년까지 생성 AI 플랫폼과 애플리케이션 시장의 매출은 283억 달러로 전망됩니다."    
+    "QUESTION": "파이낸셜 타임즈 보고서에 따르면 2030년까지 글로벌 양자컴퓨팅 시장 규모는 얼마로 예상되나요?",
+    "ANSWER": "파이낸셜 타임즈 보고서에 따르면 2030년까지 글로벌 양자컴퓨팅 시장 규모는 125억 달러로 예상됩니다."
 }}
 ```
 """
 )
 
 # -------------------------------------------------------------------
-# 4) AWS Bedrock 클라이언트 설정
+# 4) 유틸리티 함수 정의
 # -------------------------------------------------------------------
 # SageMaker는 실행 역할의 권한을 사용하므로 별도의 자격증명이 필요 없음
-print("AWS Bedrock 클라이언트 설정 중...")
+
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 print(f"AWS 리전: {AWS_REGION}")
 
-bedrock_client = boto3.client(
-    service_name='bedrock-runtime',
-    region_name=AWS_REGION
-)
-
-# Bedrock Claude 모델 설정
-llm = ChatBedrock(
-    model_id="anthropic.claude-3-5-sonnet-20240620-v1:0",
-    client=bedrock_client,
-    model_kwargs={
-        "temperature": 0,
-        "max_tokens": 2000,
-    },
-    streaming=True,
-    callbacks=[StreamingStdOutCallbackHandler()]
-)
-
-# -------------------------------------------------------------------
-# 5) 체인 구성
-# -------------------------------------------------------------------
 def custom_json_parser(response):
     """
     응답에서 JSON 형식의 텍스트를 추출하고 파싱합니다.
@@ -168,6 +152,7 @@ def custom_json_parser(response):
         print(f"파싱 시도한 텍스트: {json_text}")
         return []
 
+
 def format_docs(input_dict):
     """
     체인에 전달할 입력을 형식화합니다.
@@ -184,22 +169,51 @@ def format_docs(input_dict):
         "num_questions": input_dict["num_questions"]
     }
 
-# 체인 구성
-chain = (
-    RunnablePassthrough(format_docs)
-    | prompt
-    | llm
-    | StrOutputParser()
-    | custom_json_parser
-)
+
+
+
+
+
 
 # -------------------------------------------------------------------
 # 6) 메인 실행 함수
 # -------------------------------------------------------------------
-def main():
+def main(domain="International Finance", num_questions="5", model_id="anthropic.claude-3-5-sonnet-20240620-v1:0"): #for arguments parsing
     print("PDF 질문 생성 작업 시작...")
+    print(f"도메인: {domain}, 질문 수: {num_questions}, 모델: {model_id}")
     
     try:
+        # AWS Bedrock 클라이언트 설정
+        print("AWS Bedrock 클라이언트 설정 중...")
+        bedrock_client = boto3.client(
+            service_name='bedrock-runtime',
+            region_name=AWS_REGION
+        )
+        # Bedrock Claude 모델 설정
+        llm = ChatBedrock(
+            model_id=model_id,  # 전달받은 model_id 사용            
+            client=bedrock_client,
+            model_kwargs={
+                "temperature": 0,
+                "max_tokens": 2000,
+            },
+            streaming=True,
+            callbacks=[StreamingStdOutCallbackHandler()]
+        )
+        
+        # -------------------------------------------------------------------
+        # 5) 체인 구성 : Runnable 파이프라인 정의
+        # -------------------------------------------------------------------
+
+        # 체인 구성
+        chain = (
+            RunnablePassthrough(format_docs)
+            | prompt
+            | llm
+            | StrOutputParser()
+            | custom_json_parser
+        )
+        
         # 1) PDF 파일에서 요소 추출
         elements = extract_elements_from_pdf(PDF_FILE_PATH)
         print(f"추출된 요소 수: {len(elements)}")
@@ -233,5 +247,20 @@ def main():
         print(f"처리 중 오류 발생: {str(e)}")
         raise
 
+
+
+
 if __name__ == "__main__":
-    main()
+    # 명령줄 인자 파싱
+    parser = argparse.ArgumentParser(description='PDF에서 QA 쌍을 생성하는 스크립트')
+    parser.add_argument('--domain', type=str, default='International Finance',
+                        help='QA 생성을 위한 도메인 (예: "International Finance", "외환정책")')
+    parser.add_argument('--num_questions', type=str, default='5',
+                        help='각 PDF 요소마다 생성할 질문 수')
+    parser.add_argument('--model_id', type=str, default='anthropic.claude-3-5-sonnet-20240620-v1:0',
+                        help='사용할 Bedrock 모델 ID')
+    
+    args = parser.parse_args()
+    
+    # 파싱된 인자를 main 함수에 전달
+    main(domain=args.domain, num_questions=args.num_questions, model_id=args.model_id)
