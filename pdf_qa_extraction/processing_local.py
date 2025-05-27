@@ -74,6 +74,7 @@ def extract_elements_from_pdf(filepath):
         max_characters=4000,  
         new_after_n_chars=3800, 
         combine_text_under_n_chars=2000, 
+        #batch_size=10,  # 한 번에 처리할 페이지 수 (메모리 사용량 조절)
     )
 
 

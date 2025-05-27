@@ -1,10 +1,10 @@
 # PDF QA 추출
 
-이 디렉터리는 PDF 문서에서 질문-답변 쌍을 추출하는 도구를 포함하고 있습니다.
+이 도구는 GPU를 활용하여 PDF 문서에서 블록 단위로 텍스트를 추출하고, Amazon Bedrock의 Claude 모델을 사용하여 추출된 내용에서 고품질 질문-답변 쌍을 자동 생성합니다. 이 과정을 통해 문서의 지식을 구조화된 QA JSON 데이터셋으로 변환하여 학습, 미세 조정 또는 지식 베이스 구축에 활용할 수 있습니다.
 
 ## 설치 안내
 
-### Unstructured Docker 이미지 빌드하기
+### Unstructured CUDA Docker 이미지 빌드하기
 
 Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력한 도구를 제공합니다. 이 도구는 문서의 블럭단위 text추출을 수행하여 구조화된 형식으로 데이터를 변환합니다. Docker 환경을 설정하려면 다음 단계를 따르세요:
 
@@ -14,70 +14,45 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
      ```bash
      docker build -t qa-extractor -f Dockerfile .
      ```
-3. 로컬 컨테이너에서 실행하는 방법:
-     
-     **환경 변수 설정 방법:**
-     로컬에서 실행할 때는 python processing_local.py 과 동일 경로에  `.env` 파일을 사용하여 환경 변수를 설정할 수 있습니다. AWS 플랫폼(예: EC2, ECS, Lambda) 내에서 실행할 경우에는 액세스 키를 `.env` 파일에 저장하지 말고 IAM 역할을 사용하는 것이 보안 모범 사례입니다.
-
-     -  `.env` 파일 생성 후 필요한 환경 변수 추가 예:
-          ```
-          AWS_ACCESS_KEY_ID=YOUR_ACCESS_KEY
-          AWS_SECRET_ACCESS_KEY=YOUR_SECRET_KEY
-          AWS_REGION=USER_REGION
-          PDF_PATH=data/fsi_data.pdf
-          DOMAIN=International Finance
-          NUM_QUESTIONS=5
-          ```
-     
-
-     **Linux/macOS:**
-     ```bash
-     docker run --rm --gpus all \
-          -v $(pwd):/app \
-          -w /app \
-          --env-file .env \
-          qa-extractor \
-          python processing_local.py
-
-     #또는
-
-     docker run --rm --gpus all \
-         -v $(pwd):/app  \
-         -w /app \
-         -e AWS_REGION=us-east-1 \
-         -e PDF_PATH=data/fsi_data.pdf \
-         -e "DOMAIN=International Finance" \
-         .....
-         qa-extractor \
-         python processing_local.py
-     ```
-     
-
-     **Windows:**
-     ```bash
-     docker run --rm --gpus all ^
-         -v %cd%:/app ^
-         -w /app ^
-         --env-file .env ^
-         qa-extractor ^
-         python processing_local.py
-     
-     #또는, 
-     
-     docker run --rm --gpus all ^
-         -v %cd%:/app  ^
-         -w /app ^
-         -e AWS_REGION=us-east-1 ^
-         -e PDF_PATH=data/fsi_data.pdf ^
-         -e "DOMAIN=International Finance" ^
-         .....
-         qa-extractor ^
-         python processing_local.py
-     ```
 
 
-### GPU기반 PDF Extractor 와 SageMaker Processing Jobs
+### GPU기반 PDF Extractor 활용 가이드
 
+#### 1. 로컬 GPU 환경에서 실행
+
+Unstructured Extractor는 GPU를 활용하여 PDF 문서에서 텍스트를 빠르게 추출합니다. Docker 컨테이너는 NVIDIA GPU를 지원하며, 다음과 같이 실행할 수 있습니다:
+
+```bash
+# Linux/macOS
+docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env qa-extractor python processing_local.py
+
+# Windows
+docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env qa-extractor python processing_local.py
+```
+
+GPU 지원이 활성화되어 있는지 확인하려면:
+```bash
+docker run --rm --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
+```
+
+#### 환경 변수 설정
+
+실행 시 다음 환경 변수를 설정해야 합니다:
+- `AWS_REGION`: AWS 리전 (예: us-east-1)
+- `PDF_PATH`: 처리할 PDF 파일 경로
+- `DOMAIN`: 문서의 주제 도메인 (예: "International Finance")
+- `NUM_QUESTIONS`: 생성할 질문 수
+
+> **참고**: 로컬 테스트 용도로만 `.env` 파일을 사용하세요. 프로덕션 환경에서는 IAM 역할을 사용하는 것이 좋습니다.
+
+#### 성능 최적화 팁
+
+- 대용량 PDF 파일(100MB 이상)은 처리 전 분할하는 것이 좋습니다
+- CUDA 호환 GPU가 있는 환경에서 실행하면 처리 속도가 5-10배 향상됩니다
+- 메모리 사용량을 모니터링하고 필요한 경우 `batch_size` 파라미터를 조정하세요 (코드의 partition_pdf 참조)
+
+
+#### 2. SageMaker Processing Job에서 실행 
 Unstructured-qa-extractor 이미지는 Amazon SageMaker Processing Jobs를 통해 배치 작업으로 실행할 수 있습니다:
 
 1. ECR에 이미지 푸시:
