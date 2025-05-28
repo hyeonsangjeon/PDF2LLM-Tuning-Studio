@@ -24,6 +24,7 @@ test-volume.txt
 outputs/
 unsloth_compiled_cache/
 .env*
+test.py
 
 # Distribution / packaging
 .Python
