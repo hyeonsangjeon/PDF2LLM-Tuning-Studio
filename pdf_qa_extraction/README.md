@@ -21,6 +21,11 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
      docker build -t qa-extractor -f Dockerfile .
      ```
 
+     ```bash
+     # Event Engine 실습 계정은 네트워크 제한이 있어 이 Dockerfile_eventeng를 사용해야 합니다.
+     docker build -t qa-extractor -f Dockerfile_event_eng .     
+     ```
+
 
 ### GPU기반 PDF Extractor 활용 가이드
 
@@ -49,7 +54,28 @@ docker run --rm --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
 - `DOMAIN`: 문서의 주제 도메인 (예: "International Finance")
 - `NUM_QUESTIONS`: 생성할 질문 수
 
-> **참고**: 로컬 테스트 용도로만 `.env` 파일을 사용하세요. 프로덕션 환경에서는 IAM 역할을 사용하는 것이 좋습니다.
+```bash
+# Create .env file
+touch .env
+
+# Open .env file with vi editor
+vi .env
+
+# Press 'i' to enter insert mode and add the following content:
+# App Setting
+PDF_PATH=data/fsi_data.pdf
+DOMAIN=International Finance
+NUM_QUESTIONS=5
+
+# AWS Configuration 
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your_access_key_here
+AWS_SECRET_ACCESS_KEY=your_secret_key_here
+
+# Press ESC and type :wq to save and exit
+```
+
+> **참고**: 로컬 테스트 용도로만 `.env` 파일을 사용하세요. 프로덕션 환경에서는 IAM 역할을 사용하는 것이 참조아키택쳐 사항입니다. 절대로 AWS Key를 외부 노출에 주의하시기 바랍니다.
 
 #### 성능 최적화 팁
 
