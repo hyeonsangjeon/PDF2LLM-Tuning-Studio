@@ -19,7 +19,10 @@ PDF2LLM-Tuning-Studio/
 │
 ├── pdf_qa_extraction/       # PDF 처리 및 Q&A 추출 모듈
 │   ├── Dockerfile           # GPU 지원 PDF 추출 컨테이너
+|   |── Dockerfile_event_eng # AWS Event 실습플렛폼의 네트워크 패키지 경로로 인한 Dockerfile 대용 
 │   ├── processing_local.py  # 로컬 처리 스크립트
+│   ├── processing.py        #SageMaker Processing job entrypoint 배치잡 실행파일
+│   ├── sagemaker_processingjob_pdf_qa_extraction.ipynb # SageMaker Processing을 활용한 PDF 기반 QA 데이터 생성 배치 파이프라인 자동화 데모
 │   └── README.md            # PDF 추출 가이드
 │
 └── fine_tuning/             # LLM 파인튜닝 모듈
