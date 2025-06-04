@@ -65,8 +65,12 @@ touch .env
 
 # Open .env file with vi editor
 vi .env
+```
 
-# Press 'i' to enter insert mode and add the following content:
+i를 눌러 입력 모드 진입
+아래 내용을 복사-붙여넣기:
+
+```bash
 # App Setting
 PDF_PATH=data/fsi_data.pdf
 DOMAIN=International Finance
