@@ -76,6 +76,7 @@ NUM_QUESTIONS=5
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=your_access_key_here
 AWS_SECRET_ACCESS_KEY=your_secret_key_here
+AWS_SESSION_TOKEN=your_session_token_here
 
 # Press ESC and type :wq to save and exit
 ```

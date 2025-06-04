@@ -132,11 +132,14 @@ AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY_ID")
 print(f"AWS_REGION: {AWS_REGION}")
 print(f"Extracting Sentences from PDF to JSONL with AWS Bedrock Claude which is a LLM Professor Personality prepared test questions.")
 AWS_SECRET_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+AWS_SESSION_TOKEN = os.environ.get('AWS_SESSION_TOKEN')
+
 bedrock_client = boto3.client(
     service_name='bedrock-runtime',
     region_name=AWS_REGION,
     aws_access_key_id=AWS_ACCESS_KEY,
-    aws_secret_access_key=AWS_SECRET_KEY
+    aws_secret_access_key=AWS_SECRET_KEY,
+    aws_session_token=AWS_SESSION_TOKEN
 )
 #-------------------------------------------------------------------
 # see https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html
