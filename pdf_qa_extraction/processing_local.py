@@ -2,9 +2,13 @@ from dotenv import load_dotenv
 from unstructured.partition.pdf import partition_pdf
 from langchain_core.prompts import PromptTemplate
 from langchain_aws import ChatBedrock
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+#from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain_core.callbacks import StreamingStdOutCallbackHandler
 from langchain_core.prompts import PromptTemplate
-from langchain.schema import StrOutputParser
+#from langchain.schema import StrOutputParser
+from langchain_core.output_parsers import StrOutputParser
+
+
 from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 import json 
 import boto3

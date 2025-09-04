@@ -51,27 +51,16 @@ RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 && \
 ENV PATH="/usr/local/cuda-12.4/bin:${PATH}"
 
 # -------------------------
-# 5) Python 패키지 설치 (Python 3.11 pip)
+# 5) Python 패키지 설치 (requirements.txt 사용)
 # -------------------------
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
-        "unstructured[base]" \
-        opencv-python \
-        pdf2image \
-        pdfminer.six==20231228 \
-        pytesseract \
-        python-dotenv \
-        "unstructured[pdf]" \
-        langchain-core \
-        boto3 \
-        langchain-aws \
-        langchain
+    pip install --no-cache-dir -r requirements.txt
 
 # -------------------------
 # 6) 작업 디렉토리 설정
 # -------------------------
 #WORKDIR /app
-
 
 # -------------------------
 # 컨테이너 실행 시 기본 명령
