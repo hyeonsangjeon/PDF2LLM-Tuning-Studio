@@ -75,6 +75,7 @@ i를 눌러 입력 모드 진입
 PDF_PATH=data/fsi_data.pdf
 DOMAIN=International Finance
 NUM_QUESTIONS=5
+NUM_IMG_QUESTIONS=1
 
 # AWS Configuration 
 AWS_REGION=us-east-1

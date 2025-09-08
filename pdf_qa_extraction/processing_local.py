@@ -1,18 +1,17 @@
+import json
+import os
+import base64
+import glob
+
 from dotenv import load_dotenv
 from unstructured.partition.pdf import partition_pdf
 from langchain_core.prompts import PromptTemplate
 from langchain_aws import ChatBedrock
-#from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain_core.callbacks import StreamingStdOutCallbackHandler
-from langchain_core.prompts import PromptTemplate
-#from langchain.schema import StrOutputParser
 from langchain_core.output_parsers import StrOutputParser
-
-
 from langchain_core.runnables import RunnablePassthrough, RunnableParallel
-import json 
+from langchain_core.messages import HumanMessage
+from langchain_core.callbacks import StreamingStdOutCallbackHandler
 import boto3
-import os
 
 """
 local_processing.py
@@ -79,13 +78,54 @@ def extract_elements_from_pdf(filepath):
         new_after_n_chars=3800, 
         combine_text_under_n_chars=2000, 
         #batch_size=10,  # 한 번에 처리할 페이지 수 (메모리 사용량 조절)
+        extract_image_block_output_dir="figures",  # 이미지 추출 디렉토리 지정
     )
+
+def encode_image_to_base64(image_path):
+    """
+    이미지 파일을 base64로 인코딩합니다.
+    
+    Args:
+        image_path (str): 인코딩할 이미지 파일 경로
+        
+    Returns:
+        str: base64로 인코딩된 이미지 데이터
+    """
+    try:
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            return encoded_string
+    except Exception as e:
+        print(f"이미지 인코딩 에러 {image_path}: {e}")
+        return None
+
+def get_extracted_images(figures_dir="figures"):
+    """
+    figures 디렉토리에서 추출된 이미지 파일들을 찾습니다.
+    
+    Args:
+        figures_dir (str): 이미지가 저장된 디렉토리
+        
+    Returns:
+        list: 이미지 파일 경로 리스트
+    """
+    if not os.path.exists(figures_dir):
+        return []
+    
+    image_extensions = ['*.png', '*.jpg', '*.jpeg', '*.bmp', '*.gif']
+    image_files = []
+    
+    for extension in image_extensions:
+        image_files.extend(glob.glob(os.path.join(figures_dir, extension)))
+    
+    return sorted(image_files)
 
 
 # -------------------------------------------------------------------
 # 3) 프롬프트 템플릿 정의
 # -------------------------------------------------------------------
-prompt = PromptTemplate.from_template(
+# 텍스트용 프롬프트
+text_prompt = PromptTemplate.from_template(
     """Context information is below. You are only aware of this context and nothing else.
 ---------------------
 
@@ -123,6 +163,99 @@ ANSWER should be a complete sentence.
 """
 )
 
+# 이미지용 프롬프트 메시지 생성 함수
+def create_image_prompt_message(image_base64, domain, num_img_questions, image_path=""):
+    """
+    이미지 분석을 위한 프롬프트 메시지를 생성합니다.
+    
+    Args:
+        image_base64 (str): base64로 인코딩된 이미지 데이터
+        domain (str): 분야/도메인
+        num_questions (str): 생성할 질문 수
+        image_path (str): 이미지 파일 경로 (포맷 감지용)
+        
+    Returns:
+        HumanMessage: 이미지와 텍스트가 포함된 메시지
+    """
+    # 이미지 확장자로부터 포맷 감지
+    image_format = "png"  # 기본값
+    if image_path:
+        ext = os.path.splitext(image_path)[1].lower()
+        if ext in ['.jpg', '.jpeg']:
+            image_format = "jpeg"
+        elif ext in ['.png']:
+            image_format = "png"
+        elif ext in ['.gif']:
+            image_format = "gif"
+        elif ext in ['.bmp']:
+            image_format = "bmp"
+    
+    return HumanMessage(content=[
+        {
+            "type": "text",
+            "text": f"""
+Analyze this image and generate question-answer pairs.
+
+You are a professor/teacher in the {domain} field.
+Your task is to create exactly **{num_img_questions}** questions for an upcoming quiz/exam.
+You must not create more or fewer questions than this number.
+
+**MANDATORY RULES - VIOLATION WILL RESULT IN FAILURE:**
+1. **EXACT DATA ONLY**: Use ONLY the exact numbers, dates, and text visible in the image. Do NOT interpret, convert, or modify any values.
+2. **PRECISE READING**: Read dates, numbers, and labels character-by-character as they appear. For example, if you see "12.3일", it means December 3rd, NOT November 13th.
+3. **NO ASSUMPTIONS**: Do not assume relationships, trends, or meanings beyond what is explicitly shown.
+4. **VERIFY BEFORE WRITING**: Before writing each answer, mentally point to the exact location in the image where that information appears.
+5. **CONSERVATIVE APPROACH**: If you cannot clearly read a specific value or date, do not create a question about it.
+
+**DATA ACCURACY REQUIREMENTS:**
+- Charts/Graphs: Only reference data points where both X-axis (date/time) AND Y-axis (value) are clearly visible
+- Tables: Only reference cells where both row and column headers are clear
+- Text: Only reference text that is completely legible
+- Numbers: Copy numbers exactly as shown (including decimal points, units like bp, %, etc.)
+
+**FORBIDDEN ACTIONS:**
+- Converting date formats (e.g., 12.3 ≠ 11.13)
+- Estimating values between data points
+- Creating questions about unclear or partially visible content
+- Using information from chart legends if the actual data is unclear
+
+**Question Types to Focus On:**
+- Direct reading of clearly visible data points
+- Identification of clearly labeled chart/table elements
+- Reading of section titles, page numbers, or menu items
+- Comparison of clearly visible values (highest, lowest, specific dates)
+
+Write questions and answers in Korean and respond in JSON format.
+Do not use arrays/lists in the JSON format.
+
+
+#Format:
+```json
+{{
+    "QUESTION": "CDS 프리미엄 차트에서 12월 17일의 수치는 얼마입니까?",
+    "ANSWER": "CDS 프리미엄 차트에서 12월 17일의 수치는 36.3bp입니다."
+}},
+{{
+    "QUESTION": "목차에서 개선 방안의 첫 번째 항목은 무엇입니까?",
+    "ANSWER": "목차에서 개선 방안의 첫 번째 항목은 '건전성 규제 완화'입니다."
+}},
+{{
+    "QUESTION": "9월 전후 지표 악화 차트에서 외환 차익거래유인 최고점은 언제 기록되었습니까?",
+    "ANSWER": "9월 전후 지표 악화 차트에서 외환 차익거래유인 최고점은 10월 2일경에 기록되었습니다."
+}}
+```
+"""                
+        },
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": f"image/{image_format}",
+                "data": image_base64
+            }
+        }
+    ])
+
 
 #-------------------------------------------------------------------
 # 4) AWS Bedrock(Claude) 클라이언트 설정
@@ -150,8 +283,8 @@ bedrock_client = boto3.client(
 #--------------------------------------------------------------------
 # Bedrock Claude 모델 설정
 llm = ChatBedrock(
-    model_id="anthropic.claude-3-sonnet-20240229-v1:0",    
-    #model_id="anthropic.claude-3-5-sonnet-20240620-v1:0",    
+    model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+    #model_id="anthropic.claude-3-5-sonnet-20240620-v1:0",
     #model_id="anthropic.claude-3-7-sonnet-20250219-v1:0",
     client=bedrock_client,
     model_kwargs={
@@ -194,13 +327,54 @@ def format_docs(input_dict):
         "num_questions": input_dict["num_questions"]
     }
 
-chain = (
+# 텍스트 처리용 체인
+text_chain = (
     RunnablePassthrough(format_docs)
-    | prompt
+    | text_prompt
     | llm
     | StrOutputParser()
     | custom_json_parser
 )
+
+# 이미지 처리 함수
+def process_image_with_llm(image_path, domain, num_img_questions):
+    """
+    이미지를 LLM으로 처리해서 Q&A 생성
+    
+    Args:
+        image_path (str): 이미지 파일 경로
+        domain (str): 분야/도메인
+        num_img_questions (str): 생성할 질문 수
+        
+    Returns:
+        list: 생성된 Q&A 쌍 리스트
+    """
+    try:
+        # 이미지를 base64로 인코딩
+        image_base64 = encode_image_to_base64(image_path)
+        if not image_base64:
+            return []
+        
+        # 이미지 프롬프트 메시지 생성
+        message = create_image_prompt_message(image_base64, domain, num_img_questions, image_path)
+        
+        # LLM으로 이미지 처리
+        response = llm.invoke([message])
+        
+        # 응답을 JSON으로 파싱
+        parsed_response = custom_json_parser(response)
+        
+        # 이미지 소스 정보 추가
+        for qa in parsed_response:
+            qa['source'] = 'image'
+            qa['image_path'] = os.path.basename(image_path)
+        
+        print(f"이미지 처리 완료: {os.path.basename(image_path)} - {len(parsed_response)}개 Q&A 생성")
+        return parsed_response
+        
+    except Exception as e:
+        print(f"이미지 처리 에러 {image_path}: {e}")
+        return []
 
 
 def main():
@@ -217,32 +391,62 @@ def main():
     num_questions = os.environ.get("NUM_QUESTIONS", "5")
     print(f"Number of questions to generate: {num_questions}")
     
+    # Get number of image questions from environment variable or use default
+    num_img_questions = os.environ.get("NUM_IMG_QUESTIONS", "1")
+    
     
     # 6-1) PDF 파일에서 요소 추출     
     elements = extract_elements_from_pdf(pdf_path)
     print(f"추출된 요소 수: {len(elements)}")
     
-    # 6-2) 추출된 요소 각각에 대해 chain 실행
-    qa_pair = []
-    #for element in elements[1:]:
+    # 6-2) 추출된 텍스트 요소 각각에 대해 text_chain 실행
+    qa_pairs = []
+    text_count = 0
+    
+    print("\n=== 텍스트 요소 처리 시작 ===")
     for element in elements:
-        if element.text:
-            response = chain.invoke({
-                "context": element.text,                
-                "domain": domain,
-                #"domain": "AI",
-                #"domain": "Finance",
-                "num_questions": num_questions
-            })
-            # 여러 문서 조각 합치기
-            qa_pair.extend(response)
-            
-    # 6-3) JSONL로 결과 저장
+        if element.text and element.text.strip():  # 빈 텍스트 제외
+            try:
+                response = text_chain.invoke({
+                    "context": element.text,                
+                    "domain": domain,
+                    "num_questions": num_questions
+                })
+                qa_pairs.extend(response)
+                text_count += 1
+                print(f"텍스트 요소 {text_count} 처리 완료 - {len(response)}개 Q&A 생성")
+            except Exception as e:
+                print(f"텍스트 요소 처리 에러: {e}")
+    
+    print(f"텍스트 처리 완료: 총 {text_count}개 요소에서 {len(qa_pairs)}개 Q&A 생성")
+    
+    # 6-3) 추출된 이미지들 처리
+    print("\n=== 이미지 요소 처리 시작 ===")
+    image_files = get_extracted_images("figures")
+    image_count = 0
+    
+    if image_files:
+        print(f"발견된 이미지 파일: {len(image_files)}개")
+        for image_path in image_files:
+            image_qa = process_image_with_llm(image_path, domain, num_img_questions)
+            qa_pairs.extend(image_qa)
+            if image_qa:
+                image_count += 1
+    else:
+        print("추출된 이미지가 없습니다.")
+    
+    print(f"이미지 처리 완료: 총 {image_count}개 이미지에서 {sum(1 for qa in qa_pairs if qa.get('source') == 'image')}개 Q&A 생성")
+    
+    # 6-4) JSONL로 결과 저장
+    os.makedirs("data", exist_ok=True)  # data 디렉토리가 없으면 생성
+    
     with open("data/qa_pairs.jsonl", "w", encoding='utf-8') as f:
-        for item in qa_pair:
+        for item in qa_pairs:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
     
-    print("[INFO] QA 생성 완료! data/qa_pairs.jsonl 파일에 저장되었습니다.")
+    print(f"\n[INFO] QA 생성 완료! 총 {len(qa_pairs)}개 Q&A가 data/qa_pairs.jsonl 파일에 저장되었습니다.")
+    print(f"- 텍스트에서 생성: {len([qa for qa in qa_pairs if qa.get('source') != 'image'])}개")
+    print(f"- 이미지에서 생성: {len([qa for qa in qa_pairs if qa.get('source') == 'image'])}개")
 
 
 if __name__ == "__main__":
