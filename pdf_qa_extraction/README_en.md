@@ -1,5 +1,7 @@
 # PDF QA Extraction
 
+[English](README_en.md) | [한국어](README.md)
+
 This tool leverages GPU acceleration to extract text blocks from PDF documents and uses Amazon Bedrock's Claude model to automatically generate high-quality question-answer pairs from the extracted content. Through this process, document knowledge is transformed into structured QA JSON datasets that can be used for training, fine-tuning, or knowledge base construction.
 
 [PDF QA Extraction Process Video Guide](https://assets.fsi.kr/videos/qna-extract.mp4)
