@@ -51,12 +51,15 @@ print(f"출력 파일 경로: {OUTPUT_FILE_PATH}")
 # -------------------------------------------------------------------
 # 2) PDF 파티셔닝 함수 정의
 # -------------------------------------------------------------------
-def extract_elements_from_pdf(filepath):
+def extract_elements_from_pdf(filepath, table_model=None):
     """
     Extracts elements from a PDF file using specified partitioning strategies.
     
     Args:
         filepath (str): The path to the PDF file to be processed.
+        table_model (str, optional): The table detection model to use. 
+                                   Options: "yolox", "table-transformer", "tatr"
+                                   If None, infer_table_structure will be disabled.
 
     Returns:
         list: A list of extracted elements from the PDF.
@@ -69,18 +72,37 @@ def extract_elements_from_pdf(filepath):
         max_characters (int): The maximum number of characters in a chunk. Defaults to 4000.
         new_after_n_chars (int): The number of characters after which a new chunk is created. Defaults to 3800.
         combine_text_under_n_chars (int): The number of characters under which text is combined into a single chunk. Defaults to 2000.
+        
+    Available table_model options:
+        - None: Disable table detection
+        - "yolox": Default YOLOX (fast)
+        - "yolox_quantized": Quantized YOLOX (ultra-fast)
+        - "table-transformer": Microsoft model (high accuracy)
+        - "tatr": Table Transformer improved (balanced)
+        - "detectron2": Meta model (highest accuracy)
+        - "detectron2_onnx": Meta ONNX (optimized)
+        - "paddle": PaddleOCR (Chinese specialized)
     """
-    return partition_pdf(
-        filename=filepath,
-        extract_images_in_pdf=True, 
-        infer_table_structure=True,  
-        chunking_strategy="by_title",  #see : https://docs.unstructured.io/api-reference/partition/chunking
-        #page_numbers=list(range(1, 7)),  # 1~6 페이지 명시
-        max_characters=4000,  
-        new_after_n_chars=3800, 
-        combine_text_under_n_chars=2000,
-        extract_image_block_output_dir="figures",  # 이미지 추출 디렉토리 지정
-    )
+    # 테이블 모델 옵션 설정
+    partition_kwargs = {
+        "filename": filepath,
+        "extract_images_in_pdf": True,
+        "chunking_strategy": "by_title",  #see : https://docs.unstructured.io/api-reference/partition/chunking
+        #"page_numbers": list(range(1, 7)),  # 1~6 페이지 명시
+        "max_characters": 4000,
+        "new_after_n_chars": 3800,
+        "combine_text_under_n_chars": 2000,
+        "extract_image_block_output_dir": "figures",  # 이미지 추출 디렉토리 지정
+    }
+    
+    # 테이블 모델이 지정된 경우에만 테이블 구조 추론 활성화
+    if table_model:
+        partition_kwargs["infer_table_structure"] = True
+        partition_kwargs["table_model"] = table_model
+    else:
+        partition_kwargs["infer_table_structure"] = False
+        
+    return partition_pdf(**partition_kwargs)
 
 def encode_image_to_base64(image_path):
     """
@@ -356,7 +378,7 @@ def process_image_with_llm(image_path, domain, num_img_questions, llm):
 # -------------------------------------------------------------------
 # 6) 메인 실행 함수
 # -------------------------------------------------------------------
-def main(domain="International Finance", num_questions="5", num_img_questions="1", model_id="anthropic.claude-3-5-sonnet-20240620-v1:0"): #for arguments parsing
+def main(domain="International Finance", num_questions="5", num_img_questions="1", model_id="anthropic.claude-3-5-sonnet-20240620-v1:0", table_model=None): #for arguments parsing
     print("PDF 질문 생성 작업 시작...")
     print(f"도메인: {domain}, 텍스트 질문 수: {num_questions}, 이미지 질문 수: {num_img_questions}, 모델: {model_id}")
     
@@ -393,7 +415,7 @@ def main(domain="International Finance", num_questions="5", num_img_questions="1
         )
         
         # 1) PDF 파일에서 요소 추출
-        elements = extract_elements_from_pdf(PDF_FILE_PATH)
+        elements = extract_elements_from_pdf(PDF_FILE_PATH, table_model=table_model)
         print(f"추출된 요소 수: {len(elements)}")
         
         # 2) 추출된 텍스트 요소 각각에 대해 text_chain 실행
@@ -463,8 +485,10 @@ if __name__ == "__main__":
                         help='각 이미지마다 생성할 질문 수')
     parser.add_argument('--model_id', type=str, default='anthropic.claude-3-5-sonnet-20240620-v1:0',
                         help='사용할 Bedrock 모델 ID')
+    parser.add_argument('--table_model', type=str, default='yolox',
+                        help='테이블 구조 추론 모델 (yolox, table-transformer, tatr, detectron2, etc). None이면 테이블 구조 추론 비활성화')
     
     args = parser.parse_args()
     
     # 파싱된 인자를 main 함수에 전달
-    main(domain=args.domain, num_questions=args.num_questions, num_img_questions=args.num_img_questions, model_id=args.model_id)
+    main(domain=args.domain, num_questions=args.num_questions, num_img_questions=args.num_img_questions, model_id=args.model_id, table_model=args.table_model)

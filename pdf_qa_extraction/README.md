@@ -57,7 +57,48 @@ docker run --rm --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
 - `AWS_REGION`: AWS 리전 (예: us-east-1)
 - `PDF_PATH`: 처리할 PDF 파일 경로
 - `DOMAIN`: 문서의 주제 도메인 (예: "International Finance")
-- `NUM_QUESTIONS`: 생성할 질문 수
+- `NUM_QUESTIONS`: 텍스트 요소마다 생성할 질문 수
+- `NUM_IMG_QUESTIONS`: 이미지마다 생성할 질문 수
+- `MODEL_ID`: 사용할 Bedrock 모델 ID (예: anthropic.claude-3-sonnet-20240229-v1:0)
+- `TABLE_MODEL`: 테이블 구조 추론 모델 (예: yolox)
+
+## 테이블 추출 모델 비교
+
+### 상세 성능 비교표
+
+| 모델 | 제작사 | 정확도 | 속도 | GPU 메모리 | 특징 |
+|------|--------|--------|------|------------|------|
+| detectron2 | Meta | ⭐⭐⭐⭐⭐ | ⭐⭐ | 높음 | 최고 정확도, 연구용 |
+| detectron2_onnx | Meta | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | 중간 | ONNX 최적화 버전 |
+| table-transformer | Microsoft | ⭐⭐⭐⭐⭐ | ⭐⭐ | 높음 | 복잡한 테이블 우수, SageMaker Processing에서 다운로드 안됨(2025-09-08) |
+| tatr | 커뮤니티 | ⭐⭐⭐⭐ | ⭐⭐⭐ | 중간 | 균형잡힌 성능 |
+| yolox | Megvii | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | 낮음 | 빠른 처리 |
+| yolox_quantized | Megvii | ⭐⭐ | ⭐⭐⭐⭐⭐ | 매우낮음 | 초고속 처리 |
+| paddle | Baidu | ⭐⭐⭐ | ⭐⭐⭐ | 중간 | 중국어 테이블 특화 |
+| chipper | 커뮤니티 | ⭐⭐ | ⭐⭐⭐⭐ | 낮음 | 경량화 모델 |
+
+### GPU 메모리별 권장 모델
+
+| GPU 메모리 | 권장 모델 | 특징 |
+|------------|-----------|------|
+| 4GB 이하 | yolox_quantized | 초경량 |
+| 4-8GB | yolox | 기본 |
+| 8-12GB | tatr | 균형 |
+| 12-16GB | table-transformer | 고성능 |
+| 16-24GB | detectron2_onnx | Meta 최적화 |
+| 24GB+ | detectron2 | Meta 최고성능 |
+
+### 사용 사례별 권장 모델
+
+| 사용 사례 | 권장 모델 | 이유 |
+|-----------|-----------|------|
+| 연구논문 분석 | detectron2 | 최고 정확도 필요 |
+| 보고서 | table-transformer | 복잡한 표 많음 |
+| 일반문서 | tatr | 균형잡힌 선택 |
+| 실시간 처리 | yolox_quantized | 속도 우선 |
+| 배치 처리 | detectron2_onnx | 대용량 처리 |
+| 중국어 문서 | paddle | 언어 특화 |
+| IoT 엣지 | chipper | 경량화 |
 
 ```bash
 # Create .env file
@@ -76,6 +117,8 @@ PDF_PATH=data/fsi_data.pdf
 DOMAIN=International Finance
 NUM_QUESTIONS=5
 NUM_IMG_QUESTIONS=1
+MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+TABLE_MODEL=yolox
 
 # AWS Configuration 
 AWS_REGION=us-east-1
@@ -93,6 +136,8 @@ AWS_SESSION_TOKEN=your_session_token_here
 - 대용량 PDF 파일(100MB 이상)은 처리 전 분할하는 것이 좋습니다
 - CUDA 호환 GPU가 있는 환경에서 실행하면 처리 속도가 5-10배 향상됩니다
 - 메모리 사용량을 모니터링하고 필요한 경우 `batch_size` 파라미터를 조정하세요 (코드의 partition_pdf 참조)
+
+
 
 
 #### 2. SageMaker Processing Job에서 실행 

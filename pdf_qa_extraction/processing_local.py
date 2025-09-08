@@ -49,12 +49,15 @@ load_dotenv()
 # PDF 파일에서 이미지, 테이블, 그리고 텍스트 조각을 추출합니다.
 # -------------------------------------------------------------------
 
-def extract_elements_from_pdf(filepath):
+def extract_elements_from_pdf(filepath, table_model=None):
     """
     Extracts elements from a PDF file using specified partitioning strategies.
     
     Args:
         filepath (str): The path to the PDF file to be processed.
+        table_model (str, optional): The table detection model to use. 
+                                   Options: "yolox", "table-transformer", "tatr"
+                                   If None, infer_table_structure will be disabled.
 
     Returns:
         list: A list of extracted elements from the PDF.
@@ -68,18 +71,27 @@ def extract_elements_from_pdf(filepath):
         new_after_n_chars (int): The number of characters after which a new chunk is created. Defaults to 3800.
         combine_text_under_n_chars (int): The number of characters under which text is combined into a single chunk. Defaults to 2000.
     """
-    return partition_pdf(
-        filename=filepath,
-        extract_images_in_pdf=True, 
-        infer_table_structure=True,  
-        chunking_strategy="by_title",  #"by_page"
-        #page_numbers=list(range(1, 7)),  # 1~6 페이지 명시
-        max_characters=4000,  
-        new_after_n_chars=3800, 
-        combine_text_under_n_chars=2000, 
-        #batch_size=10,  # 한 번에 처리할 페이지 수 (메모리 사용량 조절)
-        extract_image_block_output_dir="figures",  # 이미지 추출 디렉토리 지정
-    )
+    # 테이블 모델 옵션 설정
+    partition_kwargs = {
+        "filename": filepath,
+        "extract_images_in_pdf": True,
+        "chunking_strategy": "by_title",  #"by_page"
+        #"page_numbers": list(range(1, 7)),  # 1~6 페이지 명시
+        "max_characters": 4000,
+        "new_after_n_chars": 3800,
+        "combine_text_under_n_chars": 2000,
+        #"batch_size": 10,  # 한 번에 처리할 페이지 수 (메모리 사용량 조절)
+        "extract_image_block_output_dir": "figures",  # 이미지 추출 디렉토리 지정
+    }
+    
+    # 테이블 모델이 지정된 경우에만 테이블 구조 추론 활성화
+    if table_model:
+        partition_kwargs["infer_table_structure"] = True
+        partition_kwargs["table_model"] = table_model
+    else:
+        partition_kwargs["infer_table_structure"] = False
+        
+    return partition_pdf(**partition_kwargs)
 
 def encode_image_to_base64(image_path):
     """
@@ -394,9 +406,12 @@ def main():
     # Get number of image questions from environment variable or use default
     num_img_questions = os.environ.get("NUM_IMG_QUESTIONS", "1")
     
+    # Get table model from environment variable or use default (None)
+    table_model = os.environ.get("TABLE_MODEL", None)
+    print(f"Table model: {table_model if table_model else 'None (disabled)'}")
     
     # 6-1) PDF 파일에서 요소 추출     
-    elements = extract_elements_from_pdf(pdf_path)
+    elements = extract_elements_from_pdf(pdf_path, table_model=table_model)
     print(f"추출된 요소 수: {len(elements)}")
     
     # 6-2) 추출된 텍스트 요소 각각에 대해 text_chain 실행
