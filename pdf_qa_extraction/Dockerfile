@@ -1,5 +1,5 @@
 # filepath: /workspaces/python-2/llm-hsjeon/slm-fine-tuning/Dockerfile
-FROM nvidia/cuda:12.4.1-runtime-ubuntu20.04
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 # 비대화형 모드 설정
 ENV DEBIAN_FRONTEND=noninteractive
