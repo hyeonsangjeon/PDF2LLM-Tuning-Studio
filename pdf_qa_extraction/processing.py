@@ -93,6 +93,7 @@ def extract_elements_from_pdf(filepath, table_model=None):
         "new_after_n_chars": 3800,
         "combine_text_under_n_chars": 2000,
         "extract_image_block_output_dir": "figures",  # 이미지 추출 디렉토리 지정
+        "strategy":"auto" # 자동으로 레이어웃 및 텍스트 추출 방식 선택, fast(general pdf) 또는 high_res(scanned pdf에서 object detection layout & ocr) 로 동작 
     }
     
     # 테이블 모델이 지정된 경우에만 테이블 구조 추론 활성화
