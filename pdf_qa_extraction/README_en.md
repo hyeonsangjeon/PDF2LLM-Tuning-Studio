@@ -231,8 +231,154 @@ The Unstructured-qa-extractor image can be run as a batch job through Amazon Sag
           - `inputs`: Specify data path to import from S3 bucket to container (/opt/ml/processing/ is default)
           - `outputs`: Specify S3 path to store processing results (/opt/ml/processing/ is default)
           - `code`: Path to processing script to run inside container
-          
+
 This approach allows efficient management and scaling of large-scale PDF processing tasks.
+
+### Advantages of Parallel Processing with SageMaker
+
+SageMaker Processing Jobs enable parallel processing by running multiple independent jobs simultaneously, each handling different document ranges or types with flexible LLM provider selection.
+
+![Parallel Document Processing with Different LLMs](../assets/images/diff_docs_swap_llm.png)
+
+*The diagram above illustrates how multiple SageMaker Processing Jobs can run in parallel, each processing different document sets with different LLM providers simultaneously.*
+
+#### Key Benefits:
+
+**1. Multiple Job Parallel Execution**
+- Launch multiple independent Processing Jobs simultaneously, each with `instance_count=1`
+- Each job processes a specific document range, type, or category
+- **Large Document Sets**: Even for the same document type, split large collections into multiple jobs for parallel processing
+  - Example: 1,000 financial reports can be split into 10 jobs processing 100 documents each
+  - Reduces processing time from 10 hours (sequential) to 1 hour (10 parallel jobs)
+- Dramatically reduce total processing time for large document collections
+- Jobs run independently without interfering with each other
+
+**2. Flexible Job Configuration per Document Type**
+- Assign different LLM providers to different jobs based on document characteristics
+- Example:
+  - Job 1: Financial reports → AWS Bedrock Claude (domain expertise)
+  - Job 2: Technical papers → OpenAI GPT-4 (technical understanding)
+  - Job 3: Legal documents → AWS Bedrock Claude with specialized prompts
+- Optimize cost and quality by matching the right LLM to each document type
+
+**3. Scalability & Cost Optimization**
+- Scale horizontally by launching more jobs, not by increasing instance count per job
+- Process hundreds of documents in parallel across multiple jobs
+- Pay only for the compute time used during processing
+- Auto-shutdown after each job completion prevents idle resource costs
+
+**4. Fault Tolerance & Reliability**
+- Failed jobs can be easily retried without affecting other running jobs
+- Independent job execution ensures one document set failure doesn't impact others
+- Complete audit trail and logging for all processing activities
+- Easy to identify and reprocess specific document ranges if needed
+
+#### Parallel Processing Example:
+
+```python
+from sagemaker.processing import Processor, ProcessingInput, ProcessingOutput
+import time
+
+# Define different job configurations
+jobs_config = [
+    # Case 1: Different document types with different LLMs
+    {
+        'name': 'financial-docs-bedrock',
+        'input': 's3://bucket/financial-reports/',
+        'output': 's3://bucket/qa-results/financial/',
+        'llm_provider': 'bedrock',
+        'model_id': 'anthropic.claude-3-sonnet-20240229-v1:0'
+    },
+    {
+        'name': 'technical-docs-openai',
+        'input': 's3://bucket/technical-papers/',
+        'output': 's3://bucket/qa-results/technical/',
+        'llm_provider': 'openai',
+        'model': 'gpt-4o'
+    },
+    {
+        'name': 'legal-docs-bedrock',
+        'input': 's3://bucket/legal-documents/',
+        'output': 's3://bucket/qa-results/legal/',
+        'llm_provider': 'bedrock',
+        'model_id': 'anthropic.claude-3-sonnet-20240229-v1:0'
+    },
+    # Case 2: Same document type, split by document range (large volume)
+    {
+        'name': 'financial-reports-batch-1',
+        'input': 's3://bucket/financial-reports/batch-001-100/',  # Documents 1-100
+        'output': 's3://bucket/qa-results/financial-batch-1/',
+        'llm_provider': 'bedrock',
+        'model_id': 'anthropic.claude-3-sonnet-20240229-v1:0'
+    },
+    {
+        'name': 'financial-reports-batch-2',
+        'input': 's3://bucket/financial-reports/batch-101-200/',  # Documents 101-200
+        'output': 's3://bucket/qa-results/financial-batch-2/',
+        'llm_provider': 'bedrock',
+        'model_id': 'anthropic.claude-3-sonnet-20240229-v1:0'
+    },
+    {
+        'name': 'financial-reports-batch-3',
+        'input': 's3://bucket/financial-reports/batch-201-300/',  # Documents 201-300
+        'output': 's3://bucket/qa-results/financial-batch-3/',
+        'llm_provider': 'bedrock',
+        'model_id': 'anthropic.claude-3-sonnet-20240229-v1:0'
+    }
+]
+
+# Launch all jobs in parallel
+for config in jobs_config:
+    processor = Processor(
+        role='your-iam-role',
+        image_uri=f'your-qa-extractor-{config["llm_provider"]}-image',
+        instance_count=1,  # Each job uses only 1 instance
+        instance_type='ml.g5.xlarge',
+        volume_size_in_gb=30
+    )
+
+    # Run job asynchronously (non-blocking)
+    processor.run(
+        job_name=f'qa-extraction-{config["name"]}-{int(time.time())}',
+        inputs=[
+            ProcessingInput(
+                source=config['input'],
+                destination='/opt/ml/processing/input'
+            )
+        ],
+        outputs=[
+            ProcessingOutput(
+                source='/opt/ml/processing/output',
+                destination=config['output']
+            )
+        ],
+        wait=False  # Don't wait for job completion, launch next job immediately
+    )
+
+print(f"Launched {len(jobs_config)} parallel processing jobs successfully!")
+```
+
+**Performance Comparison:**
+
+*Example 1: Different Document Types*
+- **Sequential Processing**: 3 document types × 30 min/type = 90 minutes
+- **Parallel Processing**: max(30 min, 30 min, 30 min) = 30 minutes
+- **Speed Improvement**: 3x faster
+
+*Example 2: Large Volume Same Document Type (300 financial reports)*
+- **Sequential Processing**: 300 documents × 2 min/doc = 600 minutes (10 hours)
+- **Parallel Processing (3 jobs)**: 100 documents × 2 min/doc = 200 minutes (3.3 hours)
+- **Speed Improvement**: 3x faster
+- **Parallel Processing (10 jobs)**: 30 documents × 2 min/doc = 60 minutes (1 hour)
+- **Speed Improvement**: 10x faster
+
+**Cost Comparison:**
+- Total compute time is the same (instance-minutes remain constant)
+- Wall-clock time dramatically reduced (better time-to-insight)
+- Ability to use spot instances for additional 70% cost savings
+- No idle time between batches, maximizing resource utilization
+
+This parallel job execution capability makes SageMaker Processing ideal for enterprise-scale document processing workflows where different document types require different handling strategies and LLM providers.
 
 ## Usage
 

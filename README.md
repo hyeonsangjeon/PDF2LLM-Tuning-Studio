@@ -7,7 +7,7 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
 ## 📚 주요 기능
 
 - **GPU 가속 PDF 추출**: Unstructured 라이브러리와 NVIDIA GPU를 활용한 고속 텍스트 추출
-- **Q&A 자동 생성**: Amazon Bedrock Claude 모델을 사용하여 고품질 질문-답변 쌍 생성
+- **Q&A 자동 생성**: Amazon Bedrock Claude 또는 OpenAI 모델을 사용하여 고품질 질문-답변 쌍 생성
 - **메모리 효율적 파인튜닝**: Unsloth 최적화와 LoRA 어댑터로 제한된 GPU 환경에서도 대형 모델 학습 가능
 - **완전 자동화 파이프라인**: PDF 문서 입력부터 맞춤형 LLM 모델 출력까지 자동화
 
@@ -21,8 +21,9 @@ PDF2LLM-Tuning-Studio/
 │
 ├── pdf_qa_extraction/       # PDF 처리 및 Q&A 추출 모듈
 │   ├── Dockerfile           # GPU 지원 PDF 추출 컨테이너
-|   |── Dockerfile_event_eng # AWS Event 실습플렛폼의 네트워크 패키지 경로로 인한 Dockerfile 대용 
-│   ├── processing_local.py  # 로컬 처리 스크립트
+|   |── Dockerfile_event_eng # AWS Event 실습플렛폼의 네트워크 패키지 경로로 인한 Dockerfile 대용
+│   ├── processing_local.py  # 로컬 처리 스크립트 (AWS Bedrock)
+│   ├── processing_local_openai.py  # 로컬 처리 스크립트 (OpenAI)
 │   ├── processing.py        #SageMaker Processing job entrypoint 배치잡 실행파일
 │   ├── sagemaker_processingjob_pdf_qa_extraction.ipynb # SageMaker Processing을 활용한 PDF 기반 QA 데이터 생성 배치 파이프라인 자동화 데모
 │   └── README.md            # PDF 추출 가이드
@@ -51,7 +52,7 @@ cd pdf_qa_extraction
 
 이 모듈에서 수행되는 작업:
 - NVIDIA GPU 가속 PDF 텍스트 추출
-- Amazon Bedrock Claude를 활용한 고품질 Q&A 쌍 생성
+- Amazon Bedrock Claude 또는 OpenAI를 활용한 고품질 Q&A 쌍 생성
 - 문서 도메인 기반 맞춤형 질문 생성
 - SageMaker Processing 배치 작업으로 자동화된 PDF 문서 처리 배치 프로세스
 
@@ -88,7 +89,7 @@ Unsloth와 LoRA 어댑터를 사용하여 메모리 효율적인 파인튜닝을
 ## 💡 기술 스택
 
 - **PDF 추출**: Unstructured, CUDA, Docker
-- **질문-답변 생성**: Amazon Bedrock Claude
+- **질문-답변 생성**: Amazon Bedrock Claude, OpenAI (GPT-4o, GPT-4 Turbo 등)
 - **모델 파인튜닝**: Unsloth, PyTorch, LoRA
 - **지원 모델**: Llama, Mistral, Gemma, Qwen 등 다양한 오픈소스 LLM
 
@@ -130,6 +131,7 @@ Unsloth와 LoRA 어댑터를 사용하여 메모리 효율적인 파인튜닝을
 - [Unsloth: Accelerating LLM Fine-tuning](https://github.com/unslothai/unsloth)
 - [Unstructured: Open-source PDF extraction](https://github.com/Unstructured-IO/unstructured)
 - [Amazon Bedrock Documentation](https://docs.aws.amazon.com/bedrock/)
+- [OpenAI Platform Documentation](https://platform.openai.com/docs)
 - [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685)
 - [Llama 3: Open Foundation and Fine-Tuned Chat Models](https://ai.meta.com/llama/)
 - [Fine-Tuning Llama-3-1-8B for Function Calling using LoRA](https://medium.com/@gautam75/fine-tuning-llama-3-1-8b-for-function-calling-using-lora-159b9ee66060)
