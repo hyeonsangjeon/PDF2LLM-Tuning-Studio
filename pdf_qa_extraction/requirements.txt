@@ -6,6 +6,7 @@ pydantic
 langchain-core
 #langchain
 langchain-aws
+langchain_openai
 #langchain-community
 
 # 기본 패키지들
@@ -17,3 +18,4 @@ pytesseract
 python-dotenv
 unstructured[pdf]
 boto3
+

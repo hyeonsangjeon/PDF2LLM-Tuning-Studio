@@ -37,11 +37,17 @@ Unstructured provides powerful tools for extracting and processing content from 
 The Unstructured Extractor uses GPU to quickly extract text from PDF documents. The Docker container supports NVIDIA GPUs and can be run as follows:
 
 ```bash
-# Linux/macOS
+# AWS Bedrock (Linux/macOS)
 docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env qa-extractor python processing_local.py
 
-# Windows
+# AWS Bedrock (Windows)
 docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env qa-extractor python processing_local.py
+
+# OpenAI (Linux/macOS)
+docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env qa-extractor python processing_local_openai.py
+
+# OpenAI (Windows)
+docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env qa-extractor python processing_local_openai.py
 ```
 
 To verify GPU support is enabled:
@@ -52,12 +58,25 @@ docker run --rm --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
 #### Environment Variable Configuration
 
 The following environment variables must be set during execution:
+
+**For AWS Bedrock (`processing_local.py`)**
 - `AWS_REGION`: AWS region (e.g., us-east-1)
+- `AWS_ACCESS_KEY_ID`: AWS access key
+- `AWS_SECRET_ACCESS_KEY`: AWS secret key
+- `AWS_SESSION_TOKEN`: AWS session token (optional)
 - `PDF_PATH`: Path to the PDF file to process
 - `DOMAIN`: Document subject domain (e.g., "International Finance")
 - `NUM_QUESTIONS`: Number of questions to generate per text element
 - `NUM_IMG_QUESTIONS`: Number of questions to generate per image
 - `MODEL_ID`: Bedrock model ID to use (e.g., anthropic.claude-3-sonnet-20240229-v1:0)
+- `TABLE_MODEL`: Table structure inference model (e.g., yolox)
+
+**For OpenAI (`processing_local_openai.py`)**
+- `OPENAI_API_KEY`: OpenAI API key
+- `PDF_PATH`: Path to the PDF file to process
+- `DOMAIN`: Document subject domain (e.g., "International Finance")
+- `NUM_QUESTIONS`: Number of questions to generate per text element
+- `NUM_IMG_QUESTIONS`: Number of questions to generate per image
 - `TABLE_MODEL`: Table structure inference model (e.g., yolox)
 
 ## Table Extraction Model Comparison
@@ -109,6 +128,7 @@ vi .env
 Press i to enter input mode
 Copy and paste the content below:
 
+**For AWS Bedrock:**
 ```bash
 # App Setting
 PDF_PATH=data/fsi_data.pdf
@@ -118,7 +138,7 @@ NUM_IMG_QUESTIONS=1
 MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
 TABLE_MODEL=yolox
 
-# AWS Configuration 
+# AWS Configuration
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=your_access_key_here
 AWS_SECRET_ACCESS_KEY=your_secret_key_here
@@ -127,7 +147,22 @@ AWS_SESSION_TOKEN=your_session_token_here
 # Press ESC and type :wq to save and exit
 ```
 
-> **Note**: Use the `.env` file only for local testing purposes. Using IAM roles in production environments is the reference architecture practice. Please be careful not to expose AWS Keys externally.
+**For OpenAI:**
+```bash
+# App Setting
+PDF_PATH=data/fsi_data.pdf
+DOMAIN=International Finance
+NUM_QUESTIONS=5
+NUM_IMG_QUESTIONS=1
+TABLE_MODEL=yolox
+
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Press ESC and type :wq to save and exit
+```
+
+> **Note**: Use the `.env` file only for local testing purposes. Using IAM roles in production environments is the reference architecture practice. Please be careful not to expose AWS Keys and OpenAI API Keys externally.
 
 #### Performance Optimization Tips
 
