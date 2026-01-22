@@ -8,6 +8,8 @@
 
 [PDF QA 추출 프로세스 동영상 가이드](https://assets.fsi.kr/videos/qna-extract.mp4)
 
+[WorkshopStudio매뉴얼](https://catalog.us-east-1.prod.workshops.aws/workshops/61cd351b-6326-4618-ad97-e318ed31472f/ko-KR)
+
 
 ## 시스템 흐름도
 
