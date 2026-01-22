@@ -6,6 +6,8 @@ This tool leverages GPU acceleration to extract text blocks from PDF documents a
 
 [PDF QA Extraction Process Video Guide](https://assets.fsi.kr/videos/qna-extract.mp4)
 
+[WorkshopStudio Manual](https://catalog.us-east-1.prod.workshops.aws/workshops/61cd351b-6326-4618-ad97-e318ed31472f/ko-KR)
+
 ## System Flow Diagram
 
 ![GPU Container Process](../assets/images/flow.png)
