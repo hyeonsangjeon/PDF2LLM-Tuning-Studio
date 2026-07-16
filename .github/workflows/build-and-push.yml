@@ -35,6 +35,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # A multi-stage GPU image keeps both the fat builder stage (torch +
+      # bundled CUDA libs, ~7GB) and the runtime stage in the BuildKit cache at
+      # the same time, so peak disk nearly doubles vs a single-stage build.
+      # GitHub-hosted runners only ship ~14GB free on /, so reclaim the large
+      # preinstalled toolchains we don't use before building.
+      - name: Free up runner disk space
+        run: |
+          echo "::group::Disk before cleanup"; df -h /; echo "::endgroup::"
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+                      /usr/local/lib/android /usr/local/share/boost \
+                      /opt/hostedtoolcache/CodeQL "${AGENT_TOOLSDIRECTORY:-}" || true
+          sudo docker image prune --all --force || true
+          echo "::group::Disk after cleanup"; df -h /; echo "::endgroup::"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -69,7 +83,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # mode=min caches only the final-stage layers. mode=max would also
+          # cache the fat builder stage, doubling the gha cache blobs written to
+          # the runner's disk during export and risking "no space left".
+          cache-to: type=gha,mode=min
           provenance: false
 
       - name: Smoke test & image size
@@ -77,6 +94,10 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+          # Reclaim the BuildKit build cache (~12GB of both stages' layers)
+          # before pulling the finished image back onto the runner.
+          docker buildx prune --all --force || true
+          echo "::group::Disk before pull"; df -h /; echo "::endgroup::"
           echo "Pulling $REF"
           docker pull -q "$REF"
           echo "::group::Image size"
