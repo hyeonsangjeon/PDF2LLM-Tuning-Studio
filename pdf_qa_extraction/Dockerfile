@@ -28,8 +28,8 @@ ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     DEBIAN_FRONTEND=noninteractive
 
-# Compilers/headers for the few deps that lack manylinux wheels. `binutils`
-# (from build-essential) provides `strip`, used below to shrink native libs.
+# Compilers/headers for the few deps that lack prebuilt manylinux wheels.
+# Builder-stage only, so they never reach the final image.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates && \
@@ -49,9 +49,10 @@ RUN pip install --upgrade pip setuptools wheel && \
     pip install --index-url "${TORCH_INDEX_URL}" torch && \
     pip install -r requirements.txt && \
     pip install --no-deps --no-build-isolation . && \
-    # Trim: drop cached bytecode and strip debug symbols from native libs.
-    find "$VIRTUAL_ENV" -type d -name __pycache__ -prune -exec rm -rf {} + ; \
-    find "$VIRTUAL_ENV" -name '*.so*' -exec strip --strip-unneeded {} + 2>/dev/null || true
+    # Trim cached bytecode (regenerated lazily at runtime). NB: do NOT `strip`
+    # site-packages *.so - it corrupts numpy/scipy's bundled OpenBLAS
+    # ("ELF load command not page-aligned"); torch/onnxruntime ship pre-stripped.
+    find "$VIRTUAL_ENV" -type d -name __pycache__ -prune -exec rm -rf {} + || true
 
 # ============================  Stage 2: runtime  ============================
 ARG PYTHON_TAG=3.10-slim-bookworm
