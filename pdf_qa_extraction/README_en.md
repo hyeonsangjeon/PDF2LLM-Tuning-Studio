@@ -44,6 +44,18 @@ Unstructured provides powerful tools for extracting and processing content from 
      docker build -t pdf-qa-extractor -f Dockerfile_event_eng .     
      ```
 
+> **Lightweight image design**: PyTorch's pip wheels bundle their own CUDA
+> libraries (cublas/cudnn/...), so the heavy `cuda:runtime` base and the
+> `cuda-command-line-tools` dev package are redundant. The image therefore uses
+> the slim `nvidia/cuda:12.4.1-base` base plus a **multi-stage** build
+> (compilers/headers live only in the builder stage). At run time the GPU works
+> via `libcuda.so` injected by `--gpus all` (nvidia-container-toolkit) together
+> with torch's bundled libraries. If a specific GPU path needs the full CUDA
+> runtime, fall back with:
+> ```bash
+> docker build --build-arg CUDA_TAG=12.4.1-runtime-ubuntu22.04 -t pdf-qa-extractor -f Dockerfile .
+> ```
+
 ### GPU-based PDF Extractor Usage Guide
 
 #### 1. Running in Local GPU Environment

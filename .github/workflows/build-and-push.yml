@@ -20,6 +20,11 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/pdf-qa-extractor
 
+# A new push to the same ref cancels an in-flight build (saves CI minutes).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -54,6 +59,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: pdf_qa_extraction
@@ -64,3 +70,19 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Smoke test & image size
+        # Only on pushed builds (the image must exist in the registry to pull).
+        if: github.event_name != 'pull_request'
+        run: |
+          REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+          echo "Pulling $REF"
+          docker pull -q "$REF"
+          echo "::group::Image size"
+          docker image inspect "$REF" --format '{{.Size}}' | \
+            awk '{printf "Uncompressed image size: %.2f GiB (%d bytes)\n", $1/1073741824, $1}'
+          echo "::endgroup::"
+          echo "::group::Import smoke test (CPU)"
+          docker run --rm "$REF" python -c "import pdf_qa, torch, cv2, unstructured; print('imports OK - pdf_qa', pdf_qa.__version__, '| torch', torch.__version__)"
+          echo "::endgroup::"

@@ -47,6 +47,16 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
      docker build -t pdf-qa-extractor -f Dockerfile_event_eng .     
      ```
 
+> **경량 이미지 설계**: PyTorch pip 휠이 CUDA 라이브러리(cublas/cudnn 등)를 자체 번들하므로,
+> 무거운 `cuda:runtime` 베이스와 `cuda-command-line-tools` 개발도구는 중복입니다. 그래서
+> 얇은 `nvidia/cuda:12.4.1-base` 베이스 + **멀티스테이지**(컴파일러·헤더는 빌더 스테이지에만)로
+> 최종 이미지를 크게 줄였습니다. GPU는 실행 시 `--gpus all`(nvidia-container-toolkit)로 주입되는
+> `libcuda.so`와 torch 번들 라이브러리로 동작합니다.
+> 특정 GPU 경로에서 전체 CUDA 런타임이 필요하면 아래처럼 폴백하세요:
+> ```bash
+> docker build --build-arg CUDA_TAG=12.4.1-runtime-ubuntu22.04 -t pdf-qa-extractor -f Dockerfile .
+> ```
+
 
 ### GPU기반 PDF Extractor 활용 가이드
 
