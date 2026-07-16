@@ -1,6 +1,6 @@
 # PDF2LLM-Tuning-Studio
 
-PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율적으로 파인튜닝하는 **Azure-first 멀티클라우드** 엔드투엔드 파이프라인입니다. GPU 가속 PDF 파싱과 최적화된 LLM 파인튜닝을 결합하여 문서 기반 질의응답 시스템을 구축합니다.
+PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율적으로 파인튜닝하는 **Azure-first 멀티클라우드** 엔드투엔드 파이프라인입니다. 경량 CPU 컨테이너의 PDF 파싱과 최적화된 LLM 파인튜닝을 결합하여 문서 기반 질의응답 시스템을 구축합니다.
 
 기본 백엔드는 **Azure AI Foundry**(Azure OpenAI / Foundry Agent Service)와 **Azure Machine Learning**이며, **AWS Bedrock + SageMaker** 경로도 그대로 지원합니다. 하나의 공개 컨테이너 이미지(GHCR)를 두 클라우드가 함께 사용합니다.
 
@@ -8,7 +8,7 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
 
 ## 📚 주요 기능
 
-- **GPU 가속 PDF 추출**: Unstructured 라이브러리와 NVIDIA GPU를 활용한 고속 텍스트/표/이미지 추출
+- **경량 PDF 추출**: Unstructured 라이브러리로 텍스트/표/이미지 추출 (CPU 슬림 이미지 ~2.5GB, 스캔 문서용 GPU 빌드는 선택)
 - **Q&A 자동 생성 (멀티 공급자)**: Azure AI Foundry(Azure OpenAI · Foundry Agent), OpenAI, Amazon Bedrock Claude 중 환경 변수 하나로 전환
 - **클라우드 무관 코어 패키지**: `pdf_qa` 패키지 + 공급자 플러그인 구조로 코드 중복 제거, 런타임별 얇은 진입점
 - **단일 공개 이미지**: `ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor` 하나로 로컬·Azure ML·SageMaker 실행
@@ -24,7 +24,7 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
              │  providers: azure · openai · bedrock         │
              └─────────────┬──────────────┘
                            │  빌드/배포
-        ghcr.io/.../pdf-qa-extractor  (공개 GPU 컨테이너 이미지 1개)
+        ghcr.io/.../pdf-qa-extractor  (공개 경량 컨테이너 이미지 1개)
                  │ pull                              │ pull
         ┌────────▼──── Azure (기본) ──┐     ┌────────▼──── AWS (also) ──┐
         │ Azure ML Command Job        │     │ SageMaker Processing Job  │
@@ -93,13 +93,13 @@ docker build -t pdf-qa-extractor -f Dockerfile .
 
 ### 1단계: PDF 텍스트 및 Q&A 추출
 
-GPU 컨테이너에서 PDF의 텍스트/표/이미지를 추출하고 고품질 Q&A 쌍을 생성합니다. 공급자는 `LLM_PROVIDER`로 선택합니다(기본 `azure`).
+경량 컨테이너에서 PDF의 텍스트/표/이미지를 추출하고 고품질 Q&A 쌍을 생성합니다. 공급자는 `LLM_PROVIDER`로 선택합니다(기본 `azure`).
 
 #### ☁️ Azure (기본 경로)
 
 ```bash
 # Azure OpenAI (Foundry 모델 배포) 사용
-docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env \
+docker run --rm -v $(pwd):/app -w /app --env-file .env \
   ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest \
   python run_local.py
 ```
@@ -126,7 +126,7 @@ TABLE_MODEL=yolox
 
 ```bash
 # AWS Bedrock 사용
-LLM_PROVIDER=bedrock docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env \
+LLM_PROVIDER=bedrock docker run --rm -v $(pwd):/app -w /app --env-file .env \
   ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest \
   python run_local.py
 ```
@@ -166,7 +166,7 @@ Unsloth와 LoRA 어댑터로 메모리 효율적 파인튜닝을 수행합니다
 ## 📊 성능 및 요구사항
 
 ### 하드웨어 요구사항
-- **PDF 추출**: NVIDIA GPU (CUDA 지원)
+- **PDF 추출**: CPU (경량 슬림 이미지, 스캔 문서 레이아웃/OCR 가속용 GPU는 선택)
 - **파인튜닝**: 최소 8GB VRAM (16GB+ 권장)
 
 ### 최적화 팁

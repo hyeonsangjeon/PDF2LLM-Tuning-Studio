@@ -8,7 +8,7 @@
 python-dotenv>=1.0
 pydantic>=2
 
-# --- PDF partitioning (GPU / OCR) ---
+# --- PDF partitioning (layout + OCR, CPU) ---
 unstructured[pdf]>=0.15
 opencv-python>=4.8
 pdf2image>=1.17

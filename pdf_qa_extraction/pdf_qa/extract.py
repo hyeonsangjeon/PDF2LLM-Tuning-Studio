@@ -1,4 +1,8 @@
-"""PDF partitioning helpers built on `unstructured` (GPU accelerated).
+"""PDF partitioning helpers built on `unstructured`.
+
+Extraction runs on CPU by default: the ``hi_res`` layout model uses
+``onnxruntime`` and scanned pages use ``tesseract`` OCR, so this container needs
+no CUDA. (torch is pulled in only transitively by ``unstructured[pdf]``.)
 
 `unstructured` is imported lazily inside :func:`extract_elements_from_pdf` so
 the rest of the package (providers, parsing, tests) can be imported without the

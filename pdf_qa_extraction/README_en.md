@@ -2,7 +2,7 @@
 
 [English](README_en.md) | [한국어](README.md)
 
-This tool leverages GPU acceleration to extract text/tables/images from PDF documents and uses an LLM to automatically generate high-quality question-answer pairs from the extracted content. Through this process, document knowledge is transformed into structured QA JSONL datasets that can be used for training, fine-tuning, or knowledge base construction.
+This tool extracts text/tables/images from PDF documents (layout detection via onnxruntime, OCR via tesseract — the default image is a CPU slim build) and uses an LLM to automatically generate high-quality question-answer pairs from the extracted content. Through this process, document knowledge is transformed into structured QA JSONL datasets that can be used for training, fine-tuning, or knowledge base construction.
 
 The LLM provider is selected with a single environment variable `LLM_PROVIDER` — **`azure` (default, Azure AI Foundry / Azure OpenAI)**, `openai`, or `bedrock` (AWS). The core logic lives in the cloud-agnostic `pdf_qa` package, and thin per-runtime entrypoints (`run_local.py` local/container, `azureml_job.py` Azure ML, `processing.py` SageMaker) wrap it.
 
@@ -44,47 +44,51 @@ Unstructured provides powerful tools for extracting and processing content from 
      docker build -t pdf-qa-extractor -f Dockerfile_event_eng .     
      ```
 
-> **Lightweight image design**: PyTorch's pip wheels bundle their own CUDA
-> libraries (cublas/cudnn/...), so the heavy `cuda:runtime` base and the
-> `cuda-command-line-tools` dev package are redundant. The image therefore uses
-> the slim `nvidia/cuda:12.4.1-base` base plus a **multi-stage** build
-> (compilers/headers live only in the builder stage). At run time the GPU works
-> via `libcuda.so` injected by `--gpus all` (nvidia-container-toolkit) together
-> with torch's bundled libraries. If a specific GPU path needs the full CUDA
-> runtime, fall back with:
+> **Lightweight image design (~6GB → ~2.5GB)**: this container only *parses*
+> PDFs (unstructured layout via onnxruntime + tesseract OCR) and calls the LLM
+> over the *network* (Azure/Bedrock/OpenAI). There is no `torch.cuda` /
+> `onnxruntime-gpu` code path, and torch is pulled in only transitively by
+> `unstructured[pdf]` — yet its default PyPI wheel bundles ~3.5GB of NVIDIA CUDA
+> libraries (cudnn/cublas/...) that are never used here. So the image installs
+> the **CPU-only torch wheel (~200MB)**, drops the CUDA base image, and uses a
+> **multi-stage** build (compilers/headers stay in the builder; native libs are
+> `strip`-ped). The heavy GPU workload (LoRA fine-tuning) runs in a separate
+> **Azure ML / SageMaker training job**, not in this extraction image.
+> For a GPU build (run with `--gpus all` on the same slim base), install CUDA
+> torch instead:
 > ```bash
-> docker build --build-arg CUDA_TAG=12.4.1-runtime-ubuntu22.04 -t pdf-qa-extractor -f Dockerfile .
+> docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -t pdf-qa-extractor -f Dockerfile .
 > ```
 
-### GPU-based PDF Extractor Usage Guide
+### PDF Extractor Usage Guide
 
-#### 1. Running in Local GPU Environment
+#### 1. Running Locally
 
-The Unstructured Extractor uses GPU to quickly extract text from PDF documents. The Docker container supports NVIDIA GPUs. Use the unified entrypoint `run_local.py` and select the provider via the `LLM_PROVIDER` environment variable (default `azure`). Use the public image pulled above or a locally built `pdf-qa-extractor`.
+The Unstructured Extractor extracts text/tables/images from PDF documents (layout via onnxruntime, OCR via tesseract — the **default image is a CPU slim build**, so it runs without a GPU). Use the unified entrypoint `run_local.py` and select the provider via the `LLM_PROVIDER` environment variable (default `azure`). Use the public image pulled above or a locally built `pdf-qa-extractor`.
 
 ```bash
 # Image alias (when using the public image)
 IMG=ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
 
 # Azure AI Foundry / Azure OpenAI (default, Linux/macOS)
-docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
+docker run --rm -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
 
 # AWS Bedrock (Linux/macOS)
-LLM_PROVIDER=bedrock docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
+LLM_PROVIDER=bedrock docker run --rm -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
 
 # OpenAI (Linux/macOS)
-LLM_PROVIDER=openai docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
+LLM_PROVIDER=openai docker run --rm -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
 
 # On Windows (PowerShell/CMD), use %cd% instead of $(pwd)
-docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
+docker run --rm -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
 ```
 
 > Backward compatible: `processing_local.py` (Bedrock) and `processing_local_openai.py` (OpenAI) still work; they set `LLM_PROVIDER` internally and call the same core as `run_local.py`.
 
-To verify GPU support is enabled:
-```bash
-docker run --rm --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
-```
+> **Only when running a GPU build**, add `--gpus all` to the commands above and verify the host GPU is visible:
+> ```bash
+> docker run --rm --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
+> ```
 
 #### Environment Variable Configuration
 
@@ -223,7 +227,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 #### Performance Optimization Tips
 
 - Large PDF files (over 100MB) should be split before processing
-- Running in an environment with CUDA-compatible GPU improves processing speed by 5-10 times
+- To GPU-accelerate layout/OCR on scanned PDFs (optional), run a GPU build image with `--gpus all`
 - Monitor memory usage and adjust the `batch_size` parameter if necessary (refer to partition_pdf in the code)
 
 #### 2. ☁️ Running on Azure ML Command Job (default)
@@ -463,6 +467,6 @@ Please refer to individual script documentation for detailed usage of each tool.
 ## Dependencies
 
 - Python 3.10+ (`pdf_qa` package, see `pyproject.toml`)
-- Unstructured GPU text/image extractor image (public GHCR `pdf-qa-extractor`)
+- Unstructured text/image extractor image (public GHCR `pdf-qa-extractor`, CPU slim)
 - LLM provider SDKs: `azure` (azure-ai-projects · openai) / `openai` / `bedrock` (langchain-aws) — see extras in `requirements.txt`
 - Execution runtime (optional): Azure ML Command Job or AWS SageMaker Processing Job

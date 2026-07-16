@@ -1,19 +1,19 @@
 # syntax=docker/dockerfile:1
-# PDF2LLM-Tuning-Studio - GPU PDF Q&A extraction image (restricted-network build)
-# Same lightweight multi-stage design as Dockerfile, but with apt retry/timeout
+# PDF2LLM-Tuning-Studio - PDF Q&A extraction image (restricted-network build)
+# Same slim CPU multi-stage design as Dockerfile, but with apt retry/timeout
 # tuning for AWS Event Engine lab accounts that have flaky egress.
 #
-# See Dockerfile for the full size-strategy rationale (cuda:base + pip-bundled
-# torch CUDA libs + multi-stage). Override the base with:
-#   docker build --build-arg CUDA_TAG=12.4.1-runtime-ubuntu22.04 -f Dockerfile_event_eng .
+# See Dockerfile for the full size rationale (CPU-only torch + slim base +
+# multi-stage). Optional GPU build (run with --gpus all):
+#   docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -f Dockerfile_event_eng .
 
 # ============================  Stage 1: builder  ============================
-ARG CUDA_TAG=12.4.1-base-ubuntu22.04
-FROM nvidia/cuda:${CUDA_TAG} AS builder
+ARG PYTHON_TAG=3.10-slim-bookworm
+FROM python:${PYTHON_TAG} AS builder
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
 
 # Resilient apt settings for restricted networks (retries + long timeouts).
 RUN echo 'Acquire::Retries "20";' > /etc/apt/apt.conf.d/80retries && \
@@ -22,35 +22,40 @@ RUN echo 'Acquire::Retries "20";' > /etc/apt/apt.conf.d/80retries && \
     echo 'APT::Get::Assume-Yes "true";'   > /etc/apt/apt.conf.d/90assumeyes && \
     echo 'APT::Get::Fix-Missing "true";'  > /etc/apt/apt.conf.d/90fixmissing
 
-# Build toolchain + Python (Ubuntu 22.04 ships Python 3.10; no PPA needed).
+# Compilers/headers for the few deps that lack manylinux wheels (binutils
+# supplies `strip`, used below).
 RUN apt-get -o Dpkg::Options::="--force-confold" update && \
     apt-get -o Dpkg::Options::="--force-confold" install --fix-broken --fix-missing -y \
         --no-install-recommends \
-        python3 python3-venv python3-dev \
         build-essential \
         ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# A self-contained venv is copied wholesale into the runtime stage.
 ENV VIRTUAL_ENV=/opt/venv PATH="/opt/venv/bin:${PATH}"
-RUN python3 -m venv "$VIRTUAL_ENV"
+RUN python -m venv "$VIRTUAL_ENV"
+
+# CPU-only torch keeps the image ~3.5GB smaller than the default CUDA wheel.
+# Point this at .../whl/cu124 (and run with --gpus all) for a GPU build.
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
 
 WORKDIR /build
 COPY requirements.txt pyproject.toml README.md ./
 COPY pdf_qa ./pdf_qa
 RUN pip install --upgrade pip setuptools wheel && \
+    pip install --index-url "${TORCH_INDEX_URL}" torch && \
     pip install -r requirements.txt && \
     pip install --no-deps --no-build-isolation . && \
-    find "$VIRTUAL_ENV" -type d -name __pycache__ -prune -exec rm -rf {} + || true
+    find "$VIRTUAL_ENV" -type d -name __pycache__ -prune -exec rm -rf {} + ; \
+    find "$VIRTUAL_ENV" -name '*.so*' -exec strip --strip-unneeded {} + 2>/dev/null || true
 
 # ============================  Stage 2: runtime  ============================
-ARG CUDA_TAG=12.4.1-base-ubuntu22.04
-FROM nvidia/cuda:${CUDA_TAG}
+ARG PYTHON_TAG=3.10-slim-bookworm
+FROM python:${PYTHON_TAG}
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    VIRTUAL_ENV=/opt/venv \
+ENV VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:${PATH}" \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
 
 RUN echo 'Acquire::Retries "20";' > /etc/apt/apt.conf.d/80retries && \
     echo 'Acquire::http::Timeout "240";'  > /etc/apt/apt.conf.d/99timeout && \
@@ -58,11 +63,11 @@ RUN echo 'Acquire::Retries "20";' > /etc/apt/apt.conf.d/80retries && \
     echo 'APT::Get::Assume-Yes "true";'   > /etc/apt/apt.conf.d/90assumeyes && \
     echo 'APT::Get::Fix-Missing "true";'  > /etc/apt/apt.conf.d/90fixmissing
 
-# Runtime-only shared libraries (OCR / PDF raster / OpenCV native deps).
+# Runtime-only shared libraries (OCR / PDF raster / OpenCV native deps /
+# OpenMP / libmagic). No compilers, no CUDA.
 RUN apt-get -o Dpkg::Options::="--force-confold" update && \
     apt-get -o Dpkg::Options::="--force-confold" install --fix-broken --fix-missing -y \
         --no-install-recommends \
-        python3 \
         tesseract-ocr \
         poppler-utils \
         libglib2.0-0 \

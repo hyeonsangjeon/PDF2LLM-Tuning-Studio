@@ -35,11 +35,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # A multi-stage GPU image keeps both the fat builder stage (torch +
-      # bundled CUDA libs, ~7GB) and the runtime stage in the BuildKit cache at
-      # the same time, so peak disk nearly doubles vs a single-stage build.
-      # GitHub-hosted runners only ship ~14GB free on /, so reclaim the large
-      # preinstalled toolchains we don't use before building.
+      # The build still juggles a builder stage (torch/onnxruntime + build
+      # tools) and the runtime image at once, plus the gha cache export and the
+      # smoke-test pull. GitHub-hosted runners only ship ~14GB free on /, so
+      # reclaim the large preinstalled toolchains we don't use up front.
       - name: Free up runner disk space
         run: |
           echo "::group::Disk before cleanup"; df -h /; echo "::endgroup::"
@@ -98,8 +97,8 @@ jobs:
           # lowercases the pushed tags, but this ref is built by hand).
           IMG="$(echo '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')"
           REF="${IMG}@${{ steps.build.outputs.digest }}"
-          # Reclaim the BuildKit build cache (~16GB of both stages' layers)
-          # before pulling the finished image back onto the runner.
+          # Reclaim the BuildKit build cache (both stages' layers) before
+          # pulling the finished image back onto the runner.
           docker buildx prune --all --force || true
           echo "::group::Disk before pull"; df -h /; echo "::endgroup::"
           echo "Pulling $REF"

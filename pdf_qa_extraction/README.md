@@ -2,7 +2,7 @@
 
 [English](README_en.md) | [한국어](README.md)
 
-이 도구는 GPU를 활용하여 PDF 문서에서 블록 단위로 텍스트/표/이미지를 추출하고, LLM으로 고품질 질문-답변 쌍을 자동 생성합니다. 이 과정을 통해 문서의 지식을 구조화된 QA JSONL 데이터셋으로 변환하여 학습, 미세 조정 또는 지식 베이스 구축에 활용할 수 있습니다.
+이 도구는 PDF 문서에서 블록 단위로 텍스트/표/이미지를 추출하고, LLM으로 고품질 질문-답변 쌍을 자동 생성합니다(레이아웃 감지는 onnxruntime, OCR은 tesseract — 기본 이미지는 CPU 슬림). 이 과정을 통해 문서의 지식을 구조화된 QA JSONL 데이터셋으로 변환하여 학습, 미세 조정 또는 지식 베이스 구축에 활용할 수 있습니다.
 
 LLM 공급자는 환경 변수 `LLM_PROVIDER` 하나로 전환합니다 — **`azure`(기본, Azure AI Foundry / Azure OpenAI)**, `openai`, `bedrock`(AWS). 코어 로직은 클라우드 무관 `pdf_qa` 패키지에 있고, 런타임별 진입점(`run_local.py` 로컬·컨테이너, `azureml_job.py` Azure ML, `processing.py` SageMaker)은 이 패키지를 얇게 감쌉니다.
 
@@ -47,46 +47,48 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
      docker build -t pdf-qa-extractor -f Dockerfile_event_eng .     
      ```
 
-> **경량 이미지 설계**: PyTorch pip 휠이 CUDA 라이브러리(cublas/cudnn 등)를 자체 번들하므로,
-> 무거운 `cuda:runtime` 베이스와 `cuda-command-line-tools` 개발도구는 중복입니다. 그래서
-> 얇은 `nvidia/cuda:12.4.1-base` 베이스 + **멀티스테이지**(컴파일러·헤더는 빌더 스테이지에만)로
-> 최종 이미지를 크게 줄였습니다. GPU는 실행 시 `--gpus all`(nvidia-container-toolkit)로 주입되는
-> `libcuda.so`와 torch 번들 라이브러리로 동작합니다.
-> 특정 GPU 경로에서 전체 CUDA 런타임이 필요하면 아래처럼 폴백하세요:
+> **경량 이미지 설계 (~6GB → ~2.5GB)**: 이 컨테이너는 PDF **파싱**(unstructured 레이아웃 =
+> onnxruntime, tesseract OCR)과 **LLM API 호출**(Azure/Bedrock/OpenAI)만 하며, `torch.cuda`나
+> `onnxruntime-gpu` 코드 경로가 없습니다. torch는 `unstructured[pdf]`의 전이 의존성으로만 딸려오는데,
+> PyPI 기본 휠은 실제로 안 쓰는 ~3.5GB의 NVIDIA CUDA 라이브러리(cudnn/cublas 등)를 번들합니다.
+> 그래서 **CPU 전용 torch 휠(~200MB)** 을 설치하고 CUDA 베이스를 제거했으며, **멀티스테이지**로
+> 컴파일러·헤더는 빌더 스테이지에만 두고 네이티브 라이브러리는 `strip`으로 축소했습니다. 무거운 GPU
+> 워크로드(LoRA 파인튜닝)는 이 이미지가 아니라 별도 **Azure ML / SageMaker 학습 잡**에서 실행됩니다.
+> GPU 빌드가 필요하면(같은 slim 베이스에서 `--gpus all`로 실행) 다음처럼 CUDA torch를 설치하세요:
 > ```bash
-> docker build --build-arg CUDA_TAG=12.4.1-runtime-ubuntu22.04 -t pdf-qa-extractor -f Dockerfile .
+> docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -t pdf-qa-extractor -f Dockerfile .
 > ```
 
 
-### GPU기반 PDF Extractor 활용 가이드
+### PDF Extractor 활용 가이드
 
-#### 1. 로컬 GPU 환경에서 실행
+#### 1. 로컬 환경에서 실행
 
-Unstructured Extractor는 GPU를 활용하여 PDF 문서에서 텍스트를 빠르게 추출합니다. Docker 컨테이너는 NVIDIA GPU를 지원합니다. 통합 진입점 `run_local.py`를 사용하고, 공급자는 `LLM_PROVIDER` 환경 변수로 선택합니다(기본 `azure`). 이미지는 위에서 pull한 공개 이미지 또는 직접 빌드한 `pdf-qa-extractor`를 사용하세요.
+Unstructured Extractor는 PDF 문서에서 텍스트/표/이미지를 추출합니다(레이아웃은 onnxruntime, OCR은 tesseract — **기본 이미지는 CPU 슬림**이라 GPU 없이도 동작합니다). 통합 진입점 `run_local.py`를 사용하고, 공급자는 `LLM_PROVIDER` 환경 변수로 선택합니다(기본 `azure`). 이미지는 위에서 pull한 공개 이미지 또는 직접 빌드한 `pdf-qa-extractor`를 사용하세요.
 
 ```bash
 # 이미지 별칭 (공개 이미지 사용 시)
 IMG=ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
 
 # Azure AI Foundry / Azure OpenAI (기본, Linux/macOS)
-docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
+docker run --rm -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
 
 # AWS Bedrock (Linux/macOS)
-LLM_PROVIDER=bedrock docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
+LLM_PROVIDER=bedrock docker run --rm -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
 
 # OpenAI (Linux/macOS)
-LLM_PROVIDER=openai docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
+LLM_PROVIDER=openai docker run --rm -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
 
 # Windows (PowerShell/CMD)에서는 $(pwd) 대신 %cd% 사용
-docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
+docker run --rm -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
 ```
 
 > 이전 버전 호환: `processing_local.py`(Bedrock), `processing_local_openai.py`(OpenAI) 스크립트도 그대로 동작하며, 내부적으로 `LLM_PROVIDER`를 설정해 `run_local.py`와 동일한 코어를 호출합니다.
 
-GPU 지원이 활성화되어 있는지 확인하려면:
-```bash
-docker run --rm --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
-```
+> **(선택) GPU 빌드로 실행하는 경우에만** 위 명령에 `--gpus all`을 추가하고, 호스트에 GPU가 인식되는지 확인하세요:
+> ```bash
+> docker run --rm --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
+> ```
 
 #### 환경 변수 설정
 
@@ -225,7 +227,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 #### 성능 최적화 팁
 
 - 대용량 PDF 파일(100MB 이상)은 처리 전 분할하는 것이 좋습니다
-- CUDA 호환 GPU가 있는 환경에서 실행하면 처리 속도가 5-10배 향상됩니다
+- 스캔 PDF의 레이아웃/OCR을 GPU로 가속하려면(선택) GPU 빌드 이미지 + `--gpus all`로 실행하세요
 - 메모리 사용량을 모니터링하고 필요한 경우 `batch_size` 파라미터를 조정하세요 (코드의 partition_pdf 참조)
 
 
@@ -471,6 +473,6 @@ print(f"{len(jobs_config)}개의 병렬 처리 Job을 성공적으로 실행했�
 ## 의존성
 
 - Python 3.10+ (`pdf_qa` 패키지, `pyproject.toml` 참조)
-- Unstructured GPU 텍스트/이미지 추출 이미지 (공개 GHCR `pdf-qa-extractor`)
+- Unstructured 텍스트/이미지 추출 이미지 (공개 GHCR `pdf-qa-extractor`, CPU 슬림)
 - LLM 공급자 SDK: `azure`(azure-ai-projects · openai) / `openai` / `bedrock`(langchain-aws) — `requirements.txt`의 extras 참조
 - 실행 런타임(선택): Azure ML Command Job 또는 AWS SageMaker Processing Job

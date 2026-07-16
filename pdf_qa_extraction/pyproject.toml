@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# PDF partitioning (GPU / OCR heavy stack)
+# PDF partitioning (layout + OCR stack, CPU by default)
 pdf = [
     "unstructured[pdf]>=0.15",
     "opencv-python>=4.8",
