@@ -93,8 +93,12 @@ jobs:
         # Only on pushed builds (the image must exist in the registry to pull).
         if: github.event_name != 'pull_request'
         run: |
-          REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
-          # Reclaim the BuildKit build cache (~12GB of both stages' layers)
+          # env.IMAGE_NAME embeds github.repository, whose owner/name can carry
+          # uppercase letters; docker refs must be lowercase (metadata-action
+          # lowercases the pushed tags, but this ref is built by hand).
+          IMG="$(echo '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')"
+          REF="${IMG}@${{ steps.build.outputs.digest }}"
+          # Reclaim the BuildKit build cache (~16GB of both stages' layers)
           # before pulling the finished image back onto the runner.
           docker buildx prune --all --force || true
           echo "::group::Disk before pull"; df -h /; echo "::endgroup::"
