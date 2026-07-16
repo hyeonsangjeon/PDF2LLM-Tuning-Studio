@@ -1,4 +1,5 @@
-# filepath: /workspaces/python-2/llm-hsjeon/slm-fine-tuning/Dockerfile
+# PDF2LLM-Tuning-Studio - GPU PDF Q&A extraction image
+# Public image (GHCR): one image serves Azure AI Foundry / AWS Bedrock / OpenAI.
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 # 비대화형 모드 설정
@@ -51,18 +52,24 @@ RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 && \
 ENV PATH="/usr/local/cuda-12.4/bin:${PATH}"
 
 # -------------------------
-# 5) Python 패키지 설치 (requirements.txt 사용)
+# 5) 애플리케이션 설치
+#    requirements.txt(전체 런타임 의존성) 설치 후 pdf_qa 코어 패키지를 설치합니다.
+#    하나의 이미지가 Azure AI Foundry / AWS Bedrock / OpenAI 공급자를 모두 지원합니다.
 # -------------------------
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
+COPY requirements.txt pyproject.toml README.md ./
+COPY pdf_qa ./pdf_qa
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir --no-deps --no-build-isolation .
 
 # -------------------------
-# 6) 작업 디렉토리 설정
+# 6) 엔트리포인트 스크립트 복사 (로컬 / Azure ML / SageMaker 공용)
 # -------------------------
-#WORKDIR /app
+COPY run_local.py processing.py azureml_job.py ./
+COPY processing_local.py processing_local_openai.py ./
 
 # -------------------------
-# 컨테이너 실행 시 기본 명령
+# 컨테이너 실행 시 기본 명령 (LLM_PROVIDER 환경변수로 공급자 선택)
 # -------------------------
-CMD ["python3", "--version"]
+CMD ["python3", "run_local.py"]

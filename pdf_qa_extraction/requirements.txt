@@ -1,21 +1,30 @@
+# ==========================================================================
+# PDF2LLM-Tuning-Studio - PDF Q&A extraction container dependencies
+# One image serves all providers (Azure AI Foundry / AWS Bedrock / OpenAI),
+# so the same public image can feed both Azure ML and SageMaker.
+# ==========================================================================
 
-# 핵심 의존성 먼저
-pydantic
+# --- Core ---
+python-dotenv>=1.0
+pydantic>=2
 
-# LangChain 최신 버전 
-langchain-core
-#langchain
-langchain-aws
-langchain_openai
-#langchain-community
-
-# 기본 패키지들
-unstructured[base]
-opencv-python
-pdf2image
+# --- PDF partitioning (GPU / OCR) ---
+unstructured[pdf]>=0.15
+opencv-python>=4.8
+pdf2image>=1.17
 pdfminer.six>=20250506
-pytesseract
-python-dotenv
-unstructured[pdf]
-boto3
+pytesseract>=0.3.10
 
+# --- LLM orchestration ---
+langchain-core>=0.3
+
+# --- Provider: Azure AI Foundry (Azure OpenAI + Agent Service) ---
+langchain-openai>=0.2
+openai>=1.40
+azure-identity>=1.17
+azure-ai-projects>=1.0.0
+azure-ai-agents>=1.0.0
+
+# --- Provider: AWS Bedrock ---
+langchain-aws>=0.2
+boto3>=1.34

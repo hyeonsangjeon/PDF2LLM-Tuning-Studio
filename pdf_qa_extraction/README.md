@@ -2,7 +2,11 @@
 
 [English](README_en.md) | [한국어](README.md)
 
-이 도구는 GPU를 활용하여 PDF 문서에서 블록 단위로 텍스트를 추출하고, Amazon Bedrock의 Claude 모델을 사용하여 추출된 내용에서 고품질 질문-답변 쌍을 자동 생성합니다. 이 과정을 통해 문서의 지식을 구조화된 QA JSON 데이터셋으로 변환하여 학습, 미세 조정 또는 지식 베이스 구축에 활용할 수 있습니다.
+이 도구는 GPU를 활용하여 PDF 문서에서 블록 단위로 텍스트/표/이미지를 추출하고, LLM으로 고품질 질문-답변 쌍을 자동 생성합니다. 이 과정을 통해 문서의 지식을 구조화된 QA JSONL 데이터셋으로 변환하여 학습, 미세 조정 또는 지식 베이스 구축에 활용할 수 있습니다.
+
+LLM 공급자는 환경 변수 `LLM_PROVIDER` 하나로 전환합니다 — **`azure`(기본, Azure AI Foundry / Azure OpenAI)**, `openai`, `bedrock`(AWS). 코어 로직은 클라우드 무관 `pdf_qa` 패키지에 있고, 런타임별 진입점(`run_local.py` 로컬·컨테이너, `azureml_job.py` Azure ML, `processing.py` SageMaker)은 이 패키지를 얇게 감쌉니다.
+
+> Azure ML/Foundry 상세 설정은 [`../azure/README.md`](../azure/README.md)를 참조하세요.
 
 
 
@@ -15,9 +19,17 @@
 
 ![GPU Container Process](../assets/images/flow.png)
 
-*위 다이어그램은 PDF에서 QA 데이터를 추출하는 전체 프로세스를 보여줍니다. PDF 문서가 입력되면 Unstructured 파티션 추출기를 통해 텍스트 블록으로 변환되고, 이 데이터는 Claude LLM을 활용하여 구조화된 JSONL QA 데이터로 가공됩니다.*
+*위 다이어그램은 PDF에서 QA 데이터를 추출하는 전체 프로세스를 보여줍니다. PDF 문서가 입력되면 Unstructured 파티션 추출기를 통해 텍스트 블록으로 변환되고, 이 데이터는 선택한 LLM 공급자(Azure AI Foundry / OpenAI / Bedrock Claude)를 활용하여 구조화된 JSONL QA 데이터로 가공됩니다.*
 
 ## 설치 안내
+
+### 공개 컨테이너 이미지 사용 (권장)
+
+직접 빌드 없이 공개 GHCR 이미지를 바로 사용할 수 있습니다. 이 이미지 하나를 로컬·Azure ML·SageMaker가 공유합니다.
+
+```bash
+docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
+```
 
 ### Unstructured CUDA Docker 이미지 빌드하기
 
@@ -27,12 +39,12 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
 
 2. Docker 이미지 빌드:
      ```bash
-     docker build -t qa-extractor -f Dockerfile .
+     docker build -t pdf-qa-extractor -f Dockerfile .
      ```
 
      ```bash
-     # Event Engine 실습 계정은 네트워크 제한이 있어 이 Dockerfile_eventeng를 사용해야 합니다.
-     docker build -t qa-extractor -f Dockerfile_event_eng .     
+     # Event Engine 실습 계정은 네트워크 제한이 있어 이 Dockerfile_event_eng를 사용해야 합니다.
+     docker build -t pdf-qa-extractor -f Dockerfile_event_eng .     
      ```
 
 
@@ -40,21 +52,26 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
 
 #### 1. 로컬 GPU 환경에서 실행
 
-Unstructured Extractor는 GPU를 활용하여 PDF 문서에서 텍스트를 빠르게 추출합니다. Docker 컨테이너는 NVIDIA GPU를 지원하며, 다음과 같이 실행할 수 있습니다:
+Unstructured Extractor는 GPU를 활용하여 PDF 문서에서 텍스트를 빠르게 추출합니다. Docker 컨테이너는 NVIDIA GPU를 지원합니다. 통합 진입점 `run_local.py`를 사용하고, 공급자는 `LLM_PROVIDER` 환경 변수로 선택합니다(기본 `azure`). 이미지는 위에서 pull한 공개 이미지 또는 직접 빌드한 `pdf-qa-extractor`를 사용하세요.
 
 ```bash
-# AWS Bedrock 사용 (Linux/macOS)
-docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env qa-extractor python processing_local.py
+# 이미지 별칭 (공개 이미지 사용 시)
+IMG=ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
 
-# AWS Bedrock 사용 (Windows)
-docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env qa-extractor python processing_local.py
+# Azure AI Foundry / Azure OpenAI (기본, Linux/macOS)
+docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
 
-# OpenAI 사용 (Linux/macOS)
-docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env qa-extractor python processing_local_openai.py
+# AWS Bedrock (Linux/macOS)
+LLM_PROVIDER=bedrock docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
 
-# OpenAI 사용 (Windows)
-docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env qa-extractor python processing_local_openai.py
+# OpenAI (Linux/macOS)
+LLM_PROVIDER=openai docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
+
+# Windows (PowerShell/CMD)에서는 $(pwd) 대신 %cd% 사용
+docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
 ```
+
+> 이전 버전 호환: `processing_local.py`(Bedrock), `processing_local_openai.py`(OpenAI) 스크립트도 그대로 동작하며, 내부적으로 `LLM_PROVIDER`를 설정해 `run_local.py`와 동일한 코어를 호출합니다.
 
 GPU 지원이 활성화되어 있는지 확인하려면:
 ```bash
@@ -63,27 +80,23 @@ docker run --rm --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
 
 #### 환경 변수 설정
 
-실행 시 다음 환경 변수를 설정해야 합니다:
+공통: `PDF_PATH`(처리할 PDF 경로), `DOMAIN`(문서 도메인), `NUM_QUESTIONS`(텍스트 요소당 질문 수), `NUM_IMG_QUESTIONS`(이미지당 질문 수), `TABLE_MODEL`(표 구조 추론 모델, 예: yolox).
 
-**AWS Bedrock 사용 시 (`processing_local.py`)**
+**☁️ Azure AI Foundry / Azure OpenAI 사용 시 (기본, `LLM_PROVIDER=azure`)**
+- `AZURE_MODE`: `openai`(기본) 또는 `agent`(Foundry Agent Service)
+- `AZURE_OPENAI_ENDPOINT`: 예) `https://<res>.openai.azure.com/`
+- `AZURE_OPENAI_DEPLOYMENT`: 배포 이름 (예: gpt-4o)
+- `AZURE_OPENAI_API_VERSION`: 예) 2024-10-21
+- `AZURE_OPENAI_API_KEY`: (선택) 미설정 시 `DefaultAzureCredential`(Managed Identity / `az login`)로 키리스 인증
+- (agent 모드) `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_AGENT_MODEL`
+
+**🟧 AWS Bedrock 사용 시 (`LLM_PROVIDER=bedrock`)**
 - `AWS_REGION`: AWS 리전 (예: us-east-1)
-- `AWS_ACCESS_KEY_ID`: AWS 액세스 키
-- `AWS_SECRET_ACCESS_KEY`: AWS 시크릿 키
-- `AWS_SESSION_TOKEN`: AWS 세션 토큰 (선택사항)
-- `PDF_PATH`: 처리할 PDF 파일 경로
-- `DOMAIN`: 문서의 주제 도메인 (예: "International Finance")
-- `NUM_QUESTIONS`: 텍스트 요소마다 생성할 질문 수
-- `NUM_IMG_QUESTIONS`: 이미지마다 생성할 질문 수
-- `MODEL_ID`: 사용할 Bedrock 모델 ID (예: anthropic.claude-3-sonnet-20240229-v1:0)
-- `TABLE_MODEL`: 테이블 구조 추론 모델 (예: yolox)
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN`(선택): 자격증명 (SageMaker에서는 실행 역할 사용)
+- `MODEL_ID`: Bedrock 모델 ID (예: anthropic.claude-3-sonnet-20240229-v1:0)
 
-**OpenAI 사용 시 (`processing_local_openai.py`)**
+**OpenAI 사용 시 (`LLM_PROVIDER=openai`)**
 - `OPENAI_API_KEY`: OpenAI API 키
-- `PDF_PATH`: 처리할 PDF 파일 경로
-- `DOMAIN`: 문서의 주제 도메인 (예: "International Finance")
-- `NUM_QUESTIONS`: 텍스트 요소마다 생성할 질문 수
-- `NUM_IMG_QUESTIONS`: 이미지마다 생성할 질문 수
-- `TABLE_MODEL`: 테이블 구조 추론 모델 (예: yolox)
 
 ## 테이블 추출 모델 비교
 
@@ -134,6 +147,29 @@ vi .env
 i를 눌러 입력 모드 진입
 아래 내용을 복사-붙여넣기:
 
+**☁️ Azure AI Foundry / Azure OpenAI 사용 시 (기본):**
+```bash
+# App Setting
+PDF_PATH=data/fsi_data.pdf
+DOMAIN=International Finance
+NUM_QUESTIONS=5
+NUM_IMG_QUESTIONS=1
+TABLE_MODEL=yolox
+
+# LLM Provider
+LLM_PROVIDER=azure
+AZURE_MODE=openai
+
+# Azure OpenAI (Foundry 배포)
+AZURE_OPENAI_ENDPOINT=https://<res>.openai.azure.com/
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_API_VERSION=2024-10-21
+# 키리스(Managed Identity/az login) 사용 시 아래 줄 생략
+AZURE_OPENAI_API_KEY=your_azure_openai_key_here
+
+# Press ESC and type :wq to save and exit
+```
+
 **AWS Bedrock 사용 시:**
 ```bash
 # App Setting
@@ -143,6 +179,9 @@ NUM_QUESTIONS=5
 NUM_IMG_QUESTIONS=1
 MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
 TABLE_MODEL=yolox
+
+# LLM Provider
+LLM_PROVIDER=bedrock
 
 # AWS Configuration
 AWS_REGION=us-east-1
@@ -162,13 +201,16 @@ NUM_QUESTIONS=5
 NUM_IMG_QUESTIONS=1
 TABLE_MODEL=yolox
 
+# LLM Provider
+LLM_PROVIDER=openai
+
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key_here
 
 # Press ESC and type :wq to save and exit
 ```
 
-> **참고**: 로컬 테스트 용도로만 `.env` 파일을 사용하세요. 프로덕션 환경에서는 IAM 역할을 사용하는 것이 참조아키택쳐 사항입니다. 절대로 AWS Key 및 OpenAI API Key를 외부 노출에 주의하시기 바랍니다.
+> **참고**: 로컬 테스트 용도로만 `.env` 파일을 사용하세요. 프로덕션에서는 Azure Managed Identity(또는 AWS IAM 역할)를 사용하는 것이 참조 아키텍처 권장사항입니다. Azure/AWS/OpenAI Key가 외부에 노출되지 않도록 주의하세요.
 
 #### 성능 최적화 팁
 
@@ -179,20 +221,35 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 
 
-#### 2. SageMaker Processing Job에서 실행 
-Unstructured-qa-extractor 이미지는 Amazon SageMaker Processing Jobs를 통해 배치 작업으로 실행할 수 있습니다:
+#### 2. ☁️ Azure ML Command Job에서 실행 (기본)
 
-1. ECR에 이미지 푸시:
+동일한 공개 이미지를 Azure Machine Learning 배치 잡으로 실행합니다. 입력 PDF는 Blob 데이터스토어에서 마운트하고 결과 `qa_pairs.jsonl`을 Blob으로 업로드합니다.
+
+```bash
+# azure/azureml_job.yml의 이미지/엔드포인트를 확인한 뒤 제출
+az ml job create -f ../azure/azureml_job.yml --resource-group <rg> --workspace-name <ws>
+```
+
+- SDK 기반 제출/결과 다운로드 데모: `../azure/azureml_pdf_qa_extraction.ipynb`
+- Foundry Agent Service 데모: `../azure/foundry_agent_quickstart.ipynb`
+- 워크스페이스/컴퓨트/RBAC/Key Vault 설정: [`../azure/README.md`](../azure/README.md)
+
+진입점은 `azureml_job.py`이며 `--input-dir`/`--output-dir`로 경로를 받습니다. 공급자는 `LLM_PROVIDER`(기본 `azure`)로 선택합니다.
+
+#### 3. 🟧 SageMaker Processing Job에서 실행 (also supported)
+Unstructured pdf-qa-extractor 이미지는 Amazon SageMaker Processing Jobs를 통해 배치 작업으로도 실행할 수 있습니다:
+
+1. (선택) 공개 GHCR 이미지를 그대로 쓰거나, 사설 미러가 필요하면 ECR에 푸시:
     터미널에서 아래 명령어들은 각각 ECR 인증, 이미지 태깅, 저장소 생성, 이미지 푸시 과정을 수행합니다. 로컬에서 빌드한 Docker 이미지를 AWS ECR에 등록하여 SageMaker에서 사용할 수 있게 합니다.```
      ```bash
      # ECR 로그인 - AWS 인증 수행
      aws ecr get-login-password --region <your-region> | docker login --username AWS --password-stdin <your-account-id>.dkr.ecr.<your-region>.amazonaws.com
      # 로컬 이미지에 ECR 태그 지정
-     docker tag qa-extractor <your-account-id>.dkr.ecr.<your-region>.amazonaws.com/qa-extractor
+     docker tag pdf-qa-extractor <your-account-id>.dkr.ecr.<your-region>.amazonaws.com/pdf-qa-extractor
      # ECR 저장소 생성
-     aws ecr create-repository --repository-name qa-extractor --region <your-region>
+     aws ecr create-repository --repository-name pdf-qa-extractor --region <your-region>
      # 이미지를 ECR로 푸시
-     docker push <your-account-id>.dkr.ecr.<your-region>.amazonaws.com/qa-extractor
+     docker push <your-account-id>.dkr.ecr.<your-region>.amazonaws.com/pdf-qa-extractor
      ```
 
 
@@ -229,13 +286,13 @@ Unstructured-qa-extractor 이미지는 Amazon SageMaker Processing Jobs를 통�
                       destination='s3://your-bucket/output-data'
                   )
               ],
-              code='path/to/your/processing_script.py'
+              code='processing.py'
           )
           ```
           
           **Processing Job 설정 설명:**
           - `role`: SageMaker가 AWS 리소스에 접근할 수 있는 IAM 역할 ARN
-          - `image_uri`: ECR에 업로드한 qa-extractor 컨테이너 이미지 URI
+          - `image_uri`: ECR(또는 공개 GHCR)에 있는 pdf-qa-extractor 컨테이너 이미지 URI
           - `instance_count`: 실행할 인스턴스 수 (병렬 처리 시 증가)
           - `instance_type`: 처리 작업에 사용할 gpu 인스턴스 유형 
           - `volume_size_in_gb`: 처리 작업에 할당할 EBS 저장 볼륨 크기
@@ -403,6 +460,7 @@ print(f"{len(jobs_config)}개의 병렬 처리 Job을 성공적으로 실행했�
 
 ## 의존성
 
-- Python 3.8+
-- Unstructured GPU TEXT Extractor Image 
-- SageMaker Processin Job
+- Python 3.10+ (`pdf_qa` 패키지, `pyproject.toml` 참조)
+- Unstructured GPU 텍스트/이미지 추출 이미지 (공개 GHCR `pdf-qa-extractor`)
+- LLM 공급자 SDK: `azure`(azure-ai-projects · openai) / `openai` / `bedrock`(langchain-aws) — `requirements.txt`의 extras 참조
+- 실행 런타임(선택): Azure ML Command Job 또는 AWS SageMaker Processing Job

@@ -2,7 +2,11 @@
 
 [English](README_en.md) | [한국어](README.md)
 
-This tool leverages GPU acceleration to extract text blocks from PDF documents and uses Amazon Bedrock's Claude model to automatically generate high-quality question-answer pairs from the extracted content. Through this process, document knowledge is transformed into structured QA JSON datasets that can be used for training, fine-tuning, or knowledge base construction.
+This tool leverages GPU acceleration to extract text/tables/images from PDF documents and uses an LLM to automatically generate high-quality question-answer pairs from the extracted content. Through this process, document knowledge is transformed into structured QA JSONL datasets that can be used for training, fine-tuning, or knowledge base construction.
+
+The LLM provider is selected with a single environment variable `LLM_PROVIDER` — **`azure` (default, Azure AI Foundry / Azure OpenAI)**, `openai`, or `bedrock` (AWS). The core logic lives in the cloud-agnostic `pdf_qa` package, and thin per-runtime entrypoints (`run_local.py` local/container, `azureml_job.py` Azure ML, `processing.py` SageMaker) wrap it.
+
+> For Azure ML/Foundry setup details, see [`../azure/README.md`](../azure/README.md).
 
 [PDF QA Extraction Process Video Guide](https://assets.fsi.kr/videos/qna-extract.mp4)
 
@@ -12,9 +16,17 @@ This tool leverages GPU acceleration to extract text blocks from PDF documents a
 
 ![GPU Container Process](../assets/images/flow.png)
 
-*The above diagram shows the complete process of extracting QA data from PDF documents. When a PDF document is input, it is converted into text blocks through the Unstructured partition extractor, and this data is processed into structured JSONL QA data using the Claude LLM.*
+*The above diagram shows the complete process of extracting QA data from PDF documents. When a PDF document is input, it is converted into text blocks through the Unstructured partition extractor, and this data is processed into structured JSONL QA data using the selected LLM provider (Azure AI Foundry / OpenAI / Bedrock Claude).*
 
 ## Installation Guide
+
+### Use the public container image (recommended)
+
+You can use the public GHCR image directly without building. A single image is shared by local, Azure ML, and SageMaker runtimes.
+
+```bash
+docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
+```
 
 ### Building Unstructured CUDA Docker Image
 
@@ -24,33 +36,38 @@ Unstructured provides powerful tools for extracting and processing content from 
 
 2. Build Docker image:
      ```bash
-     docker build -t qa-extractor -f Dockerfile .
+     docker build -t pdf-qa-extractor -f Dockerfile .
      ```
 
      ```bash
      # Event Engine lab accounts have network restrictions and must use this Dockerfile_event_eng.
-     docker build -t qa-extractor -f Dockerfile_event_eng .     
+     docker build -t pdf-qa-extractor -f Dockerfile_event_eng .     
      ```
 
 ### GPU-based PDF Extractor Usage Guide
 
 #### 1. Running in Local GPU Environment
 
-The Unstructured Extractor uses GPU to quickly extract text from PDF documents. The Docker container supports NVIDIA GPUs and can be run as follows:
+The Unstructured Extractor uses GPU to quickly extract text from PDF documents. The Docker container supports NVIDIA GPUs. Use the unified entrypoint `run_local.py` and select the provider via the `LLM_PROVIDER` environment variable (default `azure`). Use the public image pulled above or a locally built `pdf-qa-extractor`.
 
 ```bash
-# AWS Bedrock (Linux/macOS)
-docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env qa-extractor python processing_local.py
+# Image alias (when using the public image)
+IMG=ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
 
-# AWS Bedrock (Windows)
-docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env qa-extractor python processing_local.py
+# Azure AI Foundry / Azure OpenAI (default, Linux/macOS)
+docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
+
+# AWS Bedrock (Linux/macOS)
+LLM_PROVIDER=bedrock docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
 
 # OpenAI (Linux/macOS)
-docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env qa-extractor python processing_local_openai.py
+LLM_PROVIDER=openai docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env $IMG python run_local.py
 
-# OpenAI (Windows)
-docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env qa-extractor python processing_local_openai.py
+# On Windows (PowerShell/CMD), use %cd% instead of $(pwd)
+docker run --rm --gpus all -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
 ```
+
+> Backward compatible: `processing_local.py` (Bedrock) and `processing_local_openai.py` (OpenAI) still work; they set `LLM_PROVIDER` internally and call the same core as `run_local.py`.
 
 To verify GPU support is enabled:
 ```bash
@@ -59,27 +76,23 @@ docker run --rm --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
 
 #### Environment Variable Configuration
 
-The following environment variables must be set during execution:
+Common: `PDF_PATH`, `DOMAIN`, `NUM_QUESTIONS`, `NUM_IMG_QUESTIONS`, `TABLE_MODEL` (e.g., yolox).
 
-**For AWS Bedrock (`processing_local.py`)**
+**☁️ For Azure AI Foundry / Azure OpenAI (default, `LLM_PROVIDER=azure`)**
+- `AZURE_MODE`: `openai` (default) or `agent` (Foundry Agent Service)
+- `AZURE_OPENAI_ENDPOINT`: e.g., `https://<res>.openai.azure.com/`
+- `AZURE_OPENAI_DEPLOYMENT`: deployment name (e.g., gpt-4o)
+- `AZURE_OPENAI_API_VERSION`: e.g., 2024-10-21
+- `AZURE_OPENAI_API_KEY`: (optional) keyless via `DefaultAzureCredential` (Managed Identity / `az login`) when unset
+- (agent mode) `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_AGENT_MODEL`
+
+**🟧 For AWS Bedrock (`LLM_PROVIDER=bedrock`)**
 - `AWS_REGION`: AWS region (e.g., us-east-1)
-- `AWS_ACCESS_KEY_ID`: AWS access key
-- `AWS_SECRET_ACCESS_KEY`: AWS secret key
-- `AWS_SESSION_TOKEN`: AWS session token (optional)
-- `PDF_PATH`: Path to the PDF file to process
-- `DOMAIN`: Document subject domain (e.g., "International Finance")
-- `NUM_QUESTIONS`: Number of questions to generate per text element
-- `NUM_IMG_QUESTIONS`: Number of questions to generate per image
-- `MODEL_ID`: Bedrock model ID to use (e.g., anthropic.claude-3-sonnet-20240229-v1:0)
-- `TABLE_MODEL`: Table structure inference model (e.g., yolox)
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` (optional): credentials (use the execution role on SageMaker)
+- `MODEL_ID`: Bedrock model ID (e.g., anthropic.claude-3-sonnet-20240229-v1:0)
 
-**For OpenAI (`processing_local_openai.py`)**
+**For OpenAI (`LLM_PROVIDER=openai`)**
 - `OPENAI_API_KEY`: OpenAI API key
-- `PDF_PATH`: Path to the PDF file to process
-- `DOMAIN`: Document subject domain (e.g., "International Finance")
-- `NUM_QUESTIONS`: Number of questions to generate per text element
-- `NUM_IMG_QUESTIONS`: Number of questions to generate per image
-- `TABLE_MODEL`: Table structure inference model (e.g., yolox)
 
 ## Table Extraction Model Comparison
 
@@ -130,6 +143,29 @@ vi .env
 Press i to enter input mode
 Copy and paste the content below:
 
+**☁️ For Azure AI Foundry / Azure OpenAI (default):**
+```bash
+# App Setting
+PDF_PATH=data/fsi_data.pdf
+DOMAIN=International Finance
+NUM_QUESTIONS=5
+NUM_IMG_QUESTIONS=1
+TABLE_MODEL=yolox
+
+# LLM Provider
+LLM_PROVIDER=azure
+AZURE_MODE=openai
+
+# Azure OpenAI (Foundry deployment)
+AZURE_OPENAI_ENDPOINT=https://<res>.openai.azure.com/
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_API_VERSION=2024-10-21
+# Omit the next line to use keyless auth (Managed Identity / az login)
+AZURE_OPENAI_API_KEY=your_azure_openai_key_here
+
+# Press ESC and type :wq to save and exit
+```
+
 **For AWS Bedrock:**
 ```bash
 # App Setting
@@ -139,6 +175,9 @@ NUM_QUESTIONS=5
 NUM_IMG_QUESTIONS=1
 MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
 TABLE_MODEL=yolox
+
+# LLM Provider
+LLM_PROVIDER=bedrock
 
 # AWS Configuration
 AWS_REGION=us-east-1
@@ -158,13 +197,16 @@ NUM_QUESTIONS=5
 NUM_IMG_QUESTIONS=1
 TABLE_MODEL=yolox
 
+# LLM Provider
+LLM_PROVIDER=openai
+
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key_here
 
 # Press ESC and type :wq to save and exit
 ```
 
-> **Note**: Use the `.env` file only for local testing purposes. Using IAM roles in production environments is the reference architecture practice. Please be careful not to expose AWS Keys and OpenAI API Keys externally.
+> **Note**: Use the `.env` file only for local testing purposes. In production, using Azure Managed Identity (or AWS IAM roles) is the reference architecture practice. Please be careful not to expose Azure/AWS/OpenAI keys externally.
 
 #### Performance Optimization Tips
 
@@ -172,21 +214,36 @@ OPENAI_API_KEY=your_openai_api_key_here
 - Running in an environment with CUDA-compatible GPU improves processing speed by 5-10 times
 - Monitor memory usage and adjust the `batch_size` parameter if necessary (refer to partition_pdf in the code)
 
-#### 2. Running on SageMaker Processing Job
+#### 2. ☁️ Running on Azure ML Command Job (default)
 
-The Unstructured-qa-extractor image can be run as a batch job through Amazon SageMaker Processing Jobs:
+Run the same public image as an Azure Machine Learning batch job. Input PDFs are mounted from a Blob datastore and the resulting `qa_pairs.jsonl` is uploaded back to Blob.
 
-1. Push image to ECR:
+```bash
+# Review the image/endpoint in azure/azureml_job.yml, then submit
+az ml job create -f ../azure/azureml_job.yml --resource-group <rg> --workspace-name <ws>
+```
+
+- SDK submit/download demo: `../azure/azureml_pdf_qa_extraction.ipynb`
+- Foundry Agent Service demo: `../azure/foundry_agent_quickstart.ipynb`
+- Workspace/compute/RBAC/Key Vault setup: [`../azure/README.md`](../azure/README.md)
+
+The entrypoint is `azureml_job.py` (`--input-dir`/`--output-dir`); the provider is chosen via `LLM_PROVIDER` (default `azure`).
+
+#### 3. 🟧 Running on SageMaker Processing Job (also supported)
+
+The Unstructured pdf-qa-extractor image can also be run as a batch job through Amazon SageMaker Processing Jobs:
+
+1. (Optional) Use the public GHCR image directly, or push to ECR if you need a private mirror:
     The following commands in the terminal perform ECR authentication, image tagging, repository creation, and image push processes respectively. They register the locally built Docker image to AWS ECR so it can be used in SageMaker.
      ```bash
      # ECR login - Perform AWS authentication
      aws ecr get-login-password --region <your-region> | docker login --username AWS --password-stdin <your-account-id>.dkr.ecr.<your-region>.amazonaws.com
      # Tag local image for ECR
-     docker tag qa-extractor <your-account-id>.dkr.ecr.<your-region>.amazonaws.com/qa-extractor
+     docker tag pdf-qa-extractor <your-account-id>.dkr.ecr.<your-region>.amazonaws.com/pdf-qa-extractor
      # Create ECR repository
-     aws ecr create-repository --repository-name qa-extractor --region <your-region>
+     aws ecr create-repository --repository-name pdf-qa-extractor --region <your-region>
      # Push image to ECR
-     docker push <your-account-id>.dkr.ecr.<your-region>.amazonaws.com/qa-extractor
+     docker push <your-account-id>.dkr.ecr.<your-region>.amazonaws.com/pdf-qa-extractor
      ```
 
 2. Create SageMaker Processing Job:
@@ -220,13 +277,13 @@ The Unstructured-qa-extractor image can be run as a batch job through Amazon Sag
                       destination='s3://your-bucket/output-data'
                   )
               ],
-              code='path/to/your/processing_script.py'
+              code='processing.py'
           )
           ```
           
           **Processing Job Configuration Explanation:**
           - `role`: IAM role ARN for SageMaker to access AWS resources
-          - `image_uri`: qa-extractor container image URI uploaded to ECR
+          - `image_uri`: pdf-qa-extractor container image URI in ECR (or public GHCR)
           - `instance_count`: Number of instances to run (increase for parallel processing)
           - `instance_type`: GPU instance type to use for processing job
           - `volume_size_in_gb`: EBS storage volume size allocated for processing job
@@ -393,6 +450,7 @@ Please refer to individual script documentation for detailed usage of each tool.
 
 ## Dependencies
 
-- Python 3.8+
-- Unstructured GPU TEXT Extractor Image 
-- SageMaker Processing Job
+- Python 3.10+ (`pdf_qa` package, see `pyproject.toml`)
+- Unstructured GPU text/image extractor image (public GHCR `pdf-qa-extractor`)
+- LLM provider SDKs: `azure` (azure-ai-projects · openai) / `openai` / `bedrock` (langchain-aws) — see extras in `requirements.txt`
+- Execution runtime (optional): Azure ML Command Job or AWS SageMaker Processing Job

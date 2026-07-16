@@ -1,138 +1,200 @@
 # PDF2LLM-Tuning-Studio
 
-PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율적으로 파인튜닝하는 엔드투엔드 파이프라인입니다. GPU 가속 PDF 파싱과 최적화된 LLM 파인튜닝을 결합하여 문서 기반 질의응답 시스템을 구축합니다.
+PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율적으로 파인튜닝하는 **Azure-first 멀티클라우드** 엔드투엔드 파이프라인입니다. GPU 가속 PDF 파싱과 최적화된 LLM 파인튜닝을 결합하여 문서 기반 질의응답 시스템을 구축합니다.
+
+기본 백엔드는 **Azure AI Foundry**(Azure OpenAI / Foundry Agent Service)와 **Azure Machine Learning**이며, **AWS Bedrock + SageMaker** 경로도 그대로 지원합니다. 하나의 공개 컨테이너 이미지(GHCR)를 두 클라우드가 함께 사용합니다.
 
 - 금융보안원 AI 개발 강의, 2025
 
 ## 📚 주요 기능
 
-- **GPU 가속 PDF 추출**: Unstructured 라이브러리와 NVIDIA GPU를 활용한 고속 텍스트 추출
-- **Q&A 자동 생성**: Amazon Bedrock Claude 또는 OpenAI 모델을 사용하여 고품질 질문-답변 쌍 생성
-- **메모리 효율적 파인튜닝**: Unsloth 최적화와 LoRA 어댑터로 제한된 GPU 환경에서도 대형 모델 학습 가능
-- **완전 자동화 파이프라인**: PDF 문서 입력부터 맞춤형 LLM 모델 출력까지 자동화
+- **GPU 가속 PDF 추출**: Unstructured 라이브러리와 NVIDIA GPU를 활용한 고속 텍스트/표/이미지 추출
+- **Q&A 자동 생성 (멀티 공급자)**: Azure AI Foundry(Azure OpenAI · Foundry Agent), OpenAI, Amazon Bedrock Claude 중 환경 변수 하나로 전환
+- **클라우드 무관 코어 패키지**: `pdf_qa` 패키지 + 공급자 플러그인 구조로 코드 중복 제거, 런타임별 얇은 진입점
+- **단일 공개 이미지**: `ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor` 하나로 로컬·Azure ML·SageMaker 실행
+- **메모리 효율적 파인튜닝**: Unsloth 최적화와 LoRA 어댑터로 제한된 GPU 환경에서도 대형 모델 학습
+
+## 🏗️ 아키텍처
+
+```
+                        PDF 문서
+                           │
+             ┌─────────────▼──────────────┐
+             │  pdf_qa 코어 패키지 (파싱·프롬프트·파이프라인)  │
+             │  providers: azure · openai · bedrock         │
+             └─────────────┬──────────────┘
+                           │  빌드/배포
+        ghcr.io/.../pdf-qa-extractor  (공개 GPU 컨테이너 이미지 1개)
+                 │ pull                              │ pull
+        ┌────────▼──── Azure (기본) ──┐     ┌────────▼──── AWS (also) ──┐
+        │ Azure ML Command Job        │     │ SageMaker Processing Job  │
+        │  └▶ Azure AI Foundry        │     │  └▶ Bedrock Claude        │
+        │ Blob · Key Vault · Entra ID │     │ S3 · SSM · IAM            │
+        └──────────────┬──────────────┘     └─────────────┬─────────────┘
+                       └──────────────┬───────────────────┘
+                                      ▼
+                          qa_pairs.jsonl (Q&A 데이터셋)
+                                      ▼
+                     fine_tuning/ (Unsloth + LoRA 파인튜닝)
+```
+
+동일한 코드·이미지에서 `LLM_PROVIDER` 환경 변수만 바꾸면 백엔드가 교체됩니다.
 
 ## 🔍 프로젝트 구조
 
 ```
 PDF2LLM-Tuning-Studio/
-├── assets/                  # 공통 리소스 (이미지, 유틸리티)
+├── .github/workflows/
+│   └── build-and-push.yml   # GHCR 컨테이너 자동 빌드/푸시 (공개 이미지)
+│
+├── azure/                   # ☁️ Azure ML + AI Foundry 자산 (Azure-first)
+│   ├── azureml_job.yml               # Azure ML Command Job 스펙
+│   ├── azureml_pdf_qa_extraction.ipynb   # Azure ML 배치 잡 제출 데모
+│   ├── foundry_agent_quickstart.ipynb    # Foundry Agent Service 데모
+│   └── README.md                     # Azure 설정/실행 가이드
+│
+├── assets/                  # 공통 리소스
 │   ├── images/              # 다이어그램 및 이미지
-│   └── utils/               # 공통 유틸리티 함수
+│   └── utils/               # iam.py(AWS) · ssm.py(AWS) · keyvault.py(Azure)
 │
 ├── pdf_qa_extraction/       # PDF 처리 및 Q&A 추출 모듈
-│   ├── Dockerfile           # GPU 지원 PDF 추출 컨테이너
-|   |── Dockerfile_event_eng # AWS Event 실습플렛폼의 네트워크 패키지 경로로 인한 Dockerfile 대용
-│   ├── processing_local.py  # 로컬 처리 스크립트 (AWS Bedrock)
-│   ├── processing_local_openai.py  # 로컬 처리 스크립트 (OpenAI)
-│   ├── processing.py        #SageMaker Processing job entrypoint 배치잡 실행파일
-│   ├── sagemaker_processingjob_pdf_qa_extraction.ipynb # SageMaker Processing을 활용한 PDF 기반 QA 데이터 생성 배치 파이프라인 자동화 데모
-│   └── README.md            # PDF 추출 가이드
+│   ├── pdf_qa/              # ⭐ 클라우드 무관 코어 패키지
+│   │   ├── config.py · parsing.py · prompts.py · extract.py · pipeline.py
+│   │   └── providers/       # azure_foundry · openai · bedrock (+ base 팩토리)
+│   ├── run_local.py         # 로컬/컨테이너 통합 진입점 (LLM_PROVIDER로 전환)
+│   ├── azureml_job.py       # Azure ML 잡 진입점
+│   ├── processing.py        # SageMaker Processing Job 진입점
+│   ├── processing_local*.py # (하위호환) Bedrock/OpenAI 로컬 실행 shim
+│   ├── pyproject.toml · requirements.txt
+│   ├── Dockerfile · Dockerfile_event_eng
+│   └── README.md · README_en.md
 │
 └── fine_tuning/             # LLM 파인튜닝 모듈
-    ├── 01_setup_environment.ipynb        # 환경 설정
-    ├── 02_data_preprocessing_and_analysis.ipynb  # 데이터 전처리
-    ├── 03_train_unsloth_model.ipynb      # Unsloth 모델 훈련
-    └── README.md            # 파인튜닝 가이드
+    ├── 01_setup_environment.ipynb
+    ├── 02_data_preprocessing_and_analysis.ipynb  # Blob/S3/로컬 데이터 로딩
+    ├── 03_train_unsloth_model.ipynb
+    └── README.md
 ```
 
 ## 🚀 시작 가이드
 
-### 1단계: PDF 텍스트 및 Q&A 추출
+### 0단계: 컨테이너 이미지 준비
 
-Cuda 컨테이너를 빌드해보고, GPU인스턴스 터미널에서 PDF 문서에서 텍스트 블록을 추출하고 고품질 Q&A 쌍을 생성합니다.
-
-#### PDF 텍스트 및 Q&A 추출
-
-PDF 문서 처리 및 Q&A 추출을 위한 Docker 환경을 설정하고 실행합니다. 자세한 내용은 [PDF Q&A 추출 가이드](./pdf_qa_extraction/README.md)를 참조하세요.
+공개 GHCR 이미지를 그대로 받거나 직접 빌드합니다.
 
 ```bash
+# 공개 이미지 pull (권장)
+docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
+
+# 또는 직접 빌드
 cd pdf_qa_extraction
-# Docker 빌드 및 실행 지침은 PDF Q&A 추출 가이드 참조
+docker build -t pdf-qa-extractor -f Dockerfile .
 ```
 
-이 모듈에서 수행되는 작업:
-- NVIDIA GPU 가속 PDF 텍스트 추출
-- Amazon Bedrock Claude 또는 OpenAI를 활용한 고품질 Q&A 쌍 생성
-- 문서 도메인 기반 맞춤형 질문 생성
-- SageMaker Processing 배치 작업으로 자동화된 PDF 문서 처리 배치 프로세스
+### 1단계: PDF 텍스트 및 Q&A 추출
 
+GPU 컨테이너에서 PDF의 텍스트/표/이미지를 추출하고 고품질 Q&A 쌍을 생성합니다. 공급자는 `LLM_PROVIDER`로 선택합니다(기본 `azure`).
+
+#### ☁️ Azure (기본 경로)
+
+```bash
+# Azure OpenAI (Foundry 모델 배포) 사용
+docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env \
+  ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest \
+  python run_local.py
+```
+
+`.env` 예시(Azure OpenAI):
+```bash
+LLM_PROVIDER=azure
+AZURE_MODE=openai
+AZURE_OPENAI_ENDPOINT=https://<res>.openai.azure.com/
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_API_VERSION=2024-10-21
+# 키 대신 Managed Identity/az login 사용 시 API_KEY 생략
+PDF_PATH=data/fsi_data.pdf
+DOMAIN=International Finance
+NUM_QUESTIONS=5
+NUM_IMG_QUESTIONS=1
+TABLE_MODEL=yolox
+```
+
+- **Azure ML 배치 잡**으로 실행: [`azure/README.md`](./azure/README.md), `azure/azureml_job.yml`, `azure/azureml_pdf_qa_extraction.ipynb`
+- **Foundry Agent Service**(교수 페르소나 에이전트)로 생성: `azure/foundry_agent_quickstart.ipynb` (`AZURE_MODE=agent`)
+
+#### 🟧 AWS (also supported)
+
+```bash
+# AWS Bedrock 사용
+LLM_PROVIDER=bedrock docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env \
+  ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest \
+  python run_local.py
+```
+
+SageMaker Processing 배치 잡 실행은 [PDF Q&A 추출 가이드](./pdf_qa_extraction/README.md)와 `sagemaker_processingjob_pdf_qa_extraction.ipynb`를 참조하세요.
 
 ### 2단계: 데이터 전처리 및 분석
 
-생성된 Q&A 데이터를 파인튜닝에 적합한 형식으로 변환합니다. 이 단계에서는 데이터 품질을 검증하고 모델 학습에 최적화된 형태로 준비합니다.
+생성된 Q&A 데이터를 파인튜닝에 적합한 형식으로 변환합니다. `fine_tuning/02_data_preprocessing_and_analysis.ipynb`에서 진행하며, 입력 데이터는 **Azure Blob / AWS S3 / 로컬**에서 로드할 수 있습니다(`DATA_SOURCE` 환경 변수).
 
-데이터 전처리 및 분석은 `fine_tuning/02_data_preprocessing_and_analysis.ipynb` 노트북에서 진행됩니다.
-
-자세한 내용은 [LLM 파인튜닝 가이드](./fine_tuning/README.md)를 참조하세요.
-
-이 노트북에서 수행되는 작업:
-- 문서에서 추출한 데이터 품질 검증 (중복/짧은 응답 제거)
-- 통계 분석 및 시각화
-- 학습/검증 데이터셋 분할
-- 모델 학습용 입력 포맷으로 변환
+- 데이터 품질 검증(중복/짧은 응답 제거), 통계 분석/시각화, 학습·검증 분할, 학습 포맷 변환
 
 ### 3단계: LLM 파인튜닝
 
-Unsloth와 LoRA 어댑터를 사용하여 메모리 효율적인 파인튜닝을 수행합니다.
+Unsloth와 LoRA 어댑터로 메모리 효율적 파인튜닝을 수행합니다. `fine_tuning/03_train_unsloth_model.ipynb`에서 진행하며, Azure ML Compute 또는 AWS/온프레미스 GPU 어디서든 동작합니다. 자세한 내용은 [LLM 파인튜닝 가이드](./fine_tuning/README.md)를 참조하세요.
 
-파인튜닝은 `fine_tuning/03_train_unsloth_model.ipynb` 노트북에서 진행됩니다.
-자세한 내용은 [LLM 파인튜닝 가이드](./fine_tuning/README.md)를 참조하세요.
+## 🔀 공급자 전환 (멀티클라우드)
 
-
-주요 단계:
-1. 모델 로드 및 양자화 설정
-2. LoRA 어댑터 구성
-3. 학습 데이터 준비
-4. 모델 훈련
-5. 추론 및 테스트
+| 목표 | `LLM_PROVIDER` | 추가 설정 |
+|---|---|---|
+| Azure OpenAI (기본) | `azure` | `AZURE_MODE=openai`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT` |
+| Azure AI Foundry Agent | `azure` | `AZURE_MODE=agent`, `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_AGENT_MODEL` |
+| OpenAI 직접 | `openai` | `OPENAI_API_KEY` |
+| AWS Bedrock | `bedrock` | AWS 자격증명 / SageMaker 실행 역할, `MODEL_ID` |
 
 ## 💡 기술 스택
 
-- **PDF 추출**: Unstructured, CUDA, Docker
-- **질문-답변 생성**: Amazon Bedrock Claude, OpenAI (GPT-4o, GPT-4 Turbo 등)
+- **Q&A 생성 (기본)**: Azure AI Foundry — Azure OpenAI · Foundry Agent Service
+- **오케스트레이션 (기본)**: Azure Machine Learning (Command Job)
+- **Q&A 생성 (also)**: Amazon Bedrock Claude, OpenAI(GPT-4o 등)
+- **오케스트레이션 (also)**: Amazon SageMaker Processing
+- **컨테이너/레지스트리**: Docker, GitHub Container Registry(GHCR, 공개)
+- **PDF 추출**: Unstructured, CUDA
 - **모델 파인튜닝**: Unsloth, PyTorch, LoRA
-- **지원 모델**: Llama, Mistral, Gemma, Qwen 등 다양한 오픈소스 LLM
+- **지원 모델**: Llama, Mistral, Gemma, Qwen 등 오픈소스 LLM
 
 ## 📊 성능 및 요구사항
 
 ### 하드웨어 요구사항
-
 - **PDF 추출**: NVIDIA GPU (CUDA 지원)
 - **파인튜닝**: 최소 8GB VRAM (16GB+ 권장)
 
 ### 최적화 팁
-
-1. **PDF 처리**:
-   - 대용량 PDF(100MB+)는 분할 처리
-   - `batch_size` 파라미터로 메모리 사용량 조절
-
-2. **모델 파인튜닝**:
-   - 4비트 양자화로 메모리 사용량 75% 감소
-   - `gradient_checkpointing="unsloth"`로 30% 추가 VRAM 절약
-   - `batch_size`와 `gradient_accumulation_steps` 조정으로 메모리-속도 균형
+1. **PDF 처리**: 대용량 PDF(100MB+)는 분할 처리, `batch_size`로 메모리 조절
+2. **모델 파인튜닝**: 4비트 양자화로 메모리 75% 감소, `gradient_checkpointing="unsloth"`로 추가 30% VRAM 절약
 
 ## 🔗 확장 가능성
-
-- **추가 모델 지원**: 새로운 오픈소스 LLM 모델 적용
+- **추가 모델 지원**: 새로운 오픈소스 LLM 적용
 - **다국어 지원**: 다양한 언어 문서 처리
-- **SageMaker 통합**: AWS 환경에서 대규모 파인튜닝
-- **RAG 시스템 구축**: 문서 임베딩으로 검색 증강 생성 시스템 개발
+- **Azure ML / SageMaker 통합**: 대규모 병렬 파인튜닝·추론
+- **RAG 시스템 구축**: 문서 임베딩으로 검색 증강 생성
 
 ---
 
-> 각 모듈에 대한 자세한 정보는 해당 디렉토리의 README 파일을 참조하세요:
-> - PDF Q&A 추출 가이드
-> - LLM 파인튜닝 가이드
-
-
+> 각 모듈에 대한 자세한 정보는 해당 디렉토리의 README를 참조하세요:
+> - [Azure ML + Foundry 가이드](./azure/README.md)
+> - [PDF Q&A 추출 가이드](./pdf_qa_extraction/README.md)
+> - [LLM 파인튜닝 가이드](./fine_tuning/README.md)
 
 ## 📚 참고 자료
 
+- [Azure AI Foundry Documentation](https://learn.microsoft.com/azure/ai-foundry/)
+- [Azure AI Foundry Agent Service](https://learn.microsoft.com/azure/ai-services/agents/)
+- [Azure Machine Learning Documentation](https://learn.microsoft.com/azure/machine-learning/)
 - [Unsloth: Accelerating LLM Fine-tuning](https://github.com/unslothai/unsloth)
 - [Unstructured: Open-source PDF extraction](https://github.com/Unstructured-IO/unstructured)
 - [Amazon Bedrock Documentation](https://docs.aws.amazon.com/bedrock/)
 - [OpenAI Platform Documentation](https://platform.openai.com/docs)
 - [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685)
 - [Llama 3: Open Foundation and Fine-Tuned Chat Models](https://ai.meta.com/llama/)
-- [Fine-Tuning Llama-3-1-8B for Function Calling using LoRA](https://medium.com/@gautam75/fine-tuning-llama-3-1-8b-for-function-calling-using-lora-159b9ee66060)
 - [teddylee777: LangChain 한국어 튜토리얼](https://github.com/teddylee777/langchain-kr)

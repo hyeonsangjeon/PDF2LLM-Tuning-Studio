@@ -36,6 +36,23 @@ NVIDIA GPU에 따라 다양한 메모리 최적화 기법을 적용할 수 있�
 
 > 💡 **참고**: PyTorch 버전에 따라 패치가 필요할 수 있습니다. PyTorch 2.3 미만 버전에서는 `torch.amp.is_autocast_available()` API 패치가 필요합니다.
 
+### 실행 환경 (Azure-first, 멀티클라우드)
+
+노트북은 클라우드 무관하게 동작하며, GPU가 있는 어느 환경에서든 실행할 수 있습니다.
+
+- **☁️ Azure ML (기본, 권장)**: Azure Machine Learning **Compute Instance/Cluster**(예: `Standard_NC` GPU 계열)에서 노트북을 실행합니다. 데이터는 Blob 데이터스토어에서 로드합니다.
+- **🟧 AWS / 온프레미스 (also)**: SageMaker Notebook/Studio 또는 EC2 GPU, 로컬 GPU에서도 동일하게 동작합니다.
+
+데이터 로딩은 `02_data_preprocessing_and_analysis.ipynb`에서 `DATA_SOURCE` 환경 변수로 소스를 선택합니다:
+
+| `DATA_SOURCE` | 소스 | 주요 변수 |
+|---|---|---|
+| `azure` (기본) | Azure Blob Storage | `AZURE_STORAGE_ACCOUNT_URL`, `AZURE_BLOB_CONTAINER`, `AZURE_BLOB_NAME` |
+| `s3` | AWS S3 | `S3_BUCKET`, `S3_KEY` |
+| `local` | 로컬 파일 | `data/qa_pairs.jsonl` |
+
+> Azure Blob은 `DefaultAzureCredential`(Managed Identity / `az login`)로 인증합니다. 상세 설정은 [`../azure/README.md`](../azure/README.md)를 참조하세요.
+
 ## 2. 데이터 준비
 
 ### Q&A 데이터 구조

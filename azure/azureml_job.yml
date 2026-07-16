@@ -1,0 +1,52 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
+type: command
+
+display_name: pdf-qa-extraction
+description: Extract Korean Q&A pairs from a PDF with Azure AI Foundry (Azure OpenAI or Agent Service).
+experiment_name: pdf2llm-qa
+
+# Public multi-cloud image built by .github/workflows/build-and-push.yml.
+# The same image also runs on AWS SageMaker Processing.
+environment:
+  image: ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
+
+# A GPU cluster speeds up table/image detection; yolox also runs on CPU clusters.
+compute: azureml:gpu-cluster
+
+inputs:
+  pdf:
+    type: uri_folder
+    mode: ro_mount
+    path: azureml://datastores/workspaceblobstore/paths/pdf-qa/input/
+
+outputs:
+  qa:
+    type: uri_folder
+    mode: rw_mount
+    path: azureml://datastores/workspaceblobstore/paths/pdf-qa/output/
+
+environment_variables:
+  # --- Azure-first defaults ---
+  LLM_PROVIDER: azure
+  # AZURE_MODE=openai -> Azure OpenAI deployment (default, robust).
+  # AZURE_MODE=agent  -> Azure AI Foundry Agent Service (set AZURE_AI_PROJECT_ENDPOINT).
+  AZURE_MODE: openai
+  AZURE_OPENAI_ENDPOINT: https://<your-foundry-resource>.openai.azure.com/
+  AZURE_OPENAI_DEPLOYMENT: gpt-4o
+  AZURE_OPENAI_API_VERSION: "2024-10-21"
+  # Keyless auth via the compute's managed identity is recommended (no key here).
+  # For Agent mode instead of the two AZURE_OPENAI_* lines above, set:
+  # AZURE_AI_PROJECT_ENDPOINT: https://<your-project>.services.ai.azure.com/api/projects/<project-name>
+  # AZURE_AI_AGENT_MODEL: gpt-4o
+
+# Uploads the pdf_qa package + entrypoints as the job snapshot.
+code: ../pdf_qa_extraction
+command: >-
+  python azureml_job.py
+  --provider azure
+  --input-dir ${{inputs.pdf}}
+  --output-dir ${{outputs.qa}}
+  --domain "International Finance"
+  --num_questions 5
+  --num_img_questions 1
+  --table_model yolox

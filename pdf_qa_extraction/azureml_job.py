@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Azure ML command-job entrypoint for PDF -> Q&A extraction.
+
+Reads a PDF from ``--input-dir`` (an AML input mount / datastore path) and
+writes ``qa_pairs.jsonl`` into ``--output-dir`` (an AML output mount). Defaults
+to the Azure AI Foundry provider. Example (see ``azure/azureml_job.yml``)::
+
+    python azureml_job.py --input-dir ${{inputs.pdf}} --output-dir ${{outputs.qa}}
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import os
+import sys
+
+try:
+    import pdf_qa  # noqa: F401
+except ModuleNotFoundError:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from pdf_qa import QAConfig, get_provider, run_pipeline
+
+
+def _resolve_pdf(input_dir: str, pdf_name: str | None) -> str:
+    """Accept either a directly-mounted file or a directory of PDFs."""
+    if os.path.isfile(input_dir):
+        return input_dir
+    if pdf_name:
+        candidate = os.path.join(input_dir, pdf_name)
+        if os.path.isfile(candidate):
+            return candidate
+    matches = sorted(glob.glob(os.path.join(input_dir, "**", "*.pdf"), recursive=True))
+    if not matches:
+        raise FileNotFoundError(f"입력 PDF를 찾을 수 없습니다: {input_dir}")
+    return matches[0]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Azure ML PDF->QA 배치 잡")
+    parser.add_argument("--provider", default=os.getenv("LLM_PROVIDER", "azure"),
+                        help="LLM 공급자: azure(기본) | bedrock | openai")
+    parser.add_argument("--input-dir", dest="input_dir", default="data")
+    parser.add_argument("--output-dir", dest="output_dir", default="outputs")
+    parser.add_argument("--pdf-name", dest="pdf_name", default=None)
+    parser.add_argument("--domain", default="International Finance")
+    parser.add_argument("--num_questions", default="5")
+    parser.add_argument("--num_img_questions", default="1")
+    parser.add_argument("--model_id", default=None)
+    parser.add_argument("--table_model", default="yolox")
+    args = parser.parse_args()
+
+    config = QAConfig.from_args(args)
+    provider = get_provider(args.provider, config=config)
+    pdf_path = _resolve_pdf(args.input_dir, args.pdf_name)
+    output_path = os.path.join(args.output_dir, "qa_pairs.jsonl")
+    run_pipeline(pdf_path, output_path, provider, config)
+
+
+if __name__ == "__main__":
+    main()
