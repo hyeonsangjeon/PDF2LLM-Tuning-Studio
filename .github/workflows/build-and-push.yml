@@ -4,7 +4,8 @@ name: Build and push PDF-QA image (GHCR)
 # Container Registry (ghcr.io) as a build matrix:
 #   * :latest      - CPU-only, slim (~2GB) - the default for most users
 #   * :latest-gpu  - CUDA torch (~7.5GB) - run with `--gpus all` to GPU-accelerate
-#                    unstructured's hi_res layout/table (PyTorch) models
+#                    unstructured's table-structure model (Table Transformer,
+#                    PyTorch). Layout (YOLOX/onnxruntime) & Tesseract OCR stay CPU.
 # The same images feed both Azure ML and SageMaker, so learners can `docker
 # pull` without a cloud account.
 

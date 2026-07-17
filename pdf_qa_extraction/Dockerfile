@@ -10,12 +10,15 @@
 #     `unstructured[pdf]`, yet its default PyPI wheel drags ~3.5GB of bundled
 #     NVIDIA CUDA libraries (cudnn/cublas/...). We install the CPU torch wheel
 #     (~200MB) instead and drop the CUDA base image.
-#   * NOTE: unstructured's hi_res layout/table models DO auto-run on the GPU
-#     when CUDA torch is present - they call torch.cuda.is_available() *inside*
-#     the library, so no app-level .cuda() is needed. For a GPU host, build the
-#     GPU variant below (or pull the published :latest-gpu tag): it reinstates
-#     CUDA torch and those models will use the GPU. The heavy LoRA fine-tuning
-#     workload still runs in a separate Azure ML / SageMaker training job.
+#   * NOTE: unstructured's table-structure model (Table Transformer) is PyTorch
+#     and auto-runs on the GPU when CUDA torch is present - it calls
+#     torch.cuda.is_available() *inside* the library, no app-level .cuda()
+#     needed. (Layout detection defaults to YOLOX on *onnxruntime*, which stays
+#     on CPU unless onnxruntime-gpu is added; Tesseract OCR is always CPU. See
+#     README "PDF parsing models - GPU/CPU".) For a GPU host, build the GPU
+#     variant below (or pull the published :latest-gpu tag): it reinstates CUDA
+#     torch so the table model uses the GPU. The heavy LoRA fine-tuning workload
+#     still runs in a separate Azure ML / SageMaker training job.
 #   * Multi-stage: compilers/headers live only in the builder; the final image
 #     ships a self-contained virtualenv + a handful of runtime libs.
 #

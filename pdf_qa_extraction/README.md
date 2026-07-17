@@ -35,9 +35,11 @@ docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
 docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu
 ```
 
-> **CPU vs GPU 이미지**: 스캔·이미지 PDF의 `hi_res` 레이아웃/표 감지는 PyTorch 모델을 쓰는데,
-> `:latest-gpu`(CUDA torch)로 `--gpus all` 실행 시 이 모델들이 **자동으로 GPU 가속**됩니다. 디지털
-> PDF만 처리하거나 GPU가 없으면 기본 `:latest`(CPU)로 충분합니다.
+> **CPU vs GPU 이미지**: `:latest-gpu`(CUDA torch)로 `--gpus all` 실행 시 **표 구조 인식(Table
+> Transformer, PyTorch)** 이 자동으로 GPU 가속됩니다. 단, **레이아웃 감지(기본 YOLOX)는 onnxruntime**
+> 이라 GPU를 쓰려면 별도로 `onnxruntime-gpu`가 필요하고, **OCR(Tesseract)** 은 항상 CPU입니다. 모델별
+> GPU/CPU 구분은 아래 [PDF 파싱 내부 모델 — GPU/CPU 구분](#pdf-파싱-내부-모델--gpucpu-구분) 표를
+> 참고하세요. 디지털 PDF만 처리하거나 GPU가 없으면 기본 `:latest`(CPU)로 충분합니다.
 
 ### Unstructured CUDA Docker 이미지 빌드하기
 
@@ -63,13 +65,58 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
 > 제거했습니다(멀티스테이지: 컴파일러·헤더는 빌더 스테이지에만).
 >
 > **GPU 가속이 필요하면** 위의 `:latest-gpu` 이미지를 쓰거나 아래처럼 CUDA torch로 빌드하세요.
-> unstructured의 `hi_res` 레이아웃/표 모델은 CUDA torch가 있으면 라이브러리 내부에서
-> `torch.cuda.is_available()`를 확인해 **자동으로 GPU를 사용**합니다(`--gpus all`로 실행 — `libcuda`는
-> nvidia-container-toolkit이 주입). 무거운 LoRA 파인튜닝은 여전히 별도 Azure ML / SageMaker 잡에서
-> 돌아갑니다.
+> unstructured의 **표 구조 모델(Table Transformer)** 은 PyTorch라 CUDA torch가 있으면 라이브러리
+> 내부에서 `torch.cuda.is_available()`를 확인해 **자동으로 GPU를 사용**합니다(`--gpus all`로 실행 —
+> `libcuda`는 nvidia-container-toolkit이 주입). **레이아웃 감지·OCR은 별개**이니 아래
+> [PDF 파싱 내부 모델 — GPU/CPU 구분](#pdf-파싱-내부-모델--gpucpu-구분)을 확인하세요. 무거운 LoRA
+> 파인튜닝은 여전히 별도 Azure ML / SageMaker 잡에서 돌아갑니다.
 > ```bash
 > docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -t pdf-qa-extractor:gpu -f Dockerfile .
 > ```
+
+### PDF 파싱 내부 모델 — GPU/CPU 구분
+
+`unstructured.partition.pdf.partition_pdf`는 단일 모델이 아니라 **단계별로 다른 엔진**을 씁니다. 엔진이
+PyTorch면 CUDA torch로 GPU를 타지만, onnxruntime·Tesseract·pdfminer는 별개입니다. 우리 이미지 구성
+(`:latest` = CPU torch + CPU onnxruntime, `:latest-gpu` = CUDA torch + **CPU** onnxruntime) 기준 실제
+가속 여부:
+
+| 단계 | 모델 / 라이브러리 | 실행 엔진 | `:latest` (CPU) | `:latest-gpu` (CUDA torch) |
+|---|---|---|---|---|
+| 텍스트 추출 (디지털 PDF, `strategy="fast"`) | pdfminer.six | 순수 파이썬 | CPU | CPU (모델 없음) |
+| 레이아웃 감지 (기본 `yolox`) | YOLOX | **onnxruntime** | CPU | **CPU** — GPU엔 `onnxruntime-gpu` 필요 |
+| 레이아웃 감지 (대안 `detectron2_onnx` 등) | Detectron2-ONNX | **onnxruntime** | CPU | **CPU** — GPU엔 `onnxruntime-gpu` 필요 |
+| 표 구조 인식 (`infer_table_structure=True`) | Table Transformer (TATR) | **PyTorch / transformers** | CPU | **GPU (자동)** |
+| OCR (스캔 페이지, `strategy="hi_res"`/`"ocr_only"`) | Tesseract | Tesseract C++ | CPU | **CPU (항상)** |
+| 이미지 블록 추출/크롭 | Pillow · pdf2image · OpenCV | CPU | CPU | CPU |
+
+**핵심 요약**
+- `:latest-gpu`가 실제로 GPU로 돌리는 건 **표 구조 모델(Table Transformer, PyTorch)** 하나뿐입니다.
+  그리고 이 모델은 `infer_table_structure=True`일 때만 로드됩니다 — 이 프로젝트에선 `TABLE_MODEL`
+  환경변수(또는 `--table_model`)를 **지정해야** 켜집니다. 미지정 시 표 모델이 안 돌아 GPU도 안 탑니다.
+- **레이아웃 감지(YOLOX/Detectron2-ONNX)** 는 onnxruntime이라, 기본 이미지엔 CPU 전용 `onnxruntime`만
+  들어 있어 **CPU**로 돕니다. onnxruntime은 `CUDAExecutionProvider`가 있을 때만 GPU를 쓰는데, 그건
+  `onnxruntime-gpu` 패키지 + 호환 CUDA/cuDNN이 있어야 합니다(아래 참고).
+- **OCR(Tesseract)** 과 디지털 PDF의 텍스트 추출(pdfminer)은 **항상 CPU**입니다.
+
+**모델 선택 방법 (여러 개 중 고르기)**
+- **전략**: `partition_pdf(strategy=...)` — `"fast"`(pdfminer, 모델 없음) · `"hi_res"`(레이아웃+선택적
+  OCR/표) · `"ocr_only"`(Tesseract) · `"auto"`(기본, 문서/옵션에 따라 자동 선택).
+- **레이아웃 모델**: `hi_res_model_name=` 인자 또는 `UNSTRUCTURED_DEFAULT_MODEL_NAME` 환경변수.
+  선택지: `yolox`(기본) · `yolox_tiny` · `yolox_quantized` · `detectron2_onnx` · `detectron2_quantized`
+  · `detectron2_mask_rcnn` (모두 ONNX).
+- **표 인식**: `infer_table_structure=True` → Table Transformer(PyTorch). 이 저장소에선 `TABLE_MODEL`
+  환경변수로 켭니다.
+
+> **참고 — 예전 이미지에서 3080이 돌던 이유**: 구버전 unstructured는 레이아웃 기본 모델로 **PyTorch
+> detectron2**(layoutparser)를 썼기 때문에 CUDA torch만으로도 레이아웃 단계가 GPU를 탔습니다. 현재
+> 버전은 레이아웃 기본이 **ONNX(YOLOX)** 로 바뀌어, 레이아웃은 `onnxruntime-gpu` 없이는 CPU입니다.
+> 표 인식은 여전히 torch라 `:latest-gpu`에서 GPU 가속됩니다.
+
+> **(고급) 레이아웃까지 GPU로 돌리려면**: `:latest-gpu` 위에 `onnxruntime-gpu`를 설치하세요. 단
+> onnxruntime-gpu는 자체 CUDA/cuDNN 런타임을 요구하므로 torch가 번들한 버전과 **정확히 맞아야** 합니다
+> (`pip install onnxruntime-gpu` 후 `LD_LIBRARY_PATH`에 torch의 `nvidia/*` 라이브러리 경로 추가). 버전이
+> 안 맞으면 조용히 CPU로 폴백합니다.
 
 
 ### PDF Extractor 활용 가이드
@@ -239,7 +286,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 #### 성능 최적화 팁
 
 - 대용량 PDF 파일(100MB 이상)은 처리 전 분할하는 것이 좋습니다
-- 스캔 PDF의 레이아웃/OCR을 GPU로 가속하려면(선택) GPU 빌드 이미지 + `--gpus all`로 실행하세요
+- 스캔 PDF의 **표 구조 인식(Table Transformer)** 을 GPU로 가속하려면 `:latest-gpu` 이미지 + `--gpus all` + `TABLE_MODEL` 설정으로 실행하세요 (레이아웃 감지·OCR은 CPU — 위 [GPU/CPU 구분](#pdf-파싱-내부-모델--gpucpu-구분) 표 참고)
 - 메모리 사용량을 모니터링하고 필요한 경우 `batch_size` 파라미터를 조정하세요 (코드의 partition_pdf 참조)
 
 
