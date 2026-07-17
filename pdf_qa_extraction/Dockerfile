@@ -2,18 +2,22 @@
 # PDF2LLM-Tuning-Studio - PDF Q&A extraction image (slim, CPU, multi-stage)
 # Public image (GHCR): one image serves Azure AI Foundry / AWS Bedrock / OpenAI.
 #
-# Why this is small (~6GB -> ~2.5GB):
-#   * This container only *parses* PDFs (unstructured layout via onnxruntime +
-#     tesseract OCR) and calls the LLM over the *network* (Azure/Bedrock/OpenAI
-#     APIs). There is no torch.cuda / onnxruntime-gpu code path here, so CUDA is
-#     never actually used. torch is pulled in only transitively by
-#     `unstructured[pdf]`, and its default PyPI wheel drags ~3.5GB of bundled
-#     NVIDIA CUDA libraries (cudnn/cublas/...) that this image never touches.
-#   * So we install the CPU-only torch wheel (~200MB) and drop the CUDA base
-#     image entirely. The heavy GPU workload (LoRA fine-tuning) runs in a
-#     separate Azure ML / SageMaker training job, not in this extraction image.
+# Why this is small (~6GB -> ~2GB):
+#   * This DEFAULT build is CPU-only. The extraction *code* never calls CUDA
+#     directly, so it works fine on CPU: unstructured parses PDFs (hi_res layout
+#     via a PyTorch/ONNX model + tesseract OCR) and the LLM runs over the
+#     *network* (Azure/Bedrock/OpenAI APIs). torch is only a transitive dep of
+#     `unstructured[pdf]`, yet its default PyPI wheel drags ~3.5GB of bundled
+#     NVIDIA CUDA libraries (cudnn/cublas/...). We install the CPU torch wheel
+#     (~200MB) instead and drop the CUDA base image.
+#   * NOTE: unstructured's hi_res layout/table models DO auto-run on the GPU
+#     when CUDA torch is present - they call torch.cuda.is_available() *inside*
+#     the library, so no app-level .cuda() is needed. For a GPU host, build the
+#     GPU variant below (or pull the published :latest-gpu tag): it reinstates
+#     CUDA torch and those models will use the GPU. The heavy LoRA fine-tuning
+#     workload still runs in a separate Azure ML / SageMaker training job.
 #   * Multi-stage: compilers/headers live only in the builder; the final image
-#     ships a stripped, self-contained virtualenv + a handful of runtime libs.
+#     ships a self-contained virtualenv + a handful of runtime libs.
 #
 # Optional GPU build: install CUDA torch on the same slim base and run with
 # `--gpus all` (libcuda is injected by nvidia-container-toolkit, no CUDA base

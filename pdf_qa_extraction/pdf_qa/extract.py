@@ -1,8 +1,10 @@
 """PDF partitioning helpers built on `unstructured`.
 
-Extraction runs on CPU by default: the ``hi_res`` layout model uses
-``onnxruntime`` and scanned pages use ``tesseract`` OCR, so this container needs
-no CUDA. (torch is pulled in only transitively by ``unstructured[pdf]``.)
+The default container image is CPU-only, so extraction runs on CPU. Note that
+``unstructured``'s ``hi_res`` layout/table models are PyTorch-based and will
+automatically use the GPU when CUDA-enabled torch is present (they check
+``torch.cuda.is_available()`` internally) -- build/run the GPU image variant to
+enable that. Scanned pages are OCR'd with ``tesseract`` (CPU only).
 
 `unstructured` is imported lazily inside :func:`extract_elements_from_pdf` so
 the rest of the package (providers, parsing, tests) can be imported without the

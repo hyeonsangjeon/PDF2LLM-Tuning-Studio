@@ -28,8 +28,16 @@ LLM 공급자는 환경 변수 `LLM_PROVIDER` 하나로 전환합니다 — **`a
 직접 빌드 없이 공개 GHCR 이미지를 바로 사용할 수 있습니다. 이 이미지 하나를 로컬·Azure ML·SageMaker가 공유합니다.
 
 ```bash
+# 기본: CPU 슬림 이미지 (~2GB) — 대부분의 경우 권장
 docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
+
+# GPU 가속용: CUDA torch 이미지 (~6GB) — NVIDIA GPU 호스트에서 `--gpus all`로 실행
+docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu
 ```
+
+> **CPU vs GPU 이미지**: 스캔·이미지 PDF의 `hi_res` 레이아웃/표 감지는 PyTorch 모델을 쓰는데,
+> `:latest-gpu`(CUDA torch)로 `--gpus all` 실행 시 이 모델들이 **자동으로 GPU 가속**됩니다. 디지털
+> PDF만 처리하거나 GPU가 없으면 기본 `:latest`(CPU)로 충분합니다.
 
 ### Unstructured CUDA Docker 이미지 빌드하기
 
@@ -47,16 +55,20 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
      docker build -t pdf-qa-extractor -f Dockerfile_event_eng .     
      ```
 
-> **경량 이미지 설계 (~6GB → ~2.5GB)**: 이 컨테이너는 PDF **파싱**(unstructured 레이아웃 =
-> onnxruntime, tesseract OCR)과 **LLM API 호출**(Azure/Bedrock/OpenAI)만 하며, `torch.cuda`나
-> `onnxruntime-gpu` 코드 경로가 없습니다. torch는 `unstructured[pdf]`의 전이 의존성으로만 딸려오는데,
-> PyPI 기본 휠은 실제로 안 쓰는 ~3.5GB의 NVIDIA CUDA 라이브러리(cudnn/cublas 등)를 번들합니다.
-> 그래서 **CPU 전용 torch 휠(~200MB)** 을 설치하고 CUDA 베이스를 제거했으며, **멀티스테이지**로
-> 컴파일러·헤더는 빌더 스테이지에만 두고 네이티브 라이브러리는 `strip`으로 축소했습니다. 무거운 GPU
-> 워크로드(LoRA 파인튜닝)는 이 이미지가 아니라 별도 **Azure ML / SageMaker 학습 잡**에서 실행됩니다.
-> GPU 빌드가 필요하면(같은 slim 베이스에서 `--gpus all`로 실행) 다음처럼 CUDA torch를 설치하세요:
+> **경량 이미지 설계 (~6GB → ~2GB)**: 기본 이미지는 **CPU 전용**입니다. 추출 코드가 CUDA를 직접
+> 호출하지 않으므로 CPU에서 그대로 동작합니다 — unstructured가 PDF를 파싱(`hi_res` 레이아웃 =
+> PyTorch/ONNX 모델 + tesseract OCR)하고, LLM은 네트워크 API(Azure/Bedrock/OpenAI)로 호출됩니다.
+> torch는 `unstructured[pdf]`의 전이 의존성일 뿐인데 PyPI 기본 휠이 ~3.5GB의 NVIDIA CUDA
+> 라이브러리(cudnn/cublas 등)를 번들합니다. 그래서 **CPU torch 휠(~200MB)** 을 설치하고 CUDA 베이스를
+> 제거했습니다(멀티스테이지: 컴파일러·헤더는 빌더 스테이지에만).
+>
+> **GPU 가속이 필요하면** 위의 `:latest-gpu` 이미지를 쓰거나 아래처럼 CUDA torch로 빌드하세요.
+> unstructured의 `hi_res` 레이아웃/표 모델은 CUDA torch가 있으면 라이브러리 내부에서
+> `torch.cuda.is_available()`를 확인해 **자동으로 GPU를 사용**합니다(`--gpus all`로 실행 — `libcuda`는
+> nvidia-container-toolkit이 주입). 무거운 LoRA 파인튜닝은 여전히 별도 Azure ML / SageMaker 잡에서
+> 돌아갑니다.
 > ```bash
-> docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -t pdf-qa-extractor -f Dockerfile .
+> docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -t pdf-qa-extractor:gpu -f Dockerfile .
 > ```
 
 

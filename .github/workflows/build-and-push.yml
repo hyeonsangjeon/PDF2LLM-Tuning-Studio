@@ -1,8 +1,12 @@
 name: Build and push PDF-QA image (GHCR)
 
-# Builds the public GPU PDF Q&A extraction image and pushes it to the GitHub
-# Container Registry (ghcr.io). One public image is consumed by both
-# Azure ML and SageMaker, so learners can `docker pull` without a cloud account.
+# Builds the public PDF Q&A extraction images and pushes them to the GitHub
+# Container Registry (ghcr.io) as a build matrix:
+#   * :latest      - CPU-only, slim (~2GB) - the default for most users
+#   * :latest-gpu  - CUDA torch (~6GB) - run with `--gpus all` to GPU-accelerate
+#                    unstructured's hi_res layout/table (PyTorch) models
+# The same images feed both Azure ML and SageMaker, so learners can `docker
+# pull` without a cloud account.
 
 on:
   push:
@@ -27,7 +31,18 @@ concurrency:
 
 jobs:
   build-and-push:
+    name: build-and-push (${{ matrix.variant }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: cpu
+            torch_index: https://download.pytorch.org/whl/cpu
+            tag_suffix: ""
+          - variant: gpu
+            torch_index: https://download.pytorch.org/whl/cu124
+            tag_suffix: "-gpu"
     permissions:
       contents: read
       packages: write
@@ -65,6 +80,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # The GPU variant gets a `-gpu` suffix on every tag (incl. latest);
+          # the CPU variant keeps the bare tags. e.g. :latest / :latest-gpu.
+          flavor: |
+            suffix=${{ matrix.tag_suffix }},onlatest=true
           tags: |
             type=ref,event=branch
             type=ref,event=tag
@@ -73,19 +92,26 @@ jobs:
 
       - name: Build and push
         id: build
+        # Validate the CPU build on PRs; the ~6GB GPU variant only builds on
+        # pushes/tags to keep PR CI fast.
+        if: github.event_name != 'pull_request' || matrix.variant == 'cpu'
         uses: docker/build-push-action@v6
         with:
           context: pdf_qa_extraction
           file: pdf_qa_extraction/Dockerfile
           # Push on branch/tag builds; PRs only validate the build.
           push: ${{ github.event_name != 'pull_request' }}
+          # cpu -> .../whl/cpu (~2GB) ; gpu -> .../whl/cu124 (CUDA torch, ~6GB).
+          build-args: |
+            TORCH_INDEX_URL=${{ matrix.torch_index }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
+          # Separate cache scope per variant so cpu/gpu don't evict each other.
+          cache-from: type=gha,scope=${{ matrix.variant }}
           # mode=min caches only the final-stage layers. mode=max would also
           # cache the fat builder stage, doubling the gha cache blobs written to
           # the runner's disk during export and risking "no space left".
-          cache-to: type=gha,mode=min
+          cache-to: type=gha,mode=min,scope=${{ matrix.variant }}
           provenance: false
 
       - name: Smoke test & image size
@@ -103,10 +129,10 @@ jobs:
           echo "::group::Disk before pull"; df -h /; echo "::endgroup::"
           echo "Pulling $REF"
           docker pull -q "$REF"
-          echo "::group::Image size"
+          echo "::group::Image size (${{ matrix.variant }})"
           docker image inspect "$REF" --format '{{.Size}}' | \
             awk '{printf "Uncompressed image size: %.2f GiB (%d bytes)\n", $1/1073741824, $1}'
           echo "::endgroup::"
-          echo "::group::Import smoke test (CPU)"
-          docker run --rm "$REF" python -c "import pdf_qa, torch, cv2, unstructured; print('imports OK - pdf_qa', pdf_qa.__version__, '| torch', torch.__version__)"
+          echo "::group::Import smoke test (${{ matrix.variant }})"
+          docker run --rm "$REF" python -c "import pdf_qa, torch, cv2, unstructured; print('imports OK - ${{ matrix.variant }} | pdf_qa', pdf_qa.__version__, '| torch', torch.__version__)"
           echo "::endgroup::"

@@ -25,8 +25,17 @@ The LLM provider is selected with a single environment variable `LLM_PROVIDER` �
 You can use the public GHCR image directly without building. A single image is shared by local, Azure ML, and SageMaker runtimes.
 
 ```bash
+# Default: CPU slim image (~2GB) — recommended for most cases
 docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
+
+# GPU acceleration: CUDA torch image (~6GB) — run with `--gpus all` on an NVIDIA host
+docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu
 ```
+
+> **CPU vs GPU image**: `hi_res` layout/table detection for scanned/image PDFs
+> uses PyTorch models. With `:latest-gpu` (CUDA torch) run via `--gpus all`,
+> those models are **automatically GPU-accelerated**. If you only process digital
+> PDFs or have no GPU, the default `:latest` (CPU) is enough.
 
 ### Building Unstructured CUDA Docker Image
 
@@ -44,20 +53,22 @@ Unstructured provides powerful tools for extracting and processing content from 
      docker build -t pdf-qa-extractor -f Dockerfile_event_eng .     
      ```
 
-> **Lightweight image design (~6GB → ~2.5GB)**: this container only *parses*
-> PDFs (unstructured layout via onnxruntime + tesseract OCR) and calls the LLM
-> over the *network* (Azure/Bedrock/OpenAI). There is no `torch.cuda` /
-> `onnxruntime-gpu` code path, and torch is pulled in only transitively by
-> `unstructured[pdf]` — yet its default PyPI wheel bundles ~3.5GB of NVIDIA CUDA
-> libraries (cudnn/cublas/...) that are never used here. So the image installs
-> the **CPU-only torch wheel (~200MB)**, drops the CUDA base image, and uses a
-> **multi-stage** build (compilers/headers stay in the builder; native libs are
-> `strip`-ped). The heavy GPU workload (LoRA fine-tuning) runs in a separate
-> **Azure ML / SageMaker training job**, not in this extraction image.
-> For a GPU build (run with `--gpus all` on the same slim base), install CUDA
-> torch instead:
+> **Lightweight image design (~6GB → ~2GB)**: the default image is **CPU-only**.
+> The extraction *code* never calls CUDA directly, so it runs fine on CPU:
+> unstructured parses PDFs (`hi_res` layout = PyTorch/ONNX model + tesseract OCR)
+> and the LLM runs over the *network* (Azure/Bedrock/OpenAI). torch is only a
+> transitive dep of `unstructured[pdf]`, yet its default PyPI wheel bundles
+> ~3.5GB of NVIDIA CUDA libraries (cudnn/cublas/...). So the image installs the
+> **CPU torch wheel (~200MB)** and drops the CUDA base image (multi-stage:
+> compilers/headers stay in the builder).
+>
+> **For GPU acceleration**, use the `:latest-gpu` image above or build with CUDA
+> torch. unstructured's `hi_res` layout/table models auto-use the GPU when CUDA
+> torch is present — they call `torch.cuda.is_available()` inside the library —
+> when run with `--gpus all` (`libcuda` is injected by nvidia-container-toolkit).
+> The heavy LoRA fine-tuning still runs in a separate Azure ML / SageMaker job.
 > ```bash
-> docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -t pdf-qa-extractor -f Dockerfile .
+> docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -t pdf-qa-extractor:gpu -f Dockerfile .
 > ```
 
 ### PDF Extractor Usage Guide

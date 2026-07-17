@@ -66,10 +66,16 @@ az ml job create -f azure/azureml_job.yml \
 
 ### C) 로컬 Docker로 실행 (Azure OpenAI)
 ```bash
+# 기본: CPU 슬림 이미지
 docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
-docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env \
+docker run --rm -v $(pwd):/app -w /app --env-file .env \
   ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest \
   python run_local.py
+
+# (선택) 스캔 PDF 레이아웃/표 감지를 GPU로 가속: GPU 이미지 + --gpus all
+# docker run --rm --gpus all -v $(pwd):/app -w /app --env-file .env \
+#   ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu \
+#   python run_local.py
 ```
 
 ## 환경 변수 (Azure)
