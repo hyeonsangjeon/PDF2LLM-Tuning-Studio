@@ -3,7 +3,7 @@ name: Build and push PDF-QA image (GHCR)
 # Builds the public PDF Q&A extraction images and pushes them to the GitHub
 # Container Registry (ghcr.io) as a build matrix:
 #   * :latest      - CPU-only, slim (~2GB) - the default for most users
-#   * :latest-gpu  - CUDA torch (~6GB) - run with `--gpus all` to GPU-accelerate
+#   * :latest-gpu  - CUDA torch (~7.5GB) - run with `--gpus all` to GPU-accelerate
 #                    unstructured's hi_res layout/table (PyTorch) models
 # The same images feed both Azure ML and SageMaker, so learners can `docker
 # pull` without a cloud account.
@@ -92,7 +92,7 @@ jobs:
 
       - name: Build and push
         id: build
-        # Validate the CPU build on PRs; the ~6GB GPU variant only builds on
+        # Validate the CPU build on PRs; the ~7.5GB GPU variant only builds on
         # pushes/tags to keep PR CI fast.
         if: github.event_name != 'pull_request' || matrix.variant == 'cpu'
         uses: docker/build-push-action@v6
@@ -101,7 +101,7 @@ jobs:
           file: pdf_qa_extraction/Dockerfile
           # Push on branch/tag builds; PRs only validate the build.
           push: ${{ github.event_name != 'pull_request' }}
-          # cpu -> .../whl/cpu (~2GB) ; gpu -> .../whl/cu124 (CUDA torch, ~6GB).
+          # cpu -> .../whl/cpu (~2GB) ; gpu -> .../whl/cu124 (CUDA torch, ~7.5GB).
           build-args: |
             TORCH_INDEX_URL=${{ matrix.torch_index }}
           tags: ${{ steps.meta.outputs.tags }}
