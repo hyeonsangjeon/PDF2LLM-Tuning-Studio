@@ -22,6 +22,15 @@ def _clean_optional(value: Optional[str]) -> Optional[str]:
     return value
 
 
+def _as_bool(value, default: bool = True) -> bool:
+    """Parse a truthy/falsy env or CLI value; ``None`` -> ``default``."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 @dataclass
 class QAConfig:
     """Parameters that drive Q&A generation, independent of the LLM provider."""
@@ -31,6 +40,14 @@ class QAConfig:
     num_img_questions: str = "1"
     table_model: Optional[str] = None
     figures_dir: str = "figures"
+    # Q&A persona/style (see ``pdf_qa.prompts.PERSONAS``): professor (default),
+    # socratic, consultant, interviewer, analyst.
+    persona: str = "professor"
+    # ``unstructured`` strategy: auto | fast | hi_res | ocr_only. ``auto`` is
+    # escalated to ``hi_res`` when a GPU is detected and ``gpu_boost`` is on.
+    strategy: str = "auto"
+    # Route the heavy layout + table models to the GPU when one is reachable.
+    gpu_boost: bool = True
     # Provider-specific model / deployment id. When ``None`` each provider
     # falls back to its own sensible default (see ``providers/``).
     model_id: Optional[str] = None
@@ -44,6 +61,9 @@ class QAConfig:
             num_img_questions=os.environ.get("NUM_IMG_QUESTIONS", "1"),
             table_model=_clean_optional(os.environ.get("TABLE_MODEL")),
             figures_dir=os.environ.get("FIGURES_DIR", "figures"),
+            persona=os.environ.get("PERSONA", "professor"),
+            strategy=os.environ.get("STRATEGY", "auto"),
+            gpu_boost=_as_bool(os.environ.get("GPU_BOOST"), default=True),
             model_id=_clean_optional(os.environ.get("MODEL_ID")),
         )
 
@@ -56,5 +76,8 @@ class QAConfig:
             num_img_questions=getattr(args, "num_img_questions", "1"),
             table_model=_clean_optional(getattr(args, "table_model", None)),
             figures_dir=getattr(args, "figures_dir", "figures"),
+            persona=getattr(args, "persona", "professor") or "professor",
+            strategy=getattr(args, "strategy", "auto") or "auto",
+            gpu_boost=_as_bool(getattr(args, "gpu_boost", None), default=True),
             model_id=_clean_optional(getattr(args, "model_id", None)),
         )

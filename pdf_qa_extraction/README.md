@@ -156,7 +156,41 @@ docker run --rm -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
 
 #### 환경 변수 설정
 
-공통: `PDF_PATH`(처리할 PDF 경로), `DOMAIN`(문서 도메인), `NUM_QUESTIONS`(텍스트 요소당 질문 수), `NUM_IMG_QUESTIONS`(이미지당 질문 수), `TABLE_MODEL`(표 구조 추론 모델, 예: yolox).
+공통: `PDF_PATH`(처리할 PDF 경로), `DOMAIN`(문서 도메인), `NUM_QUESTIONS`(텍스트 요소당 질문 수), `NUM_IMG_QUESTIONS`(이미지당 질문 수), `TABLE_MODEL`(표 구조 추론 모델, 예: yolox), `PERSONA`(Q&A 페르소나/스타일), `STRATEGY`(추출 전략), `GPU_BOOST`(GPU 자동 가속 on/off).
+
+##### 🎭 페르소나 (Q&A 스타일 선택)
+
+하나의 PDF로 **여러 스타일의 파인튜닝 데이터셋**을 만들 수 있습니다. `PERSONA` 환경변수(또는 `--persona`)로 모델이 맡을 역할과 질문/답변 스타일을 바꿉니다. 출력 JSON 스키마(`QUESTION`/`ANSWER`)는 동일합니다.
+
+| `PERSONA` | 역할 | 질문 스타일 |
+|---|---|---|
+| `professor` (기본) | 교수/출제자 | 시험·퀴즈형 사실 확인 질문 |
+| `socratic` | 소크라테스식 튜터 | "왜/어떻게"로 사고를 유도, 단계별 설명 답변 |
+| `consultant` | 실무 컨설턴트 | 의사결정·실무 조언 중심의 실용 질문 |
+| `interviewer` | 기술 면접관 | 면접식 질문 + 모범 답안 |
+| `analyst` | 리서치 분석가 | 종합·비교·시사점 도출형 질문 |
+
+```bash
+# 예: 같은 PDF로 소크라테스식 학습 데이터셋 생성
+PERSONA=socratic LLM_PROVIDER=azure PDF_PATH=data/fsi_data.pdf python run_local.py
+```
+
+##### ⚡ GPU 자동 가속 (디바이스 인지 로직)
+
+파이프라인은 시작 시 **디바이스를 점검**해 로그로 남기고(“디바이스 점검(GPU/CPU)”), GPU가 실제로 잡히면(`torch.cuda.is_available()` = NVIDIA 드라이버 존재) **무거운 고품질 경로를 자동으로 GPU에 태웁니다**:
+
+- `STRATEGY=auto`(기본)일 때 GPU가 감지되면 → **`hi_res`로 승격**하여 레이아웃 모델(YOLOX/detectron2_onnx)을 **onnxruntime-gpu**로 실행
+- **표 구조 추론(Table Transformer, CUDA torch)** 을 자동 활성화 (CPU에선 너무 느려 기본 비활성)
+- CPU 호스트에서는 경량 경로를 그대로 유지 → 빠름
+
+즉, `:latest-gpu` 이미지 + `--gpus all`로 실행하면 이 로직이 GPU의 강점을 자동으로 끌어냅니다. 끄려면 `GPU_BOOST=false`, 전략을 직접 고정하려면 `STRATEGY=fast|hi_res|ocr_only`를 쓰세요.
+
+```bash
+# GPU 호스트: 디바이스 점검 후 hi_res 레이아웃 + 표 구조를 GPU로 자동 실행
+docker run --rm --gpus all -e PERSONA=analyst \
+  ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu
+```
+
 
 **☁️ Azure AI Foundry / Azure OpenAI 사용 시 (기본, `LLM_PROVIDER=azure`)**
 - `AZURE_MODE`: `openai`(기본) 또는 `agent`(Foundry Agent Service)
@@ -291,7 +325,8 @@ OPENAI_API_KEY=your_openai_api_key_here
 #### 성능 최적화 팁
 
 - 대용량 PDF 파일(100MB 이상)은 처리 전 분할하는 것이 좋습니다
-- 스캔 PDF에서 GPU로 가속하려면 `:latest-gpu` 이미지 + `--gpus all`로 실행하세요. **레이아웃 감지(onnxruntime-gpu)** 는 `hi_res`에서 자동 가속되고, **표 구조 인식(Table Transformer)** 은 `TABLE_MODEL` 설정 시 가속됩니다 (OCR은 CPU — 위 [GPU/CPU 구분](#pdf-파싱-내부-모델--gpucpu-구분) 표 참고)
+- **GPU 자동 가속**: `:latest-gpu` 이미지 + `--gpus all`로 실행하면 파이프라인이 디바이스를 점검하고, GPU가 잡히면 `STRATEGY=auto`를 **`hi_res`로 승격**해 **레이아웃(onnxruntime-gpu)** 과 **표 구조(Table Transformer, CUDA torch)** 를 자동으로 GPU에 태웁니다. 끄려면 `GPU_BOOST=false` (OCR은 항상 CPU — 위 [GPU/CPU 구분](#pdf-파싱-내부-모델--gpucpu-구분) 표 참고)
+- **페르소나 활용**: 같은 PDF를 `PERSONA=professor|socratic|consultant|interviewer|analyst`로 여러 번 돌려 다양한 스타일의 파인튜닝 데이터셋을 축적하세요
 - 메모리 사용량을 모니터링하고 필요한 경우 `batch_size` 파라미터를 조정하세요 (코드의 partition_pdf 참조)
 
 

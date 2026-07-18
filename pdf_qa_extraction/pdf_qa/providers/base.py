@@ -20,15 +20,15 @@ class LLMProvider(ABC):
 
     @abstractmethod
     def generate_text_qa(
-        self, context: str, domain: str, num_questions: str
+        self, context: str, domain: str, num_questions: str, persona: str = "professor"
     ) -> List[dict]:
-        """Generate Q&A pairs from a text chunk."""
+        """Generate Q&A pairs from a text chunk in the given ``persona`` style."""
 
     @abstractmethod
     def generate_image_qa(
-        self, image_path: str, domain: str, num_img_questions: str
+        self, image_path: str, domain: str, num_img_questions: str, persona: str = "professor"
     ) -> List[dict]:
-        """Generate Q&A pairs from a single image file."""
+        """Generate Q&A pairs from a single image file in the given ``persona`` style."""
 
     @staticmethod
     def tag_image_source(qa_list: List[dict], image_path: str) -> List[dict]:

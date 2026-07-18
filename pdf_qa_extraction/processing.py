@@ -48,6 +48,12 @@ def main() -> None:
     parser.add_argument("--domain", default="International Finance")
     parser.add_argument("--num_questions", default="5")
     parser.add_argument("--num_img_questions", default="1")
+    parser.add_argument("--persona", default=os.getenv("PERSONA", "professor"),
+                        help="Q&A 페르소나: professor(기본) | socratic | consultant | interviewer | analyst")
+    parser.add_argument("--strategy", default=os.getenv("STRATEGY", "auto"),
+                        help="추출 전략: auto(기본) | fast | hi_res | ocr_only. GPU 감지 시 auto는 hi_res로 승격")
+    parser.add_argument("--gpu_boost", default=os.getenv("GPU_BOOST", "true"),
+                        help="GPU 감지 시 레이아웃+표 모델을 GPU로 가속 (true/false)")
     parser.add_argument("--model_id", default=None,
                         help="공급자별 모델/디플로이먼트 ID (미지정 시 공급자 기본값)")
     parser.add_argument("--table_model", default="yolox",

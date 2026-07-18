@@ -46,14 +46,14 @@ class OpenAIProvider(LLMProvider):
         print(f"[OpenAIProvider] model={self.model_id}")
 
     def generate_text_qa(
-        self, context: str, domain: str, num_questions: str
+        self, context: str, domain: str, num_questions: str, persona: str = "professor"
     ) -> List[dict]:
-        prompt = build_text_prompt(context, domain, num_questions)
+        prompt = build_text_prompt(context, domain, num_questions, persona)
         response = self._llm.invoke(prompt)
         return custom_json_parser(response)
 
     def generate_image_qa(
-        self, image_path: str, domain: str, num_img_questions: str
+        self, image_path: str, domain: str, num_img_questions: str, persona: str = "professor"
     ) -> List[dict]:
         from langchain_core.messages import HumanMessage
 
@@ -62,7 +62,7 @@ class OpenAIProvider(LLMProvider):
             return []
 
         image_format = detect_image_format(image_path)
-        instruction = build_image_instruction(domain, num_img_questions)
+        instruction = build_image_instruction(domain, num_img_questions, persona)
         message = HumanMessage(
             content=[
                 {"type": "text", "text": instruction},

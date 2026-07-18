@@ -168,7 +168,41 @@ docker run --rm -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
 
 #### Environment Variable Configuration
 
-Common: `PDF_PATH`, `DOMAIN`, `NUM_QUESTIONS`, `NUM_IMG_QUESTIONS`, `TABLE_MODEL` (e.g., yolox).
+Common: `PDF_PATH`, `DOMAIN`, `NUM_QUESTIONS`, `NUM_IMG_QUESTIONS`, `TABLE_MODEL` (e.g., yolox), `PERSONA` (Q&A style), `STRATEGY` (extraction strategy), `GPU_BOOST` (auto GPU acceleration on/off).
+
+##### 🎭 Personas (choosing the Q&A style)
+
+One PDF can seed **several different fine-tuning datasets**. The `PERSONA` env var (or `--persona`) swaps the role the model plays and the question/answer style — the output JSON schema (`QUESTION`/`ANSWER`) stays the same.
+
+| `PERSONA` | Role | Question style |
+|---|---|---|
+| `professor` (default) | Teacher/Professor | Exam/quiz-style factual questions |
+| `socratic` | Socratic tutor | "Why/how" reasoning prompts, step-by-step answers |
+| `consultant` | Senior practitioner | Practical, decision-oriented advice questions |
+| `interviewer` | Technical interviewer | Interview-style questions with model answers |
+| `analyst` | Research analyst | Synthesis/comparison, implication-drawing questions |
+
+```bash
+# e.g. build a Socratic study dataset from the same PDF
+PERSONA=socratic LLM_PROVIDER=azure PDF_PATH=data/fsi_data.pdf python run_local.py
+```
+
+##### ⚡ Automatic GPU acceleration (device-aware logic)
+
+At startup the pipeline **probes the device** and logs it ("디바이스 점검(GPU/CPU)"). When a GPU is actually reachable (`torch.cuda.is_available()` = NVIDIA driver present) it **routes the heavier, higher-quality path to the GPU automatically**:
+
+- with `STRATEGY=auto` (default), a detected GPU **escalates to `hi_res`**, so the layout model (YOLOX/detectron2_onnx) runs on **onnxruntime-gpu**;
+- **table-structure inference (Table Transformer, CUDA torch)** is turned on automatically (it is too slow to enable by default on CPU);
+- on a CPU host the light path is kept → fast.
+
+So running the `:latest-gpu` image with `--gpus all` lets this logic surface the GPU advantage on its own. Disable it with `GPU_BOOST=false`, or pin the strategy explicitly with `STRATEGY=fast|hi_res|ocr_only`.
+
+```bash
+# GPU host: probe device, then run hi_res layout + table structure on the GPU
+docker run --rm --gpus all -e PERSONA=analyst \
+  ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu
+```
+
 
 **☁️ For Azure AI Foundry / Azure OpenAI (default, `LLM_PROVIDER=azure`)**
 - `AZURE_MODE`: `openai` (default) or `agent` (Foundry Agent Service)
@@ -303,7 +337,8 @@ OPENAI_API_KEY=your_openai_api_key_here
 #### Performance Optimization Tips
 
 - Large PDF files (over 100MB) should be split before processing
-- To GPU-accelerate on scanned PDFs, run `:latest-gpu` with `--gpus all`. **Layout detection (onnxruntime-gpu)** is accelerated automatically under `hi_res`, and **table-structure recognition (Table Transformer)** is accelerated when `TABLE_MODEL` is set (OCR stays on CPU — see the [GPU/CPU breakdown](#pdf-parsing-models--gpucpu) above)
+- **Automatic GPU acceleration**: run the `:latest-gpu` image with `--gpus all` and the pipeline probes the device; when a GPU is detected it **escalates `STRATEGY=auto` to `hi_res`** and runs **layout (onnxruntime-gpu)** and **table structure (Table Transformer, CUDA torch)** on the GPU automatically. Turn it off with `GPU_BOOST=false` (OCR is always CPU — see the [GPU/CPU breakdown](#pdf-parsing-models--gpucpu) above)
+- **Use personas**: run the same PDF several times with `PERSONA=professor|socratic|consultant|interviewer|analyst` to accumulate diverse fine-tuning datasets
 - Monitor memory usage and adjust the `batch_size` parameter if necessary (refer to partition_pdf in the code)
 
 #### 2. ☁️ Running on Azure ML Command Job (default)

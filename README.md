@@ -10,6 +10,8 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
 
 - **경량 PDF 추출**: Unstructured 라이브러리로 텍스트/표/이미지 추출 (CPU 슬림 이미지 `:latest` ~2GB, 레이아웃+표를 GPU로 가속하는 `:latest-gpu` ~8GB는 선택)
 - **Q&A 자동 생성 (멀티 공급자)**: Azure AI Foundry(Azure OpenAI · Foundry Agent), OpenAI, Amazon Bedrock Claude 중 환경 변수 하나로 전환
+- **다중 페르소나**: `PERSONA`로 교수·소크라테스식 튜터·실무 컨설턴트·기술 면접관·리서치 분석가 스타일을 전환해 하나의 PDF로 여러 파인튜닝 데이터셋 생성
+- **GPU 자동 가속(디바이스 인지)**: 실행 시 GPU를 점검해 감지되면 `hi_res` 레이아웃(onnxruntime-gpu)+표 구조(CUDA torch)를 자동으로 GPU에 태우고, CPU에서는 경량 경로 유지
 - **클라우드 무관 코어 패키지**: `pdf_qa` 패키지 + 공급자 플러그인 구조로 코드 중복 제거, 런타임별 얇은 진입점
 - **단일 공개 이미지**: `ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor` 하나로 로컬·Azure ML·SageMaker 실행
 - **메모리 효율적 파인튜닝**: Unsloth 최적화와 LoRA 어댑터로 제한된 GPU 환경에서도 대형 모델 학습

@@ -13,7 +13,9 @@ import os
 from typing import List
 
 from .config import QAConfig
+from .device import probe_device
 from .extract import extract_elements_from_pdf, get_extracted_images
+from .prompts import get_persona
 from .providers.base import LLMProvider
 
 
@@ -21,8 +23,18 @@ def generate_qa_pairs(
     pdf_path: str, provider: LLMProvider, config: QAConfig
 ) -> List[dict]:
     """Extract elements from ``pdf_path`` and generate Q&A pairs via ``provider``."""
+    # Probe the accelerator once and reuse it for extraction (so the log shows
+    # exactly which path -- GPU or CPU -- the heavy models take).
+    device = probe_device()
+    print(device.summary())
+
     elements = extract_elements_from_pdf(
-        pdf_path, table_model=config.table_model, figures_dir=config.figures_dir
+        pdf_path,
+        table_model=config.table_model,
+        figures_dir=config.figures_dir,
+        strategy=config.strategy,
+        gpu_boost=config.gpu_boost,
+        device=device,
     )
     print(f"추출된 요소 수: {len(elements)}")
 
@@ -36,7 +48,7 @@ def generate_qa_pairs(
         if text and text.strip():
             try:
                 response = provider.generate_text_qa(
-                    text, config.domain, config.num_questions
+                    text, config.domain, config.num_questions, config.persona
                 )
                 qa_pairs.extend(response)
                 text_count += 1
@@ -53,7 +65,7 @@ def generate_qa_pairs(
         print(f"발견된 이미지 파일: {len(image_files)}개")
         for image_path in image_files:
             image_qa = provider.generate_image_qa(
-                image_path, config.domain, config.num_img_questions
+                image_path, config.domain, config.num_img_questions, config.persona
             )
             qa_pairs.extend(image_qa)
             if image_qa:
@@ -81,9 +93,12 @@ def run_pipeline(
 ) -> List[dict]:
     """Full run: generate Q&A pairs and persist them to ``output_path``."""
     print(f"PDF 처리 시작: {pdf_path}")
+    persona = get_persona(config.persona)
     print(
         f"LLM 공급자: {provider.name} | 도메인: {config.domain} | "
+        f"페르소나: {persona.label}({persona.key}) | "
         f"텍스트질문: {config.num_questions} | 이미지질문: {config.num_img_questions} | "
+        f"전략: {config.strategy} | GPU부스트: {config.gpu_boost} | "
         f"테이블모델: {config.table_model or 'None'}"
     )
 

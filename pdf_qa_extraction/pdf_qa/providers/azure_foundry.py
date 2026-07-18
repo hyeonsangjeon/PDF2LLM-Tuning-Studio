@@ -35,11 +35,12 @@ from .base import LLMProvider
 _DEFAULT_DEPLOYMENT = "gpt-4o"
 _DEFAULT_API_VERSION = "2024-10-21"
 
-# Persona applied to the Foundry Agent; the per-request prompt carries the task.
+# Persona-neutral base instruction for the Foundry Agent; the per-request prompt
+# carries the concrete role/persona (see pdf_qa.prompts) and the task/format.
 _AGENT_INSTRUCTIONS = (
-    "You are a meticulous university professor who writes exam questions. "
-    "Follow the user's formatting instructions exactly and always answer in Korean, "
-    "returning only the requested JSON block."
+    "You generate high-quality Q&A pairs from the material the user provides. "
+    "Adopt the role and follow the formatting instructions in each user message "
+    "exactly, always answer in Korean, and return only the requested JSON block."
 )
 
 
@@ -118,17 +119,17 @@ class AzureFoundryProvider(LLMProvider):
     # public API
     # ------------------------------------------------------------------
     def generate_text_qa(
-        self, context: str, domain: str, num_questions: str
+        self, context: str, domain: str, num_questions: str, persona: str = "professor"
     ) -> List[dict]:
-        prompt = build_text_prompt(context, domain, num_questions)
+        prompt = build_text_prompt(context, domain, num_questions, persona)
         if self.mode == "agent":
             return custom_json_parser(self._agent.run_text(prompt))
         return custom_json_parser(self._llm.invoke(prompt))
 
     def generate_image_qa(
-        self, image_path: str, domain: str, num_img_questions: str
+        self, image_path: str, domain: str, num_img_questions: str, persona: str = "professor"
     ) -> List[dict]:
-        instruction = build_image_instruction(domain, num_img_questions)
+        instruction = build_image_instruction(domain, num_img_questions, persona)
         try:
             if self.mode == "agent":
                 raw = self._agent.run_image(instruction, image_path)

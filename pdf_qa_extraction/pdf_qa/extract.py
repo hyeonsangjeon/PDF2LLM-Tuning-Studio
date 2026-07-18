@@ -10,6 +10,11 @@ ships CUDA torch **and** ``onnxruntime-gpu``, so both the layout model
 with ``--gpus all``; only Tesseract OCR and pdfminer stay on CPU. See the module
 README "PDF parsing models -- GPU/CPU" for the full breakdown.
 
+:func:`resolve_extraction_plan` makes this concrete and *automatic*: it probes
+the device (see :mod:`pdf_qa.device`) and, when a GPU is actually reachable,
+escalates ``strategy="auto"`` to ``"hi_res"`` and enables table-structure
+inference so both heavy models run on the GPU. On CPU it keeps the light path.
+
 `unstructured` is imported lazily inside :func:`extract_elements_from_pdf` so
 the rest of the package (providers, parsing, tests) can be imported without the
 heavy PDF/OCR dependency stack installed.
@@ -22,28 +27,100 @@ import glob
 import os
 from typing import List, Optional
 
+from .device import DeviceReport, probe_device
+
 _IMAGE_EXTENSIONS = ("*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif")
+
+
+def resolve_extraction_plan(
+    strategy: str = "auto",
+    table_model: Optional[str] = None,
+    gpu_boost: bool = True,
+    device: Optional[DeviceReport] = None,
+) -> dict:
+    """Decide the partitioning strategy, escalating to the GPU path when able.
+
+    This is where the GPU advantage becomes concrete: when a GPU is actually
+    reachable (``device.gpu_ready``) and ``gpu_boost`` is on, we force the
+    ``hi_res`` strategy (so the ONNX **layout** model runs -- on the
+    ``onnxruntime-gpu`` CUDA provider in the GPU image) and turn on
+    ``infer_table_structure`` (so the PyTorch **Table Transformer** runs on CUDA
+    torch). Both are far too slow to enable by default on CPU, so on a CPU host
+    the pipeline stays on the light path.
+
+    An explicit ``strategy`` (anything other than ``"auto"``) or an explicit
+    ``table_model`` is always respected -- the boost only fills in defaults.
+
+    Returns a dict with keys ``strategy``, ``infer_table_structure``,
+    ``table_model`` and ``gpu_accelerated``.
+    """
+    report = device if device is not None else probe_device()
+
+    effective_strategy = strategy
+    infer_tables = table_model is not None
+    gpu_accelerated = False
+
+    if gpu_boost and report.gpu_ready:
+        gpu_accelerated = True
+        if strategy == "auto":
+            # Force the layout model even for digital PDFs -> exercises the GPU.
+            effective_strategy = "hi_res"
+        # Turn table-structure inference on if the caller did not opt out.
+        infer_tables = True
+        print(
+            "[extract] GPU 감지 → hi_res 레이아웃(onnxruntime-gpu) + "
+            "표 구조 추론(CUDA torch)을 GPU로 실행합니다."
+        )
+    else:
+        print(
+            f"[extract] CPU 경로 → strategy={effective_strategy}, "
+            f"표 추론={infer_tables}."
+        )
+
+    return {
+        "strategy": effective_strategy,
+        "infer_table_structure": infer_tables,
+        "table_model": table_model,
+        "gpu_accelerated": gpu_accelerated,
+    }
 
 
 def extract_elements_from_pdf(
     filepath: str,
     table_model: Optional[str] = None,
     figures_dir: str = "figures",
+    strategy: str = "auto",
+    gpu_boost: bool = True,
+    device: Optional[DeviceReport] = None,
 ) -> list:
     """Extract text/image/table elements from a PDF.
 
     Args:
         filepath: Path to the PDF file.
         table_model: Table detection model (``yolox``, ``tatr``,
-            ``table-transformer``, ``detectron2``, ...). ``None`` disables
-            table-structure inference.
+            ``table-transformer``, ``detectron2``, ...). ``None`` lets the GPU
+            boost decide; on CPU it disables table-structure inference.
         figures_dir: Directory where extracted image blocks are written.
+        strategy: ``unstructured`` strategy (``auto`` | ``fast`` | ``hi_res`` |
+            ``ocr_only``). ``auto`` is escalated to ``hi_res`` when a GPU is
+            reachable and ``gpu_boost`` is on.
+        gpu_boost: When True (default), route the heavy layout + table models to
+            the GPU whenever one is detected. Set False to keep the light path.
+        device: Pre-computed :class:`~pdf_qa.device.DeviceReport` (probed if
+            omitted) so the pipeline can log it once and reuse it here.
 
     Returns:
         The list of elements produced by ``unstructured.partition.pdf``.
     """
     # Imported here so importing this module never requires unstructured.
     from unstructured.partition.pdf import partition_pdf
+
+    plan = resolve_extraction_plan(
+        strategy=strategy,
+        table_model=table_model,
+        gpu_boost=gpu_boost,
+        device=device,
+    )
 
     partition_kwargs = {
         "filename": filepath,
@@ -53,15 +130,16 @@ def extract_elements_from_pdf(
         "new_after_n_chars": 3800,
         "combine_text_under_n_chars": 2000,
         "extract_image_block_output_dir": figures_dir,
-        # "auto" -> fast for digital PDFs, high_res (layout detection + OCR) for scans.
-        "strategy": "auto",
+        # "auto" -> fast for digital PDFs, hi_res (layout + OCR) for scans;
+        # escalated to hi_res by the GPU boost so the layout model runs on GPU.
+        "strategy": plan["strategy"],
+        "infer_table_structure": plan["infer_table_structure"],
     }
 
-    if table_model:
-        partition_kwargs["infer_table_structure"] = True
-        partition_kwargs["table_model"] = table_model
-    else:
-        partition_kwargs["infer_table_structure"] = False
+    # Only pass an explicit table model when the caller set one (the GPU boost
+    # enables table inference with unstructured's default Table Transformer).
+    if plan["table_model"]:
+        partition_kwargs["table_model"] = plan["table_model"]
 
     return partition_pdf(**partition_kwargs)
 
