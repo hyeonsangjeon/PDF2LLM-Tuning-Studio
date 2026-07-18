@@ -31,7 +31,7 @@ LLM 공급자는 환경 변수 `LLM_PROVIDER` 하나로 전환합니다 — **`a
 # 기본: CPU 슬림 이미지 (~2GB) — 대부분의 경우 권장
 docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
 
-# GPU 가속용: CUDA torch + onnxruntime-gpu 이미지 (~9GB) — NVIDIA GPU 호스트에서 `--gpus all`로 실행
+# GPU 가속용: CUDA torch + onnxruntime-gpu 이미지 (~8GB) — NVIDIA GPU 호스트에서 `--gpus all`로 실행
 docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu
 ```
 

@@ -28,7 +28,7 @@ You can use the public GHCR image directly without building. A single image is s
 # Default: CPU slim image (~2GB) — recommended for most cases
 docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
 
-# GPU acceleration: CUDA torch + onnxruntime-gpu image (~9GB) — run with `--gpus all` on an NVIDIA host
+# GPU acceleration: CUDA torch + onnxruntime-gpu image (~8GB) — run with `--gpus all` on an NVIDIA host
 docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu
 ```
 

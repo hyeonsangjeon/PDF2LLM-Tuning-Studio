@@ -3,7 +3,7 @@ name: Build and push PDF-QA image (GHCR)
 # Builds the public PDF Q&A extraction images and pushes them to the GitHub
 # Container Registry (ghcr.io) as a build matrix:
 #   * :latest      - CPU-only, slim (~2GB) - the default for most users
-#   * :latest-gpu  - CUDA torch + onnxruntime-gpu (~9GB) - run with `--gpus all`
+#   * :latest-gpu  - CUDA torch + onnxruntime-gpu (~8GB) - run with `--gpus all`
 #                    to GPU-accelerate BOTH unstructured model families: layout
 #                    detection (YOLOX/detectron2_onnx on onnxruntime-gpu) and the
 #                    table-structure model (Table Transformer, PyTorch). Tesseract
@@ -97,7 +97,7 @@ jobs:
 
       - name: Build and push
         id: build
-        # Validate the CPU build on PRs; the ~9GB GPU variant only builds on
+        # Validate the CPU build on PRs; the ~8GB GPU variant only builds on
         # pushes/tags to keep PR CI fast.
         if: github.event_name != 'pull_request' || matrix.variant == 'cpu'
         uses: docker/build-push-action@v6
@@ -107,7 +107,7 @@ jobs:
           # Push on branch/tag builds; PRs only validate the build.
           push: ${{ github.event_name != 'pull_request' }}
           # cpu -> whl/cpu + onnxruntime (CPU, ~2GB); gpu -> whl/cu124 CUDA torch
-          # + onnxruntime-gpu (layout & table on GPU, ~9GB).
+          # + onnxruntime-gpu (layout & table on GPU, ~8GB).
           build-args: |
             TORCH_INDEX_URL=${{ matrix.torch_index }}
             ONNXRUNTIME_PACKAGE=${{ matrix.onnxruntime_package }}
