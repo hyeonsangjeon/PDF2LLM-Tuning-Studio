@@ -4,8 +4,11 @@
 # tuning for AWS Event Engine lab accounts that have flaky egress.
 #
 # See Dockerfile for the full size rationale (CPU-only torch + slim base +
-# multi-stage). Optional GPU build (run with --gpus all):
-#   docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -f Dockerfile_event_eng .
+# multi-stage). Optional GPU build (CUDA torch + onnxruntime-gpu, run --gpus all):
+#   docker build \
+#     --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 \
+#     --build-arg ONNXRUNTIME_PACKAGE=onnxruntime-gpu \
+#     -f Dockerfile_event_eng .
 
 # ============================  Stage 1: builder  ============================
 ARG PYTHON_TAG=3.10-slim-bookworm
@@ -37,6 +40,9 @@ RUN python -m venv "$VIRTUAL_ENV"
 # CPU-only torch keeps the image ~3.5GB smaller than the default CUDA wheel.
 # Point this at .../whl/cu124 (and run with --gpus all) for a GPU build.
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+# GPU build overrides this with `onnxruntime-gpu` so the ONNX layout models
+# (YOLOX / detectron2_onnx) use the CUDAExecutionProvider too.
+ARG ONNXRUNTIME_PACKAGE=onnxruntime
 
 WORKDIR /build
 COPY requirements.txt pyproject.toml README.md ./
@@ -45,6 +51,10 @@ RUN pip install --upgrade pip setuptools wheel && \
     pip install --index-url "${TORCH_INDEX_URL}" torch && \
     pip install -r requirements.txt && \
     pip install --no-deps --no-build-isolation . && \
+    if [ "${ONNXRUNTIME_PACKAGE}" != "onnxruntime" ]; then \
+        pip uninstall -y onnxruntime && \
+        pip install "${ONNXRUNTIME_PACKAGE}"; \
+    fi && \
     find "$VIRTUAL_ENV" -type d -name __pycache__ -prune -exec rm -rf {} + || true
 
 # ============================  Stage 2: runtime  ============================
@@ -80,6 +90,12 @@ RUN apt-get -o Dpkg::Options::="--force-confold" update && \
 
 # Bring in the fully-installed environment (pdf_qa + all provider SDKs).
 COPY --from=builder /opt/venv /opt/venv
+
+# Make the venv's bundled NVIDIA CUDA/cuDNN libs discoverable by the loader so
+# onnxruntime-gpu can load its CUDAExecutionProvider (GPU build). No-op for CPU.
+RUN find /opt/venv -type d \( -path '*/nvidia/*/lib' -o -path '*/torch/lib' \) \
+        > /etc/ld.so.conf.d/venv-cuda.conf 2>/dev/null || true; \
+    ldconfig
 
 WORKDIR /app
 COPY run_local.py processing.py azureml_job.py ./

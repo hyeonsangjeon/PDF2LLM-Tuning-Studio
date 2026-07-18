@@ -28,17 +28,17 @@ You can use the public GHCR image directly without building. A single image is s
 # Default: CPU slim image (~2GB) — recommended for most cases
 docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
 
-# GPU acceleration: CUDA torch image (~7.5GB) — run with `--gpus all` on an NVIDIA host
+# GPU acceleration: CUDA torch + onnxruntime-gpu image (~9GB) — run with `--gpus all` on an NVIDIA host
 docker pull ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu
 ```
 
-> **CPU vs GPU image**: with `:latest-gpu` (CUDA torch) run via `--gpus all`, the
-> **table-structure model (Table Transformer, PyTorch)** is automatically
-> GPU-accelerated. However, **layout detection (default YOLOX) runs on
-> onnxruntime**, so it needs a separate `onnxruntime-gpu` to use the GPU, and
-> **OCR (Tesseract) is always CPU**. See the per-model breakdown in
-> [PDF parsing models — GPU/CPU](#pdf-parsing-models--gpucpu) below. If you only
-> process digital PDFs or have no GPU, the default `:latest` (CPU) is enough.
+> **CPU vs GPU image**: with `:latest-gpu` (CUDA torch + **onnxruntime-gpu**) run
+> via `--gpus all`, **both** model families are GPU-accelerated: **layout
+> detection (YOLOX/detectron2_onnx on onnxruntime-gpu)** and the
+> **table-structure model (Table Transformer, PyTorch)**. **OCR (Tesseract)** and
+> digital text extraction (pdfminer) are always CPU. See the per-model breakdown
+> in [PDF parsing models — GPU/CPU](#pdf-parsing-models--gpucpu) below. If you
+> only process digital PDFs or have no GPU, the default `:latest` (CPU) is enough.
 
 ### Building Unstructured CUDA Docker Image
 
@@ -66,45 +66,50 @@ Unstructured provides powerful tools for extracting and processing content from 
 > compilers/headers stay in the builder).
 >
 > **For GPU acceleration**, use the `:latest-gpu` image above or build with CUDA
-> torch. unstructured's **table-structure model (Table Transformer)** is PyTorch,
-> so with CUDA torch present it calls `torch.cuda.is_available()` inside the
-> library and **auto-uses the GPU** (run with `--gpus all`; `libcuda` is injected
-> by nvidia-container-toolkit). **Layout detection and OCR are separate** — see
-> [PDF parsing models — GPU/CPU](#pdf-parsing-models--gpucpu). The heavy LoRA
+> torch + onnxruntime-gpu. `:latest-gpu` runs **both layout (onnxruntime-gpu)**
+> and **table structure (CUDA torch)** on the GPU (run with `--gpus all`;
+> `libcuda` is injected by nvidia-container-toolkit). See the per-model breakdown
+> in [PDF parsing models — GPU/CPU](#pdf-parsing-models--gpucpu). The heavy LoRA
 > fine-tuning still runs in a separate Azure ML / SageMaker job.
 > ```bash
-> docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -t pdf-qa-extractor:gpu -f Dockerfile .
+> docker build \
+>   --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 \
+>   --build-arg ONNXRUNTIME_PACKAGE=onnxruntime-gpu \
+>   -t pdf-qa-extractor:gpu -f Dockerfile .
 > ```
 
 ### PDF parsing models — GPU/CPU
 
 `unstructured.partition.pdf.partition_pdf` is not one model — it runs **different
-engines per stage**. PyTorch stages ride the GPU with CUDA torch; onnxruntime,
-Tesseract and pdfminer are separate. Actual acceleration for our images
-(`:latest` = CPU torch + CPU onnxruntime, `:latest-gpu` = CUDA torch + **CPU**
-onnxruntime):
+engines per stage**. PyTorch stages ride the GPU with CUDA torch; ONNX stages ride
+it with onnxruntime-gpu; Tesseract and pdfminer are separate. Actual acceleration
+for our images (`:latest` = CPU torch + CPU onnxruntime, `:latest-gpu` = **CUDA
+torch + onnxruntime-gpu**):
 
-| Stage | Model / library | Engine | `:latest` (CPU) | `:latest-gpu` (CUDA torch) |
+| Stage | Model / library | Engine | `:latest` (CPU) | `:latest-gpu` (GPU) |
 |---|---|---|---|---|
 | Text extraction (digital PDF, `strategy="fast"`) | pdfminer.six | pure Python | CPU | CPU (no model) |
-| Layout detection (default `yolox`) | YOLOX | **onnxruntime** | CPU | **CPU** — GPU needs `onnxruntime-gpu` |
-| Layout detection (alt `detectron2_onnx`, …) | Detectron2-ONNX | **onnxruntime** | CPU | **CPU** — GPU needs `onnxruntime-gpu` |
-| Table structure (`infer_table_structure=True`) | Table Transformer (TATR) | **PyTorch / transformers** | CPU | **GPU (automatic)** |
+| Layout detection (default `yolox`) | YOLOX | **onnxruntime** | CPU | **GPU** (onnxruntime-gpu) |
+| Layout detection (alt `detectron2_onnx`, …) | Detectron2-ONNX | **onnxruntime** | CPU | **GPU** (onnxruntime-gpu) |
+| Table structure (`infer_table_structure=True`) | Table Transformer (TATR) | **PyTorch / transformers** | CPU | **GPU** (CUDA torch) |
 | OCR (scanned pages, `hi_res`/`ocr_only`) | Tesseract | Tesseract C++ | CPU | **CPU (always)** |
 | Image block extraction/crop | Pillow · pdf2image · OpenCV | CPU | CPU | CPU |
 
 **Key takeaways**
-- The only stage `:latest-gpu` actually runs on the GPU is the **table-structure
-  model (Table Transformer, PyTorch)**, and it only loads when
-  `infer_table_structure=True` — in this project you must set the `TABLE_MODEL`
-  env var (or `--table_model`). Without it, no table model runs and nothing hits
-  the GPU.
-- **Layout detection (YOLOX/Detectron2-ONNX)** uses onnxruntime; the default
-  image ships CPU-only `onnxruntime`, so it runs on **CPU**. onnxruntime uses the
-  GPU only when a `CUDAExecutionProvider` is available, which requires the
-  `onnxruntime-gpu` package plus matching CUDA/cuDNN (see below).
+- `:latest-gpu` runs **both layout detection (onnxruntime-gpu)** and the
+  **table-structure model (CUDA torch)** on the GPU. Layout runs automatically
+  under the `hi_res` strategy (scanned PDFs, `extract_images_in_pdf`, …); the
+  table model only loads when `infer_table_structure=True` — set the `TABLE_MODEL`
+  env var (or `--table_model`) to enable it.
+- GPU acceleration only kicks in with a **compatible NVIDIA driver + `--gpus
+  all`**. `:latest-gpu` targets CUDA 12.x (cu124) by default; for an older driver,
+  rebuild with `TORCH_INDEX_URL=cu121`/`cu118` and a matching onnxruntime-gpu. The
+  CUDA/cuDNN runtime libs ship inside the torch and onnxruntime-gpu wheels, so
+  they're baked into the image.
 - **OCR (Tesseract)** and digital-PDF text extraction (pdfminer) are **always
   CPU**.
+- The default `:latest` uses **CPU-only onnxruntime + CPU torch**, so every stage
+  is CPU (and the image is small).
 
 **Selecting models (choosing among several)**
 - **Strategy**: `partition_pdf(strategy=...)` — `"fast"` (pdfminer, no model),
@@ -112,20 +117,23 @@ onnxruntime):
   (default; picks per document/options).
 - **Layout model**: `hi_res_model_name=` arg or `UNSTRUCTURED_DEFAULT_MODEL_NAME`
   env. Options: `yolox` (default), `yolox_tiny`, `yolox_quantized`,
-  `detectron2_onnx`, `detectron2_quantized`, `detectron2_mask_rcnn` (all ONNX).
+  `detectron2_onnx`, `detectron2_quantized`, `detectron2_mask_rcnn` (all ONNX →
+  run on the GPU via onnxruntime-gpu in `:latest-gpu`).
 - **Table**: `infer_table_structure=True` → Table Transformer (PyTorch). Enabled
   here via the `TABLE_MODEL` env var.
 
 > **Why your 3080 lit up on the old image**: older unstructured used a **PyTorch
 > detectron2** (layoutparser) layout model by default, so CUDA torch alone put
 > the layout stage on the GPU. Current versions default layout to **ONNX
-> (YOLOX)**, so layout is CPU without `onnxruntime-gpu`. Table structure is still
-> torch, so it's GPU-accelerated on `:latest-gpu`.
+> (YOLOX)**, which uses the onnxruntime engine — so `:latest-gpu` ships
+> **onnxruntime-gpu** to put layout back on the GPU (old behaviour + the table
+> model on the GPU too).
 
-> **(Advanced) To GPU-accelerate layout too**: install `onnxruntime-gpu` on top of
-> `:latest-gpu`. Note onnxruntime-gpu needs its own CUDA/cuDNN runtime that
-> **exactly matches** what torch bundles (`pip install onnxruntime-gpu`, then add
-> torch's `nvidia/*` lib paths to `LD_LIBRARY_PATH`). On a version mismatch it
+> **Switching a CPU install to GPU by hand**: `onnxruntime` (CPU) and
+> `onnxruntime-gpu` both provide the `onnxruntime` module and **conflict**, so
+> remove the CPU one first — `pip uninstall -y onnxruntime && pip install
+> onnxruntime-gpu`. (This repo does that automatically in the GPU build via the
+> `ONNXRUNTIME_PACKAGE=onnxruntime-gpu` build-arg.) On a driver/CUDA mismatch it
 > silently falls back to CPU.
 
 ### PDF Extractor Usage Guide
@@ -295,7 +303,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 #### Performance Optimization Tips
 
 - Large PDF files (over 100MB) should be split before processing
-- To GPU-accelerate **table-structure recognition (Table Transformer)** on scanned PDFs, run `:latest-gpu` with `--gpus all` and set `TABLE_MODEL` (layout detection and OCR stay on CPU — see the [GPU/CPU breakdown](#pdf-parsing-models--gpucpu) above)
+- To GPU-accelerate on scanned PDFs, run `:latest-gpu` with `--gpus all`. **Layout detection (onnxruntime-gpu)** is accelerated automatically under `hi_res`, and **table-structure recognition (Table Transformer)** is accelerated when `TABLE_MODEL` is set (OCR stays on CPU — see the [GPU/CPU breakdown](#pdf-parsing-models--gpucpu) above)
 - Monitor memory usage and adjust the `batch_size` parameter if necessary (refer to partition_pdf in the code)
 
 #### 2. ☁️ Running on Azure ML Command Job (default)

@@ -3,9 +3,11 @@ name: Build and push PDF-QA image (GHCR)
 # Builds the public PDF Q&A extraction images and pushes them to the GitHub
 # Container Registry (ghcr.io) as a build matrix:
 #   * :latest      - CPU-only, slim (~2GB) - the default for most users
-#   * :latest-gpu  - CUDA torch (~7.5GB) - run with `--gpus all` to GPU-accelerate
-#                    unstructured's table-structure model (Table Transformer,
-#                    PyTorch). Layout (YOLOX/onnxruntime) & Tesseract OCR stay CPU.
+#   * :latest-gpu  - CUDA torch + onnxruntime-gpu (~9GB) - run with `--gpus all`
+#                    to GPU-accelerate BOTH unstructured model families: layout
+#                    detection (YOLOX/detectron2_onnx on onnxruntime-gpu) and the
+#                    table-structure model (Table Transformer, PyTorch). Tesseract
+#                    OCR stays CPU.
 # The same images feed both Azure ML and SageMaker, so learners can `docker
 # pull` without a cloud account.
 
@@ -40,9 +42,11 @@ jobs:
         include:
           - variant: cpu
             torch_index: https://download.pytorch.org/whl/cpu
+            onnxruntime_package: onnxruntime
             tag_suffix: ""
           - variant: gpu
             torch_index: https://download.pytorch.org/whl/cu124
+            onnxruntime_package: onnxruntime-gpu
             tag_suffix: "-gpu"
     permissions:
       contents: read
@@ -93,7 +97,7 @@ jobs:
 
       - name: Build and push
         id: build
-        # Validate the CPU build on PRs; the ~7.5GB GPU variant only builds on
+        # Validate the CPU build on PRs; the ~9GB GPU variant only builds on
         # pushes/tags to keep PR CI fast.
         if: github.event_name != 'pull_request' || matrix.variant == 'cpu'
         uses: docker/build-push-action@v6
@@ -102,9 +106,11 @@ jobs:
           file: pdf_qa_extraction/Dockerfile
           # Push on branch/tag builds; PRs only validate the build.
           push: ${{ github.event_name != 'pull_request' }}
-          # cpu -> .../whl/cpu (~2GB) ; gpu -> .../whl/cu124 (CUDA torch, ~7.5GB).
+          # cpu -> whl/cpu + onnxruntime (CPU, ~2GB); gpu -> whl/cu124 CUDA torch
+          # + onnxruntime-gpu (layout & table on GPU, ~9GB).
           build-args: |
             TORCH_INDEX_URL=${{ matrix.torch_index }}
+            ONNXRUNTIME_PACKAGE=${{ matrix.onnxruntime_package }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Separate cache scope per variant so cpu/gpu don't evict each other.
@@ -135,5 +141,5 @@ jobs:
             awk '{printf "Uncompressed image size: %.2f GiB (%d bytes)\n", $1/1073741824, $1}'
           echo "::endgroup::"
           echo "::group::Import smoke test (${{ matrix.variant }})"
-          docker run --rm "$REF" python -c "import pdf_qa, torch, cv2, unstructured; print('imports OK - ${{ matrix.variant }} | pdf_qa', pdf_qa.__version__, '| torch', torch.__version__)"
+          docker run --rm "$REF" python -c "import importlib.metadata as md, pdf_qa, torch, cv2, unstructured, onnxruntime as ort; names={d.metadata['Name'].lower() for d in md.distributions()}; assert '${{ matrix.onnxruntime_package }}' in names, 'expected ${{ matrix.onnxruntime_package }}, found '+str(sorted(n for n in names if 'onnx' in n)); print('imports OK - ${{ matrix.variant }} | pdf_qa', pdf_qa.__version__, '| torch', torch.__version__, '| onnxruntime', ort.__version__, '(${{ matrix.onnxruntime_package }}) providers:', ort.get_available_providers())"
           echo "::endgroup::"

@@ -1,14 +1,14 @@
 """PDF partitioning helpers built on `unstructured`.
 
-The default container image is CPU-only, so extraction runs on CPU. Engines
-differ per stage: the ``hi_res`` **layout** model (default ``yolox``) runs on
-``onnxruntime`` and stays on CPU unless ``onnxruntime-gpu`` is installed;
-scanned pages are OCR'd with ``tesseract`` (CPU only); the **table-structure**
-model (Table Transformer, ``infer_table_structure=True``) is PyTorch-based and
-auto-uses the GPU when CUDA-enabled torch is present (it checks
-``torch.cuda.is_available()`` internally) -- run the ``:latest-gpu`` image to
-enable that. See the module README "PDF parsing models -- GPU/CPU" for the full
-breakdown.
+The default container image (``:latest``) is CPU-only, so extraction runs on
+CPU. Engines differ per stage: the ``hi_res`` **layout** model (default
+``yolox``) runs on ``onnxruntime``; scanned pages are OCR'd with ``tesseract``
+(CPU only); the **table-structure** model (Table Transformer,
+``infer_table_structure=True``) is PyTorch-based. The ``:latest-gpu`` image
+ships CUDA torch **and** ``onnxruntime-gpu``, so both the layout model
+(onnxruntime-gpu) and the table model (CUDA torch) run on the GPU when launched
+with ``--gpus all``; only Tesseract OCR and pdfminer stay on CPU. See the module
+README "PDF parsing models -- GPU/CPU" for the full breakdown.
 
 `unstructured` is imported lazily inside :func:`extract_elements_from_pdf` so
 the rest of the package (providers, parsing, tests) can be imported without the
