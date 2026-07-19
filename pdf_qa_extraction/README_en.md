@@ -182,12 +182,17 @@ One PDF can seed **several different fine-tuning datasets**. The `PERSONA` env v
 | `interviewer` | Technical interviewer | Escalating interview questions with concise model answers |
 | `analyst` | Research analyst | Synthesis/comparison across the document, drawing implications |
 | `feynman` | Feynman (plain talk) | First-principles + everyday analogies, no jargon (Feynman technique) |
+| `memoirist` | Autobiographer (1st person) | Recounts a life story in the first person ("나는…") — events, people, feelings, decisions and lessons — without inventing anything absent from the context |
 
 > Personas live in a **YAML ledger (`pdf_qa/personas.yaml`)**, not in code. Edit that file to tweak wording/methods or add new personas, or point the `PERSONA_FILE` env var at your own external YAML to manage a separate ledger.
 
 ```bash
 # e.g. build a Socratic study dataset from the same PDF
 PERSONA=socratic LLM_PROVIDER=azure PDF_PATH=data/fsi_data.pdf python run_local.py
+
+# e.g. turn an autobiography PDF into a first-person recollection dataset —
+# capture a person's own voice in an SLM
+PERSONA=memoirist DOMAIN="my father's life" PDF_PATH=data/memoir.pdf python run_local.py
 
 # e.g. run your own persona ledger from an external file
 PERSONA_FILE=/path/to/my_personas.yaml PERSONA=feynman python run_local.py
@@ -344,7 +349,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 - Large PDF files (over 100MB) should be split before processing
 - **Automatic GPU acceleration**: run the `:latest-gpu` image with `--gpus all` and the pipeline probes the device; when a GPU is detected it **escalates `STRATEGY=auto` to `hi_res`** and runs **layout (onnxruntime-gpu)** and **table structure (Table Transformer, CUDA torch)** on the GPU automatically. Turn it off with `GPU_BOOST=false` (OCR is always CPU — see the [GPU/CPU breakdown](#pdf-parsing-models--gpucpu) above)
-- **Use personas**: run the same PDF several times with `PERSONA=professor|socratic|consultant|interviewer|analyst|feynman` to accumulate datasets built with different methods. Edit `pdf_qa/personas.yaml` (or point `PERSONA_FILE` at your own YAML) to customize the ledger
+- **Use personas**: run the same PDF several times with `PERSONA=professor|socratic|consultant|interviewer|analyst|feynman|memoirist` to accumulate datasets built with different methods. Edit `pdf_qa/personas.yaml` (or point `PERSONA_FILE` at your own YAML) to customize the ledger. (e.g. `memoirist` turns an autobiography PDF into first-person recollection Q&A that captures a person's voice in an SLM)
 - Monitor memory usage and adjust the `batch_size` parameter if necessary (refer to partition_pdf in the code)
 
 #### 2. ☁️ Running on Azure ML Command Job (default)

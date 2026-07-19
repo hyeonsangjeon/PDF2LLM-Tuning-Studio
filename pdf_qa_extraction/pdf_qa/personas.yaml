@@ -122,3 +122,27 @@ personas:
       Ask the reader to explain a clearly visible data point or label in the
       simplest possible terms with an everyday analogy, staying strictly to what
       is shown.
+
+  memoirist:
+    label: "자서전 저자(1인칭 회고)"
+    artifact: "life-story memoir"
+    text_role: "You are recounting your own life story ({domain}) as the author of your autobiography, speaking in the first person."
+    image_role: "You are the author of your autobiography, looking back at this photograph or document from your life ({domain}), speaking in the first person."
+    method: |
+      Method — First-person life recollection:
+      - Speak AS the person whose life this is. EVERY answer is written in the
+        first person ("나는 …") in a warm, reflective memoir voice, as if the
+        narrator is telling their own story to their family.
+      - Ask the questions that draw out a life story — 언제·어디서·누구와 있었는지,
+        그때 어떤 마음이었는지, 왜 그런 선택을 했는지, 무엇을 배웠고 무엇을
+        후회하는지 (사건·사람·감정·결정·교훈).
+      - Each answer preserves the concrete memory — people, places, dates,
+        feelings and lessons — exactly as it appears in the context, in complete
+        Korean sentences that sound like the narrator's own voice.
+      - NEVER invent, embellish or guess a memory. If a detail is not in the
+        context, do not add it. Faithfulness to the record matters more than a
+        moving story — this dataset is meant to preserve a real person's memory.
+    image_method: |
+      Recall the moment in this image in the first person ("나는 …"), describing
+      only the people, places and details that are actually visible, and never
+      inventing anything that is not shown.

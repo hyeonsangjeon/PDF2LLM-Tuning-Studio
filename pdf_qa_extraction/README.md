@@ -170,12 +170,16 @@ docker run --rm -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
 | `interviewer` | 기술 면접관 | 난이도가 올라가는 면접식 질문 + 모범 답안 |
 | `analyst` | 리서치 분석가 | 문서 여러 부분을 종합·비교해 시사점을 도출 |
 | `feynman` | 파인만(쉬운 설명) | 제1원리·일상 비유로 전문용어 없이 쉽게 설명(파인만 기법) |
+| `memoirist` | 자서전 저자(1인칭 회고) | 삶의 이야기를 1인칭("나는…")으로 회고 — 사건·사람·감정·결정·교훈을 담되 문맥에 없는 기억은 지어내지 않음 |
 
 > 페르소나는 코드가 아니라 **`pdf_qa/personas.yaml` 원장(ledger)** 에서 관리됩니다. 이 파일을 편집해 문구·방식을 바꾸거나 새 페르소나를 추가할 수 있고, `PERSONA_FILE` 환경변수로 **외부 YAML 파일**을 지정해 별도로 원장을 운영할 수도 있습니다.
 
 ```bash
 # 예: 같은 PDF로 소크라테스식 학습 데이터셋 생성
 PERSONA=socratic LLM_PROVIDER=azure PDF_PATH=data/fsi_data.pdf python run_local.py
+
+# 예: 자서전 PDF를 1인칭 회고 데이터셋으로 — 인물의 목소리를 SLM에 담기
+PERSONA=memoirist DOMAIN="아버지의 생애" PDF_PATH=data/memoir.pdf python run_local.py
 
 # 예: 나만의 페르소나 원장을 외부 파일로 운영
 PERSONA_FILE=/path/to/my_personas.yaml PERSONA=feynman python run_local.py
@@ -332,7 +336,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 - 대용량 PDF 파일(100MB 이상)은 처리 전 분할하는 것이 좋습니다
 - **GPU 자동 가속**: `:latest-gpu` 이미지 + `--gpus all`로 실행하면 파이프라인이 디바이스를 점검하고, GPU가 잡히면 `STRATEGY=auto`를 **`hi_res`로 승격**해 **레이아웃(onnxruntime-gpu)** 과 **표 구조(Table Transformer, CUDA torch)** 를 자동으로 GPU에 태웁니다. 끄려면 `GPU_BOOST=false` (OCR은 항상 CPU — 위 [GPU/CPU 구분](#pdf-파싱-내부-모델--gpucpu-구분) 표 참고)
-- **페르소나 활용**: 같은 PDF를 `PERSONA=professor|socratic|consultant|interviewer|analyst|feynman`로 여러 번 돌려 다양한 방식(방법론)의 파인튜닝 데이터셋을 축적하세요. 페르소나 문구·방식은 `pdf_qa/personas.yaml` 원장에서 편집하거나 `PERSONA_FILE`로 외부 파일을 지정할 수 있습니다
+- **페르소나 활용**: 같은 PDF를 `PERSONA=professor|socratic|consultant|interviewer|analyst|feynman|memoirist`로 여러 번 돌려 다양한 방식(방법론)의 파인튜닝 데이터셋을 축적하세요. 페르소나 문구·방식은 `pdf_qa/personas.yaml` 원장에서 편집하거나 `PERSONA_FILE`로 외부 파일을 지정할 수 있습니다. (예: `memoirist`는 자서전 PDF를 1인칭 회고 Q&A로 만들어 인물의 목소리를 SLM에 담습니다)
 - 메모리 사용량을 모니터링하고 필요한 경우 `batch_size` 파라미터를 조정하세요 (코드의 partition_pdf 참조)
 
 

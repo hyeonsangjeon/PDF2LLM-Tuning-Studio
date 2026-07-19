@@ -52,6 +52,7 @@ def test_persona_registry_has_expected_keys():
         "interviewer",
         "analyst",
         "feynman",
+        "memoirist",
     ]
     assert DEFAULT_PERSONA == "professor"
     assert list_personas()[0] == "professor"
@@ -103,6 +104,12 @@ def test_default_persona_reproduces_professor_wording():
             "plain-language explainer",
             "Method — Feynman technique:",
         ),
+        (
+            "memoirist",
+            "You are recounting your own life story (금융) as the author of your autobiography, speaking in the first person.",
+            "life-story memoir",
+            "Method — First-person life recollection:",
+        ),
     ],
 )
 def test_text_persona_swaps_role_artifact_and_method(persona, role_needle, artifact, method_needle):
@@ -116,6 +123,19 @@ def test_feynman_uses_analogy_and_first_principles():
     prompt = build_text_prompt("CTX", "금융", "2", "feynman")
     assert "everyday analogy" in prompt
     assert "first-principles" in prompt
+
+
+def test_memoirist_is_first_person_and_faithful():
+    prompt = build_text_prompt("CTX", "아버지의 생애", "3", "memoirist")
+    # role weaves the domain in and asks for a first-person voice
+    assert "as the author of your autobiography" in prompt
+    assert "first person" in prompt
+    assert '"나는 …"' in prompt
+    # the memory-preservation guardrail must be present
+    assert "NEVER invent" in prompt
+    img = build_image_instruction("아버지의 생애", "1", "memoirist")
+    assert '"나는 …"' in img
+    assert "never" in img.lower()
 
 
 def test_image_instruction_uses_persona_and_domain():
@@ -158,7 +178,7 @@ def test_every_persona_has_a_distinct_method():
     assert all(m.strip() for m in text_methods + image_methods)
 
 
-def test_ledger_loads_six_personas_from_yaml():
+def test_ledger_loads_all_personas_from_yaml():
     personas, default = load_personas()
     assert default == "professor"
     assert set(personas) == {
@@ -168,6 +188,7 @@ def test_ledger_loads_six_personas_from_yaml():
         "interviewer",
         "analyst",
         "feynman",
+        "memoirist",
     }
 
 
