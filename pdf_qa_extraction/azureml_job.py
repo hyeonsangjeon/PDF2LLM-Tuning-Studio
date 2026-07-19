@@ -48,7 +48,7 @@ def main() -> None:
     parser.add_argument("--num_questions", default="5")
     parser.add_argument("--num_img_questions", default="1")
     parser.add_argument("--persona", default=os.getenv("PERSONA", "professor"),
-                        help="Q&A 페르소나: professor(기본) | socratic | consultant | interviewer | analyst")
+                        help="Q&A 페르소나: professor(기본) | socratic | consultant | interviewer | analyst | feynman | memoirist (원장: pdf_qa/personas.yaml, PERSONA_FILE로 교체 가능)")
     parser.add_argument("--strategy", default=os.getenv("STRATEGY", "auto"),
                         help="추출 전략: auto(기본) | fast | hi_res | ocr_only. GPU 감지 시 auto는 hi_res로 승격")
     parser.add_argument("--gpu_boost", default=os.getenv("GPU_BOOST", "true"),

@@ -40,8 +40,9 @@ class QAConfig:
     num_img_questions: str = "1"
     table_model: Optional[str] = None
     figures_dir: str = "figures"
-    # Q&A persona/style (see ``pdf_qa.prompts.PERSONAS``): professor (default),
-    # socratic, consultant, interviewer, analyst.
+    # Q&A persona/style (see ``pdf_qa.prompts.PERSONAS`` / ``personas.yaml``):
+    # professor (default), socratic, consultant, interviewer, analyst, feynman,
+    # memoirist. The ledger is editable and overridable via ``PERSONA_FILE``.
     persona: str = "professor"
     # ``unstructured`` strategy: auto | fast | hi_res | ocr_only. ``auto`` is
     # escalated to ``hi_res`` when a GPU is detected and ``gpu_boost`` is on.
