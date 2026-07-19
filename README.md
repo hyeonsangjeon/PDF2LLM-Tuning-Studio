@@ -14,6 +14,7 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
 - **GPU 자동 가속(디바이스 인지)**: 실행 시 GPU를 점검해 감지되면 `hi_res` 레이아웃(onnxruntime-gpu)+표 구조(CUDA torch)를 자동으로 GPU에 태우고, CPU에서는 경량 경로 유지
 - **클라우드 무관 코어 패키지**: `pdf_qa` 패키지 + 공급자 플러그인 구조로 코드 중복 제거, 런타임별 얇은 진입점
 - **단일 공개 이미지**: `ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor` 하나로 로컬·Azure ML·SageMaker 실행
+- **로컬 데모 웹앱(싱글 노드)**: 같은 이미지에서 `python run_webapp.py` → 브라우저에서 문서 업로드·페르소나 선택. 파이프라인을 **같은 프로세스에서 직접 호출(in-process)** 해 GPU 유무를 자동 감지하며, 미리보기 모드는 클라우드 자격 증명 없이 오프라인으로 동작(병렬 팬아웃은 advanced)
 - **메모리 효율적 파인튜닝**: Unsloth 최적화와 LoRA 어댑터로 제한된 GPU 환경에서도 대형 모델 학습
 
 ## 🏗️ 아키텍처
@@ -61,9 +62,14 @@ PDF2LLM-Tuning-Studio/
 │
 ├── pdf_qa_extraction/       # PDF 처리 및 Q&A 추출 모듈
 │   ├── pdf_qa/              # ⭐ 클라우드 무관 코어 패키지
-│   │   ├── config.py · parsing.py · prompts.py · extract.py · pipeline.py
+│   │   ├── config.py · parsing.py · prompts.py · extract.py · pipeline.py · device.py
+│   │   ├── personas.yaml    # 🎭 페르소나 원장 (YAML, PERSONA_FILE로 외부 지정 가능)
 │   │   └── providers/       # azure_foundry · openai · bedrock (+ base 팩토리)
+│   ├── webapp/              # 🖥️ 로컬 데모 웹앱 (FastAPI, in-process 파이프라인)
+│   │   ├── app.py           # /api/{personas,device,providers,extract} 엔드포인트
+│   │   └── static/index.html    # 싱글 페이지 UI (GPU/CPU 배지, 페르소나 선택)
 │   ├── run_local.py         # 로컬/컨테이너 통합 진입점 (LLM_PROVIDER로 전환)
+│   ├── run_webapp.py        # 로컬 데모 웹앱 진입점 (uvicorn, 기본 :8000)
 │   ├── azureml_job.py       # Azure ML 잡 진입점
 │   ├── processing.py        # SageMaker Processing Job 진입점
 │   ├── processing_local*.py # (하위호환) Bedrock/OpenAI 로컬 실행 shim
@@ -134,6 +140,17 @@ LLM_PROVIDER=bedrock docker run --rm -v $(pwd):/app -w /app --env-file .env \
 ```
 
 SageMaker Processing 배치 잡 실행은 [PDF Q&A 추출 가이드](./pdf_qa_extraction/README.md)와 `sagemaker_processingjob_pdf_qa_extraction.ipynb`를 참조하세요.
+
+#### 🖥️ 로컬 데모 웹앱 (싱글 노드)
+
+CLI 대신 브라우저로 체험하려면 같은 이미지에서 웹앱을 띄웁니다. 문서를 올리고 페르소나를 고른 뒤 실행하면 **호스트 GPU 유무를 자동 감지**합니다. 미리보기 모드는 자격 증명 없이 오프라인으로 추출·페르소나 프롬프트를 보여주고, 전체 모드는 선택한 공급자로 Q&A까지 생성합니다(자세한 내용은 [PDF Q&A 추출 가이드](./pdf_qa_extraction/README.md)의 "로컬 데모 웹앱" 절 참조).
+
+```bash
+# http://localhost:8000 접속 (GPU 호스트는 --gpus all 추가)
+docker run --rm -p 8000:8000 --env-file .env \
+  ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest \
+  python run_webapp.py
+```
 
 ### 2단계: 데이터 전처리 및 분석
 

@@ -218,6 +218,38 @@ docker run --rm --gpus all -e PERSONA=analyst \
 **OpenAI 사용 시 (`LLM_PROVIDER=openai`)**
 - `OPENAI_API_KEY`: OpenAI API 키
 
+#### 2. 🖥️ 로컬 데모 웹앱 (싱글 노드)
+
+병렬 팬아웃(SageMaker/Azure ML 분산 처리)은 **advanced** 경로로 두고, "로컬에서 이렇게 씁니다"를 그대로 보여주는 **싱글 노드 웹앱**을 같은 이미지 안에 넣었습니다. 문서를 올리고 → 페르소나를 고르고 → 버튼을 누르면 **호스트의 GPU 유무를 자동 감지**해 동작합니다.
+
+**아키텍처 — 컨테이너가 곧 웹앱 (in-process):** 웹앱은 별도 컨테이너를 API로 호출하거나 요청마다 프로세스를 띄우지 않습니다. `pdf_qa` 코어를 **같은 프로세스 안에서 직접 호출**하므로 torch/onnxruntime가 동일 프로세스에서 돌고, `--gpus all`로 넘어온 GPU가 자동으로 잡힙니다. 동시에 REST 엔드포인트(`POST /api/extract`)도 노출하므로 필요하면 API로도 쓸 수 있습니다.
+
+```bash
+# 이미지 별칭
+IMG=ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest      # CPU 슬림
+# IMG=ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu  # GPU 빌드
+
+# 웹앱 구동 → 브라우저에서 http://localhost:8000 접속
+docker run --rm -p 8000:8000 --env-file .env $IMG python run_webapp.py
+
+# GPU 호스트: --gpus all 만 추가하면 hi_res 레이아웃 + 표 구조가 자동으로 GPU로
+docker run --rm --gpus all -p 8000:8000 --env-file .env \
+  ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu python run_webapp.py
+```
+
+로컬(컨테이너 없이) 실행:
+
+```bash
+pip install ".[pdf,azure,webapp]"   # 추출 + 공급자 + 웹앱 의존성
+python run_webapp.py                 # HOST/PORT 환경변수로 바인딩 변경 가능(기본 0.0.0.0:8000)
+```
+
+**두 가지 모드**
+- **미리보기(preview) — 오프라인, 클라우드 자격 증명 불필요:** PDF를 디바이스 인지 방식으로 파싱해 **요소/표/이미지 개수 + 실제 사용된 디바이스 경로 + 페르소나가 적용된 프롬프트**를 보여줍니다. LLM을 호출하지 않으므로 **GPU 가속의 강점과 페르소나 차이를 자격 증명 없이** 확인할 수 있습니다.
+- **전체(full) — 자격 증명 필요:** 위 추출에 더해 선택한 공급자(Azure/OpenAI/Bedrock)로 **Q&A 쌍을 생성**하고 결과 표 + `JSONL` 다운로드를 제공합니다.
+
+> UI는 로드 시 `/api/device`로 **GPU/CPU 배지**를, `/api/personas`로 페르소나 목록(방식 요약 포함)을, `/api/providers`로 공급자 설정 여부를 표시합니다. 대량·분산 처리는 아래 SageMaker/Azure ML 병렬 처리 섹션을 참고하세요.
+
 ## 테이블 추출 모델 비교
 
 ### 상세 성능 비교표

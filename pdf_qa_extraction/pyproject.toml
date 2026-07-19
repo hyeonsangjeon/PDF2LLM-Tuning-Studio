@@ -44,6 +44,12 @@ openai = [
     "langchain-openai>=0.2",
     "openai>=1.40",
 ]
+# Single-node local demo web app (thin UI over the in-process pipeline)
+webapp = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
+]
 
 [tool.setuptools]
 py-modules = []

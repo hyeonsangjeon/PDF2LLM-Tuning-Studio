@@ -231,6 +231,38 @@ docker run --rm --gpus all -e PERSONA=analyst \
 **For OpenAI (`LLM_PROVIDER=openai`)**
 - `OPENAI_API_KEY`: OpenAI API key
 
+#### 2. 🖥️ Local Demo Web App (Single Node)
+
+Parallel fan-out (SageMaker / Azure ML distributed processing) stays the **advanced** path; for a "this is how you use it locally" experience we ship a **single-node web app inside the same image**. Upload a document → pick a persona → click, and it **auto-detects the host GPU** and runs accordingly.
+
+**Architecture — the container *is* the web app (in-process):** the app does **not** call a separate container as an API, nor spawn a process per request. It imports `pdf_qa` and calls it **in the same process**, so torch/onnxruntime run inline and a GPU passed via `--gpus all` is picked up automatically. It also exposes a REST endpoint (`POST /api/extract`), so it doubles as an API when you need one.
+
+```bash
+# Image alias
+IMG=ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest      # CPU slim
+# IMG=ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu  # GPU build
+
+# Launch the web app → open http://localhost:8000
+docker run --rm -p 8000:8000 --env-file .env $IMG python run_webapp.py
+
+# GPU host: just add --gpus all → hi_res layout + table structure run on the GPU automatically
+docker run --rm --gpus all -p 8000:8000 --env-file .env \
+  ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu python run_webapp.py
+```
+
+Run locally (no container):
+
+```bash
+pip install ".[pdf,azure,webapp]"   # extraction + provider + web app deps
+python run_webapp.py                 # HOST/PORT env vars change the bind (default 0.0.0.0:8000)
+```
+
+**Two modes**
+- **Preview — offline, no cloud credentials:** partitions the PDF device-aware and shows **element/table/image counts + the actual device path + the persona-rendered prompt**. No LLM call, so you can see the **GPU acceleration strength and persona differences without any credentials**.
+- **Full — credentials required:** additionally calls the selected provider (Azure/OpenAI/Bedrock) to **generate Q&A pairs**, returning a results table + a `JSONL` download.
+
+> On load the UI shows a **GPU/CPU badge** (`/api/device`), the persona list with method summaries (`/api/personas`), and provider-configured hints (`/api/providers`). For large / distributed workloads, see the SageMaker / Azure ML parallel processing section below.
+
 ## Table Extraction Model Comparison
 
 ### Detailed Performance Comparison

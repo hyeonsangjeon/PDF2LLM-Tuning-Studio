@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PDF2LLM Tuning Studio — 로컬 데모</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #171e2e; --panel2: #1e2740; --line: #2a3550;
+    --fg: #e6ecf7; --mut: #93a1bd; --accent: #4f8cff; --ok: #35c47b;
+    --warn: #f0b429; --err: #ff6b6b; --chip: #243049;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Noto Sans KR", sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #141b2b, #10151f); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  header .sub { color: var(--mut); font-size: 12px; margin-top: 2px; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px;
+    border-radius: 999px; background: var(--chip); border: 1px solid var(--line);
+    font-size: 12.5px; white-space: nowrap; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--mut); }
+  .dot.gpu { background: var(--ok); box-shadow: 0 0 0 3px rgba(53,196,123,.18); }
+  .dot.cpu { background: var(--warn); box-shadow: 0 0 0 3px rgba(240,180,41,.15); }
+  main { display: grid; grid-template-columns: 380px 1fr; gap: 20px;
+    padding: 20px 24px; align-items: start; }
+  @media (max-width: 900px){ main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px;
+    color: var(--mut); margin: 0 0 14px; }
+  label { display: block; font-size: 12.5px; color: var(--mut); margin: 12px 0 5px; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; padding: 9px 10px; background: var(--panel2); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px; }
+  input[type=file] { width: 100%; font-size: 12.5px; color: var(--mut); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .hint { font-size: 11.5px; color: var(--mut); margin-top: 5px; min-height: 15px; }
+  .seg { display: flex; gap: 6px; margin-top: 6px; }
+  .seg button { flex: 1; padding: 8px; background: var(--panel2); color: var(--mut);
+    border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .seg button.active { background: rgba(79,140,255,.16); color: var(--fg);
+    border-color: var(--accent); }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .check label { margin: 0; color: var(--fg); }
+  .run { margin-top: 18px; width: 100%; padding: 12px; border: none; cursor: pointer;
+    background: var(--accent); color: #fff; font-weight: 650; font-size: 14px;
+    border-radius: 9px; }
+  .run:disabled { opacity: .55; cursor: not-allowed; }
+  .out { min-height: 200px; }
+  .kv { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .chip { background: var(--chip); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; }
+  .chip b { color: var(--fg); } .chip span { color: var(--mut); }
+  pre { background: #0b0f18; border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px; overflow: auto; font-size: 12px; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word; max-height: 460px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line);
+    vertical-align: top; }
+  th { color: var(--mut); font-weight: 600; font-size: 11.5px; text-transform: uppercase; }
+  td.q { width: 42%; color: var(--fg); } td.a { color: #cdd8ee; }
+  .tag { font-size: 10.5px; padding: 2px 6px; border-radius: 5px; background: var(--chip);
+    color: var(--mut); border: 1px solid var(--line); }
+  .muted { color: var(--mut); }
+  .err { color: var(--err); background: rgba(255,107,107,.08);
+    border: 1px solid rgba(255,107,107,.3); padding: 12px; border-radius: 8px; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px; gap: 12px; }
+  .dl { padding: 8px 14px; background: var(--panel2); color: var(--fg);
+    border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .spin { display: inline-block; width: 15px; height: 15px; border: 2px solid #fff;
+    border-top-color: transparent; border-radius: 50%; animation: sp .8s linear infinite;
+    vertical-align: -2px; margin-right: 8px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>PDF2LLM Tuning Studio · 로컬 데모</h1>
+    <div class="sub">문서 업로드 → 페르소나 선택 → 로컬에서 GPU/CPU 자동 실행 (인프로세스)</div>
+  </div>
+  <div class="badge" id="deviceBadge" title="로딩 중…">
+    <span class="dot" id="deviceDot"></span><span id="deviceText">디바이스 확인 중…</span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>입력</h2>
+    <label>PDF 문서</label>
+    <input type="file" id="file" accept="application/pdf,.pdf" />
+
+    <label>페르소나 (Q&amp;A 방식)</label>
+    <select id="persona"></select>
+    <div class="hint" id="personaHint"></div>
+
+    <div class="row">
+      <div>
+        <label>도메인</label>
+        <input type="text" id="domain" value="International Finance" />
+      </div>
+      <div>
+        <label>텍스트당 질문 수</label>
+        <input type="number" id="numQ" value="3" min="1" max="20" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>이미지당 질문 수</label>
+        <input type="number" id="numImgQ" value="1" min="0" max="10" />
+      </div>
+      <div>
+        <label>추출 전략</label>
+        <select id="strategy">
+          <option value="auto">auto (GPU 시 hi_res 승격)</option>
+          <option value="fast">fast</option>
+          <option value="hi_res">hi_res</option>
+          <option value="ocr_only">ocr_only</option>
+        </select>
+      </div>
+    </div>
+
+    <label>LLM 공급자 <span class="muted">(full 실행 시)</span></label>
+    <select id="provider"></select>
+    <div class="hint" id="providerHint"></div>
+
+    <div class="check">
+      <input type="checkbox" id="gpuBoost" checked />
+      <label for="gpuBoost">GPU 자동 가속 (감지 시 레이아웃·표를 GPU로)</label>
+    </div>
+
+    <label>실행 모드</label>
+    <div class="seg" id="modeSeg">
+      <button data-mode="preview" class="active">미리보기 (오프라인)</button>
+      <button data-mode="full">전체 실행 (LLM)</button>
+    </div>
+    <div class="hint" id="modeHint">미리보기: LLM 없이 추출·디바이스 경로·페르소나 프롬프트만 확인합니다.</div>
+
+    <button class="run" id="run">실행</button>
+  </section>
+
+  <section class="card out">
+    <h2>결과</h2>
+    <div id="output"><div class="muted">문서를 올리고 <b>실행</b>을 눌러 보세요.
+      미리보기는 자격 증명 없이도 로컬 추출과 GPU/CPU 경로를 보여줍니다.</div></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let MODE = "preview";
+let lastJsonl = null;
+
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+async function loadDevice(){
+  try{
+    const d = await (await fetch("/api/device")).json();
+    const dot = $("deviceDot"), txt = $("deviceText");
+    if(d.gpu_ready){ dot.className = "dot gpu";
+      txt.textContent = "GPU 가속: " + (d.cuda_device_name || "CUDA"); }
+    else if(d.onnxruntime_gpu_package){ dot.className = "dot cpu";
+      txt.textContent = "GPU 이미지 · 드라이버 미탐지 → CPU"; }
+    else { dot.className = "dot cpu"; txt.textContent = "CPU 모드 (경량)"; }
+    $("deviceBadge").title = d.summary || "";
+  }catch(e){ $("deviceText").textContent = "디바이스 확인 실패"; }
+}
+
+async function loadPersonas(){
+  const d = await (await fetch("/api/personas")).json();
+  const sel = $("persona"); sel.innerHTML = "";
+  d.personas.forEach(p => {
+    const o = document.createElement("option");
+    o.value = p.key; o.textContent = p.label + " (" + p.key + ")";
+    o.dataset.summary = p.method_summary || "";
+    if(p.key === d.default) o.selected = true;
+    sel.appendChild(o);
+  });
+  const upd = () => { const o = sel.selectedOptions[0];
+    $("personaHint").textContent = o ? o.dataset.summary : ""; };
+  sel.onchange = upd; upd();
+}
+
+async function loadProviders(){
+  const d = await (await fetch("/api/providers")).json();
+  const sel = $("provider"); sel.innerHTML = "";
+  d.providers.forEach(p => {
+    const o = document.createElement("option");
+    o.value = p.name;
+    o.textContent = p.name + (p.configured ? "  ✓ 자격증명 감지" : "  · 미설정");
+    if(p.name === d.default) o.selected = true;
+    sel.appendChild(o);
+  });
+  const upd = () => { const o = sel.selectedOptions[0];
+    $("providerHint").textContent = o && o.textContent.includes("미설정")
+      ? "이 공급자의 자격 증명이 .env에 없어 보입니다 — 전체 실행이 실패할 수 있어요."
+      : ""; };
+  sel.onchange = upd; upd();
+}
+
+$("modeSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if(!b) return;
+  MODE = b.dataset.mode;
+  [...$("modeSeg").children].forEach(x => x.classList.toggle("active", x === b));
+  $("modeHint").textContent = MODE === "preview"
+    ? "미리보기: LLM 없이 추출·디바이스 경로·페르소나 프롬프트만 확인합니다."
+    : "전체 실행: 선택한 LLM 공급자로 Q&A를 생성합니다 (.env 자격 증명 필요).";
+  $("run").textContent = MODE === "preview" ? "미리보기 실행" : "전체 실행";
+});
+
+function planChips(p, dev){
+  const g = p.gpu_accelerated;
+  return `<div class="kv">
+    <div class="chip"><span>경로</span> <b>${g ? "GPU 가속" : "CPU"}</b></div>
+    <div class="chip"><span>strategy</span> <b>${esc(p.strategy)}</b></div>
+    <div class="chip"><span>표 추론</span> <b>${p.infer_table_structure ? "on" : "off"}</b></div>
+    <div class="chip"><span>onnxruntime</span> <b>${esc((dev.providers||[]).join(", ")||"-")}</b></div>
+  </div>`;
+}
+
+function renderPreview(r){
+  const c = r.counts || {};
+  $("output").innerHTML = planChips(r.plan, r.device) +
+    `<div class="kv">
+      <div class="chip"><span>요소</span> <b>${c.elements ?? "-"}</b></div>
+      <div class="chip"><span>표</span> <b>${c.tables ?? 0}</b></div>
+      <div class="chip"><span>이미지</span> <b>${c.images ?? 0}</b></div>
+      <div class="chip"><span>페르소나</span> <b>${esc(r.persona.label)}</b></div>
+     </div>
+     <div class="muted" style="margin:6px 0 8px">아래는 이 문서 첫 본문에 대해 <b>${esc(r.persona.label)}</b> 페르소나가 만든 실제 프롬프트입니다:</div>
+     <pre>${esc(r.sample_prompt)}</pre>`;
+}
+
+function renderFull(r){
+  const c = r.counts || {};
+  const rows = (r.pairs||[]).map((p,i) => `<tr>
+     <td class="q">${esc(p.QUESTION || p.question || "")}</td>
+     <td class="a">${esc(p.ANSWER || p.answer || "")}
+       ${p.source==="image" ? '<span class="tag">image</span>' : ''}</td>
+   </tr>`).join("");
+  lastJsonl = r.jsonl || "";
+  $("output").innerHTML = planChips(r.plan, r.device) +
+    `<div class="kv">
+      <div class="chip"><span>총 Q&amp;A</span> <b>${c.total ?? 0}</b></div>
+      <div class="chip"><span>텍스트</span> <b>${c.text ?? 0}</b></div>
+      <div class="chip"><span>이미지</span> <b>${c.image ?? 0}</b></div>
+      <div class="chip"><span>페르소나</span> <b>${esc(r.persona.label)}</b></div>
+     </div>
+     <div class="toolbar"><div class="muted">생성된 Q&amp;A (파인튜닝용 JSONL)</div>
+       <button class="dl" id="dl">JSONL 다운로드</button></div>
+     <table><thead><tr><th>QUESTION</th><th>ANSWER</th></tr></thead>
+       <tbody>${rows || '<tr><td colspan=2 class="muted">생성된 Q&amp;A가 없습니다.</td></tr>'}</tbody></table>`;
+  const dl = $("dl");
+  if(dl) dl.onclick = () => {
+    const blob = new Blob([lastJsonl], {type: "application/jsonl"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "qa_pairs.jsonl"; a.click();
+    URL.revokeObjectURL(a.href);
+  };
+}
+
+$("run").addEventListener("click", async () => {
+  const f = $("file").files[0];
+  if(!f){ $("output").innerHTML = '<div class="err">먼저 PDF 파일을 선택하세요.</div>'; return; }
+  const fd = new FormData();
+  fd.append("file", f);
+  fd.append("persona", $("persona").value);
+  fd.append("domain", $("domain").value);
+  fd.append("num_questions", $("numQ").value);
+  fd.append("num_img_questions", $("numImgQ").value);
+  fd.append("provider", $("provider").value);
+  fd.append("strategy", $("strategy").value);
+  fd.append("gpu_boost", $("gpuBoost").checked ? "true" : "false");
+  fd.append("mode", MODE);
+
+  const btn = $("run"); btn.disabled = true;
+  const label = MODE === "preview" ? "추출 중…" : "Q&A 생성 중… (수십 초 소요될 수 있음)";
+  $("output").innerHTML = '<div class="muted"><span class="spin"></span>' + label + '</div>';
+  try{
+    const res = await fetch("/api/extract", { method: "POST", body: fd });
+    const data = await res.json();
+    if(!res.ok){ throw new Error(data.detail || ("HTTP " + res.status)); }
+    if(data.mode === "full") renderFull(data); else renderPreview(data);
+  }catch(e){
+    $("output").innerHTML = '<div class="err">' + esc(e.message) + '</div>';
+  }finally{ btn.disabled = false; }
+});
+
+loadDevice(); loadPersonas(); loadProviders();
+</script>
+</body>
+</html>
