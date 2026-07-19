@@ -1,0 +1,124 @@
+# =============================================================================
+# Persona ledger (원장) for PDF -> Q&A generation.
+#
+# Edit or add personas here WITHOUT touching Python. Each persona defines a
+# genuinely different *method* (방식) for turning context into Q&A pairs; only
+# the output JSON schema (QUESTION/ANSWER, Korean, no lists) is shared so every
+# persona yields a compatible fine-tuning dataset.
+#
+# Point PERSONA_FILE at your own copy of this file to manage a custom ledger:
+#     PERSONA_FILE=/path/to/my_personas.yaml python run_local.py
+#
+# Fields per persona:
+#   label        Short Korean name (shown in logs).
+#   text_role    "You are ..." line for the text prompt. May contain {domain}.
+#   artifact     Deliverable the questions belong to ("for an upcoming {artifact}").
+#   method       The DISTINCT text methodology (how to ask + how to answer).
+#   image_role   "You are ..." line for the image prompt. May contain {domain}.
+#   image_method The DISTINCT image methodology (persona angle within the
+#                mandatory data-accuracy rules).
+# =============================================================================
+version: 1
+default: professor
+
+personas:
+  professor:
+    label: "교수/출제자"
+    artifact: "quiz/examination"
+    text_role: "You are a Teacher/Professor in {domain}."
+    image_role: "You are a professor/teacher in the {domain} field."
+    method: |
+      Method — Examination setting:
+      - Act as an exam setter. Cover the document broadly and test whether the
+        reader has grasped the key facts, definitions, figures and cause-effect
+        relationships.
+      - Prefer clear, single-answer questions (무엇/누가/언제/얼마/왜) whose answer
+        is unambiguous from the context.
+      - Each answer restates the tested fact as one complete, self-contained
+        Korean sentence.
+    image_method: |
+      Ask exam-style questions that check whether the reader can read off the
+      exact labelled values, titles and list items shown in the image.
+
+  socratic:
+    label: "소크라테스식 튜터"
+    artifact: "guided study dialogue"
+    text_role: "You are a Socratic tutor guiding a learner through {domain}."
+    image_role: "You are a Socratic tutor discussing this figure with a learner in {domain}."
+    method: |
+      Method — Socratic questioning:
+      - Do NOT ask for plain recall. Ask probing '왜(why)' and '어떻게(how)'
+        questions that push the learner to reason about the underlying
+        mechanism, assumption or consequence behind a fact in the context.
+      - Each answer walks through the reasoning in order — 근거 → 과정 → 결론 —
+        so the learner can follow the chain, using only the context.
+    image_method: |
+      Ask 'why/how' questions that make the learner interpret what a clearly
+      shown value or trend implies, reasoning only from what is visible.
+
+  consultant:
+    label: "실무 컨설턴트"
+    artifact: "advisory session"
+    text_role: "You are a senior practitioner and consultant in {domain}."
+    image_role: "You are a senior {domain} consultant reviewing this figure for a client."
+    method: |
+      Method — Advisory framing:
+      - Act as a senior practitioner advising a client. Frame each question
+        around a decision, risk, trade-off or '그래서 어떻게 대응해야 하는가'.
+      - Each answer gives concrete, actionable guidance and states the practical
+        implication (권고/대응/시사점), grounded only in the context.
+    image_method: |
+      Ask decision-oriented questions about the clearly shown figures
+      ('이 수치는 무엇을 시사하는가') and answer with an actionable reading of the
+      visible data.
+
+  interviewer:
+    label: "기술 면접관"
+    artifact: "job interview"
+    text_role: "You are a technical interviewer assessing a candidate in {domain}."
+    image_role: "You are a technical interviewer using this figure to probe a candidate in {domain}."
+    method: |
+      Method — Technical interview:
+      - Act as an interviewer. Write questions of escalating difficulty that
+        reveal whether a candidate truly understands the material — use prompts
+        like '설명하시오', '비교하시오', '~라면 어떻게 되는가'.
+      - Each answer is a concise model answer an interviewer would accept as
+        correct, based only on the context.
+    image_method: |
+      Ask the candidate to identify and explain specific, clearly visible
+      elements of the chart/table, as in a whiteboard interview.
+
+  analyst:
+    label: "리서치 분석가"
+    artifact: "analytical review"
+    text_role: "You are a research analyst in {domain}."
+    image_role: "You are a research analyst interpreting this figure in {domain}."
+    method: |
+      Method — Analytical synthesis:
+      - Act as a research analyst. Ask questions that require synthesis and
+        comparison ACROSS multiple parts of the document — trends, relationships
+        between figures, and overall implications ('~와 ~의 차이', '전체적으로
+        시사하는 바').
+      - Each answer connects the relevant points and summarises the implication,
+        using only the context.
+    image_method: |
+      Ask comparison questions across clearly visible data points (highest /
+      lowest / specific dates) and state the implication of the comparison.
+
+  feynman:
+    label: "파인만(쉬운 설명)"
+    artifact: "plain-language explainer"
+    text_role: "You are Richard Feynman explaining {domain} to a curious beginner."
+    image_role: "You are Richard Feynman explaining this figure in {domain} to a curious beginner."
+    method: |
+      Method — Feynman technique:
+      - Ask questions that force a simple, first-principles explanation, as if
+        teaching a smart 12-year-old — e.g. '쉽게 설명하면 무엇인가',
+        '왜 이렇게 되는지 비유로 설명하라', '핵심만 한 문장으로'.
+      - Each answer explains the idea in plain Korean using an everyday analogy
+        and NO jargon (if a technical term is unavoidable, immediately unpack it
+        in ordinary words), while staying faithful to the context.
+    image_method: |
+      Ask the reader to explain a clearly visible data point or label in the
+      simplest possible terms with an everyday analogy, staying strictly to what
+      is shown.

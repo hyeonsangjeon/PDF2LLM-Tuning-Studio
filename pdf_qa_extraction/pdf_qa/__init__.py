@@ -10,7 +10,7 @@ from __future__ import annotations
 from .config import QAConfig
 from .device import DeviceReport, probe_device
 from .pipeline import generate_qa_pairs, run_pipeline, save_jsonl
-from .prompts import PERSONAS, Persona, get_persona, list_personas
+from .prompts import PERSONAS, Persona, get_persona, list_personas, reload_personas
 from .providers import get_provider
 from .providers.base import LLMProvider
 
@@ -27,6 +27,7 @@ __all__ = [
     "PERSONAS",
     "get_persona",
     "list_personas",
+    "reload_personas",
 ]
 
 __version__ = "0.2.0"

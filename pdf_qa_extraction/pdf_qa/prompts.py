@@ -1,30 +1,37 @@
-"""Shared prompt templates and personas for text/image Q&A generation.
+"""Prompt templates and the persona ledger for text/image Q&A generation.
 
 The *content* of the prompt is identical across providers; only the transport
 envelope (how an image is attached to a chat message) differs, and that lives
 in each provider module. Placeholders are filled with ``str.replace`` so the
 literal JSON braces in the few-shot examples need no escaping.
 
-A **persona** swaps the role the model plays and the style of the generated
-questions/answers, so one PDF can seed several *different* fine-tuning datasets
-(exam questions, Socratic dialogue, consulting advice, interview drills,
-analyst reviews) without changing the output JSON schema.
+**Personas are managed in a YAML ledger** (``personas.yaml`` next to this
+module) so they can be edited/extended without touching Python. Each persona
+carries a genuinely different *method* (방식) for turning context into Q&A pairs
+-- exam setting, Socratic questioning, advisory framing, technical interview,
+analytical synthesis, the Feynman technique -- while the output JSON schema
+stays identical so every persona yields a compatible fine-tuning dataset.
+
+Point the ``PERSONA_FILE`` environment variable at your own copy to manage a
+custom ledger.
 """
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Union
+from typing import Dict, List, Tuple, Union
+
+import yaml
 
 # ---------------------------------------------------------------------------
-# Personas
+# Personas (loaded from the YAML ledger)
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class Persona:
-    """A role/style preset applied to the Q&A prompts.
+    """A role + *method* preset applied to the Q&A prompts.
 
     Attributes:
         key: Stable identifier used by config/env/CLI (e.g. ``"professor"``).
@@ -33,89 +40,91 @@ class Persona:
             ``{domain}``.
         artifact: The kind of deliverable the questions belong to (fills
             ``for an upcoming {artifact}``), e.g. ``"quiz/examination"``.
-        goal: One sentence describing what the questions should accomplish and
-            in what style (fills the "purpose of the questions" line).
+        method: The distinct text methodology -- how to ask questions and how to
+            write answers. May contain ``{domain}``.
         image_role: The ``You are ...`` sentence for the image prompt. May
             contain ``{domain}``.
+        image_method: The distinct image methodology (persona angle applied
+            within the mandatory data-accuracy rules).
     """
 
     key: str
     label: str
     text_role: str
     artifact: str
-    goal: str
+    method: str
     image_role: str
+    image_method: str
 
 
-# The default persona reproduces the original professor/exam behaviour exactly.
-PERSONAS: Dict[str, Persona] = {
-    "professor": Persona(
-        key="professor",
-        label="교수/출제자",
-        text_role="You are a Teacher/Professor in {domain}.",
-        artifact="quiz/examination",
-        goal=(
-            "The purpose of the question(s) is to test the students' "
-            "understanding of the context information provided."
-        ),
-        image_role="You are a professor/teacher in the {domain} field.",
-    ),
-    "socratic": Persona(
-        key="socratic",
-        label="소크라테스식 튜터",
-        text_role="You are a Socratic tutor guiding a learner through {domain}.",
-        artifact="guided study dialogue",
-        goal=(
-            "The purpose of the question(s) is to provoke deeper reasoning: ask "
-            "'why' and 'how' style questions, and make each answer explain the "
-            "underlying cause or step-by-step process, using only the context."
-        ),
-        image_role="You are a Socratic tutor discussing this figure with a learner in {domain}.",
-    ),
-    "consultant": Persona(
-        key="consultant",
-        label="실무 컨설턴트",
-        text_role="You are a senior practitioner and consultant in {domain}.",
-        artifact="advisory Q&A session",
-        goal=(
-            "The purpose of the question(s) is to surface practical, "
-            "decision-oriented insights a professional would ask; each answer "
-            "should give actionable guidance grounded only in the context."
-        ),
-        image_role="You are a senior {domain} consultant reviewing this figure for a client.",
-    ),
-    "interviewer": Persona(
-        key="interviewer",
-        label="기술 면접관",
-        text_role="You are a technical interviewer assessing a candidate in {domain}.",
-        artifact="job interview",
-        goal=(
-            "The purpose of the question(s) is to evaluate the candidate's "
-            "grasp of the material; write interview-style questions with clear, "
-            "model answers based only on the context."
-        ),
-        image_role="You are a technical interviewer using this figure to probe a candidate in {domain}.",
-    ),
-    "analyst": Persona(
-        key="analyst",
-        label="리서치 분석가",
-        text_role="You are a research analyst in {domain}.",
-        artifact="analytical review",
-        goal=(
-            "The purpose of the question(s) is to require synthesis and "
-            "comparison across the material; answers should connect ideas and "
-            "summarise implications using only the context."
-        ),
-        image_role="You are a research analyst interpreting this figure in {domain}.",
-    ),
-}
+#: Location of the persona ledger; override with the ``PERSONA_FILE`` env var to
+#: manage personas outside the package.
+DEFAULT_PERSONA_FILE = os.path.join(os.path.dirname(__file__), "personas.yaml")
 
-#: The persona used when none is specified (original behaviour).
-DEFAULT_PERSONA = "professor"
+
+def _persona_file() -> str:
+    return os.environ.get("PERSONA_FILE") or DEFAULT_PERSONA_FILE
+
+
+_REQUIRED_FIELDS = ("label", "text_role", "artifact", "method", "image_role", "image_method")
+
+
+def load_personas(path: str | None = None) -> Tuple[Dict[str, Persona], str]:
+    """Read the YAML ledger and return ``(personas, default_key)``.
+
+    Raises a clear ``ValueError`` on a malformed ledger so misconfiguration
+    fails loudly rather than silently dropping personas.
+    """
+    ledger_path = path or _persona_file()
+    with open(ledger_path, "r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+
+    raw = data.get("personas")
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError(f"Persona ledger '{ledger_path}' has no 'personas' mapping.")
+
+    personas: Dict[str, Persona] = {}
+    for key, spec in raw.items():
+        if not isinstance(spec, dict):
+            raise ValueError(f"Persona '{key}' in '{ledger_path}' must be a mapping.")
+        missing = [f for f in _REQUIRED_FIELDS if not spec.get(f)]
+        if missing:
+            raise ValueError(
+                f"Persona '{key}' in '{ledger_path}' is missing field(s): {', '.join(missing)}"
+            )
+        personas[str(key).lower()] = Persona(
+            key=str(key).lower(),
+            label=str(spec["label"]),
+            text_role=str(spec["text_role"]),
+            artifact=str(spec["artifact"]),
+            method=str(spec["method"]).strip(),
+            image_role=str(spec["image_role"]),
+            image_method=str(spec["image_method"]).strip(),
+        )
+
+    default = str(data.get("default", next(iter(personas)))).lower()
+    if default not in personas:
+        raise ValueError(
+            f"Default persona '{default}' is not defined in '{ledger_path}'."
+        )
+    return personas, default
+
+
+# Loaded once at import time; call reload_personas() to pick up edits.
+PERSONAS: Dict[str, Persona]
+DEFAULT_PERSONA: str
+PERSONAS, DEFAULT_PERSONA = load_personas()
+
+
+def reload_personas(path: str | None = None) -> Dict[str, Persona]:
+    """Re-read the ledger (e.g. after editing ``personas.yaml``) and return it."""
+    global PERSONAS, DEFAULT_PERSONA
+    PERSONAS, DEFAULT_PERSONA = load_personas(path)
+    return PERSONAS
 
 
 def list_personas() -> List[str]:
-    """Return the available persona keys."""
+    """Return the available persona keys, in ledger order."""
     return list(PERSONAS.keys())
 
 
@@ -147,8 +156,11 @@ Given this context, generate only questions based on the below query.
 {persona_role}
 Your task is to provide exactly **{num_questions}** question(s) for an upcoming {artifact}.
 You are not to provide more or less than this number of questions.
+
+# Persona method ({persona_label}) - follow this approach:
+{persona_method}
+
 The question(s) should be diverse in nature across the document.
-{persona_goal}
 You must also provide the answer to each question. The answer should be based on the context information provided only.
 
 Restrict the question(s) to the context information provided only.
@@ -182,6 +194,9 @@ Analyze this image and generate question-answer pairs.
 {persona_image_role}
 Your task is to create exactly **{num_img_questions}** questions for an upcoming {artifact}.
 You must not create more or fewer questions than this number.
+
+# Persona method ({persona_label}) - apply this angle within the rules below:
+{persona_image_method}
 
 **MANDATORY RULES - VIOLATION WILL RESULT IN FAILURE:**
 1. **EXACT DATA ONLY**: Use ONLY the exact numbers, dates, and text visible in the image. Do NOT interpret, convert, or modify any values.
@@ -239,12 +254,13 @@ def build_text_prompt(
     """Render the text Q&A prompt for the given context, domain and persona."""
     p = get_persona(persona)
     role = p.text_role.replace("{domain}", str(domain))
-    goal = p.goal.replace("{domain}", str(domain))
+    method = p.method.replace("{domain}", str(domain))
     return (
         _TEXT_PROMPT.replace("{context}", str(context))
         .replace("{persona_role}", role)
         .replace("{artifact}", p.artifact)
-        .replace("{persona_goal}", goal)
+        .replace("{persona_label}", p.label)
+        .replace("{persona_method}", method)
         .replace("{num_questions}", str(num_questions))
     )
 
@@ -257,9 +273,12 @@ def build_image_instruction(
     """Render the image Q&A instruction text (without the image payload)."""
     p = get_persona(persona)
     role = p.image_role.replace("{domain}", str(domain))
+    method = p.image_method.replace("{domain}", str(domain))
     return (
         _IMAGE_INSTRUCTION.replace("{persona_image_role}", role)
         .replace("{artifact}", p.artifact)
+        .replace("{persona_label}", p.label)
+        .replace("{persona_image_method}", method)
         .replace("{num_img_questions}", str(num_img_questions))
     )
 

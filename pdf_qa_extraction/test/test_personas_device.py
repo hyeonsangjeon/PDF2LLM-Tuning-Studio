@@ -20,52 +20,111 @@ from pdf_qa.prompts import (
     build_text_prompt,
     get_persona,
     list_personas,
+    load_personas,
+    reload_personas,
+)
+
+_TEXT_PLACEHOLDERS = (
+    "{persona_role}",
+    "{artifact}",
+    "{persona_label}",
+    "{persona_method}",
+    "{context}",
+    "{num_questions}",
+)
+_IMAGE_PLACEHOLDERS = (
+    "{persona_image_role}",
+    "{artifact}",
+    "{persona_label}",
+    "{persona_image_method}",
+    "{num_img_questions}",
 )
 
 
-# --------------------------- personas ---------------------------
+# --------------------------- personas (YAML ledger) ---------------------------
 def test_persona_registry_has_expected_keys():
+    # feynman is appended by the ledger refactor; professor must stay first so
+    # the container smoke test (list_personas()[0] == "professor") holds.
     assert list_personas() == [
         "professor",
         "socratic",
         "consultant",
         "interviewer",
         "analyst",
+        "feynman",
     ]
     assert DEFAULT_PERSONA == "professor"
+    assert list_personas()[0] == "professor"
 
 
 def test_default_persona_reproduces_professor_wording():
     prompt = build_text_prompt("CTX", "International Finance", "5")
     assert "You are a Teacher/Professor in International Finance." in prompt
     assert "for an upcoming quiz/examination." in prompt
-    assert "test the students' understanding" in prompt
+    # persona method block is rendered with its Korean label header
+    assert "# Persona method (교수/출제자) - follow this approach:" in prompt
+    assert "Method — Examination setting:" in prompt
     # every placeholder is filled
-    for token in ("{persona_role}", "{artifact}", "{persona_goal}", "{context}", "{num_questions}"):
+    for token in _TEXT_PLACEHOLDERS:
         assert token not in prompt
     assert "CTX" in prompt
 
 
 @pytest.mark.parametrize(
-    "persona,needle,artifact",
+    "persona,role_needle,artifact,method_needle",
     [
-        ("socratic", "Socratic tutor guiding a learner through", "guided study dialogue"),
-        ("consultant", "senior practitioner and consultant in", "advisory Q&A session"),
-        ("interviewer", "technical interviewer assessing a candidate in", "job interview"),
-        ("analyst", "research analyst in", "analytical review"),
+        (
+            "socratic",
+            "You are a Socratic tutor guiding a learner through 금융.",
+            "guided study dialogue",
+            "Method — Socratic questioning:",
+        ),
+        (
+            "consultant",
+            "You are a senior practitioner and consultant in 금융.",
+            "advisory session",
+            "Method — Advisory framing:",
+        ),
+        (
+            "interviewer",
+            "You are a technical interviewer assessing a candidate in 금융.",
+            "job interview",
+            "Method — Technical interview:",
+        ),
+        (
+            "analyst",
+            "You are a research analyst in 금융.",
+            "analytical review",
+            "Method — Analytical synthesis:",
+        ),
+        (
+            "feynman",
+            "You are Richard Feynman explaining 금융 to a curious beginner.",
+            "plain-language explainer",
+            "Method — Feynman technique:",
+        ),
     ],
 )
-def test_text_persona_swaps_role_and_artifact(persona, needle, artifact):
+def test_text_persona_swaps_role_artifact_and_method(persona, role_needle, artifact, method_needle):
     prompt = build_text_prompt("CTX", "금융", "3", persona)
-    assert needle in prompt
+    assert role_needle in prompt
     assert f"for an upcoming {artifact}." in prompt
+    assert method_needle in prompt
+
+
+def test_feynman_uses_analogy_and_first_principles():
+    prompt = build_text_prompt("CTX", "금융", "2", "feynman")
+    assert "everyday analogy" in prompt
+    assert "first-principles" in prompt
 
 
 def test_image_instruction_uses_persona_and_domain():
     img = build_image_instruction("경제", "2", "consultant")
-    assert "senior 경제 consultant" in img
-    assert "for an upcoming advisory Q&A session." in img
-    assert "{persona_image_role}" not in img and "{artifact}" not in img
+    assert "You are a senior 경제 consultant reviewing this figure for a client." in img
+    assert "for an upcoming advisory session." in img
+    assert "# Persona method (실무 컨설턴트) - apply this angle within the rules below:" in img
+    for token in _IMAGE_PLACEHOLDERS:
+        assert token not in img
 
 
 def test_unknown_persona_raises():
@@ -82,8 +141,51 @@ def test_all_personas_render_without_leftover_placeholders():
     for key in PERSONAS:
         t = build_text_prompt("ctx", "dom", "1", key)
         i = build_image_instruction("dom", "1", key)
-        for token in ("{persona_role}", "{persona_goal}", "{persona_image_role}", "{artifact}"):
-            assert token not in t and token not in i
+        for token in _TEXT_PLACEHOLDERS:
+            assert token not in t
+        for token in _IMAGE_PLACEHOLDERS:
+            assert token not in i
+
+
+def test_every_persona_has_a_distinct_method():
+    # The whole point of the refactor: each persona is a genuinely different
+    # 방식, so both the text and image methods must be pairwise-unique.
+    text_methods = [p.method for p in PERSONAS.values()]
+    image_methods = [p.image_method for p in PERSONAS.values()]
+    assert len(set(text_methods)) == len(text_methods)
+    assert len(set(image_methods)) == len(image_methods)
+    # ...and none of them is empty.
+    assert all(m.strip() for m in text_methods + image_methods)
+
+
+def test_ledger_loads_six_personas_from_yaml():
+    personas, default = load_personas()
+    assert default == "professor"
+    assert set(personas) == {
+        "professor",
+        "socratic",
+        "consultant",
+        "interviewer",
+        "analyst",
+        "feynman",
+    }
+
+
+def test_reload_personas_returns_registry():
+    import pdf_qa.prompts as prompts_mod
+
+    reloaded = reload_personas()
+    # reload rebinds the module-level registry; the returned object is that
+    # same current registry and still contains the Feynman persona.
+    assert reloaded is prompts_mod.PERSONAS
+    assert "feynman" in reloaded
+
+
+def test_malformed_ledger_raises(tmp_path):
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("version: 1\ndefault: x\npersonas: {}\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_personas(str(bad))
 
 
 # --------------------------- device / GPU plan ---------------------------

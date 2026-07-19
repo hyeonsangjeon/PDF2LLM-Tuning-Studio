@@ -172,19 +172,25 @@ Common: `PDF_PATH`, `DOMAIN`, `NUM_QUESTIONS`, `NUM_IMG_QUESTIONS`, `TABLE_MODEL
 
 ##### 🎭 Personas (choosing the Q&A style)
 
-One PDF can seed **several different fine-tuning datasets**. The `PERSONA` env var (or `--persona`) swaps the role the model plays and the question/answer style — the output JSON schema (`QUESTION`/`ANSWER`) stays the same.
+One PDF can seed **several different fine-tuning datasets**. The `PERSONA` env var (or `--persona`) swaps the role the model plays and its question/answer style. Each persona follows a **genuinely different method (방식)**, while the output JSON schema (`QUESTION`/`ANSWER`) stays the same.
 
-| `PERSONA` | Role | Question style |
+| `PERSONA` | Role | Method |
 |---|---|---|
-| `professor` (default) | Teacher/Professor | Exam/quiz-style factual questions |
-| `socratic` | Socratic tutor | "Why/how" reasoning prompts, step-by-step answers |
-| `consultant` | Senior practitioner | Practical, decision-oriented advice questions |
-| `interviewer` | Technical interviewer | Interview-style questions with model answers |
-| `analyst` | Research analyst | Synthesis/comparison, implication-drawing questions |
+| `professor` (default) | Teacher/Professor | Exam-setter method — broad, single-answer factual questions |
+| `socratic` | Socratic tutor | "Why/how" prompts; answers reason 근거→과정→결론 step by step |
+| `consultant` | Senior practitioner | Decision/risk/implication-oriented advisory Q&A |
+| `interviewer` | Technical interviewer | Escalating interview questions with concise model answers |
+| `analyst` | Research analyst | Synthesis/comparison across the document, drawing implications |
+| `feynman` | Feynman (plain talk) | First-principles + everyday analogies, no jargon (Feynman technique) |
+
+> Personas live in a **YAML ledger (`pdf_qa/personas.yaml`)**, not in code. Edit that file to tweak wording/methods or add new personas, or point the `PERSONA_FILE` env var at your own external YAML to manage a separate ledger.
 
 ```bash
 # e.g. build a Socratic study dataset from the same PDF
 PERSONA=socratic LLM_PROVIDER=azure PDF_PATH=data/fsi_data.pdf python run_local.py
+
+# e.g. run your own persona ledger from an external file
+PERSONA_FILE=/path/to/my_personas.yaml PERSONA=feynman python run_local.py
 ```
 
 ##### ⚡ Automatic GPU acceleration (device-aware logic)
@@ -338,7 +344,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 - Large PDF files (over 100MB) should be split before processing
 - **Automatic GPU acceleration**: run the `:latest-gpu` image with `--gpus all` and the pipeline probes the device; when a GPU is detected it **escalates `STRATEGY=auto` to `hi_res`** and runs **layout (onnxruntime-gpu)** and **table structure (Table Transformer, CUDA torch)** on the GPU automatically. Turn it off with `GPU_BOOST=false` (OCR is always CPU — see the [GPU/CPU breakdown](#pdf-parsing-models--gpucpu) above)
-- **Use personas**: run the same PDF several times with `PERSONA=professor|socratic|consultant|interviewer|analyst` to accumulate diverse fine-tuning datasets
+- **Use personas**: run the same PDF several times with `PERSONA=professor|socratic|consultant|interviewer|analyst|feynman` to accumulate datasets built with different methods. Edit `pdf_qa/personas.yaml` (or point `PERSONA_FILE` at your own YAML) to customize the ledger
 - Monitor memory usage and adjust the `batch_size` parameter if necessary (refer to partition_pdf in the code)
 
 #### 2. ☁️ Running on Azure ML Command Job (default)

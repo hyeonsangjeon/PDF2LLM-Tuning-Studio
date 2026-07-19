@@ -14,6 +14,7 @@ keywords = ["pdf", "llm", "qa-generation", "azure-ai-foundry", "bedrock", "unstr
 dependencies = [
     "python-dotenv>=1.0",
     "langchain-core>=0.3",
+    "pyyaml>=6",
 ]
 
 [project.optional-dependencies]
@@ -46,6 +47,10 @@ openai = [
 
 [tool.setuptools]
 py-modules = []
+
+[tool.setuptools.package-data]
+# Ship the persona ledger inside the wheel / container image.
+pdf_qa = ["personas.yaml"]
 
 [tool.setuptools.packages.find]
 include = ["pdf_qa*"]

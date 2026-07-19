@@ -160,19 +160,25 @@ docker run --rm -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
 
 ##### 🎭 페르소나 (Q&A 스타일 선택)
 
-하나의 PDF로 **여러 스타일의 파인튜닝 데이터셋**을 만들 수 있습니다. `PERSONA` 환경변수(또는 `--persona`)로 모델이 맡을 역할과 질문/답변 스타일을 바꿉니다. 출력 JSON 스키마(`QUESTION`/`ANSWER`)는 동일합니다.
+하나의 PDF로 **여러 스타일의 파인튜닝 데이터셋**을 만들 수 있습니다. `PERSONA` 환경변수(또는 `--persona`)로 모델이 맡을 역할과 질문/답변 스타일을 바꿉니다. 각 페르소나는 **서로 다른 방식(방법론)** 으로 질문을 만들지만, 출력 JSON 스키마(`QUESTION`/`ANSWER`)는 동일합니다.
 
-| `PERSONA` | 역할 | 질문 스타일 |
+| `PERSONA` | 역할 | 방식(방법론) |
 |---|---|---|
-| `professor` (기본) | 교수/출제자 | 시험·퀴즈형 사실 확인 질문 |
-| `socratic` | 소크라테스식 튜터 | "왜/어떻게"로 사고를 유도, 단계별 설명 답변 |
-| `consultant` | 실무 컨설턴트 | 의사결정·실무 조언 중심의 실용 질문 |
-| `interviewer` | 기술 면접관 | 면접식 질문 + 모범 답안 |
-| `analyst` | 리서치 분석가 | 종합·비교·시사점 도출형 질문 |
+| `professor` (기본) | 교수/출제자 | 시험 출제 방식 — 문서를 폭넓게 다루는 단답형 사실 확인 |
+| `socratic` | 소크라테스식 튜터 | "왜/어떻게"로 사고 유도, 근거→과정→결론 단계별 추론 답변 |
+| `consultant` | 실무 컨설턴트 | 의사결정·리스크·시사점 중심의 실무 조언형 질문/답변 |
+| `interviewer` | 기술 면접관 | 난이도가 올라가는 면접식 질문 + 모범 답안 |
+| `analyst` | 리서치 분석가 | 문서 여러 부분을 종합·비교해 시사점을 도출 |
+| `feynman` | 파인만(쉬운 설명) | 제1원리·일상 비유로 전문용어 없이 쉽게 설명(파인만 기법) |
+
+> 페르소나는 코드가 아니라 **`pdf_qa/personas.yaml` 원장(ledger)** 에서 관리됩니다. 이 파일을 편집해 문구·방식을 바꾸거나 새 페르소나를 추가할 수 있고, `PERSONA_FILE` 환경변수로 **외부 YAML 파일**을 지정해 별도로 원장을 운영할 수도 있습니다.
 
 ```bash
 # 예: 같은 PDF로 소크라테스식 학습 데이터셋 생성
 PERSONA=socratic LLM_PROVIDER=azure PDF_PATH=data/fsi_data.pdf python run_local.py
+
+# 예: 나만의 페르소나 원장을 외부 파일로 운영
+PERSONA_FILE=/path/to/my_personas.yaml PERSONA=feynman python run_local.py
 ```
 
 ##### ⚡ GPU 자동 가속 (디바이스 인지 로직)
@@ -326,7 +332,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 - 대용량 PDF 파일(100MB 이상)은 처리 전 분할하는 것이 좋습니다
 - **GPU 자동 가속**: `:latest-gpu` 이미지 + `--gpus all`로 실행하면 파이프라인이 디바이스를 점검하고, GPU가 잡히면 `STRATEGY=auto`를 **`hi_res`로 승격**해 **레이아웃(onnxruntime-gpu)** 과 **표 구조(Table Transformer, CUDA torch)** 를 자동으로 GPU에 태웁니다. 끄려면 `GPU_BOOST=false` (OCR은 항상 CPU — 위 [GPU/CPU 구분](#pdf-파싱-내부-모델--gpucpu-구분) 표 참고)
-- **페르소나 활용**: 같은 PDF를 `PERSONA=professor|socratic|consultant|interviewer|analyst`로 여러 번 돌려 다양한 스타일의 파인튜닝 데이터셋을 축적하세요
+- **페르소나 활용**: 같은 PDF를 `PERSONA=professor|socratic|consultant|interviewer|analyst|feynman`로 여러 번 돌려 다양한 방식(방법론)의 파인튜닝 데이터셋을 축적하세요. 페르소나 문구·방식은 `pdf_qa/personas.yaml` 원장에서 편집하거나 `PERSONA_FILE`로 외부 파일을 지정할 수 있습니다
 - 메모리 사용량을 모니터링하고 필요한 경우 `batch_size` 파라미터를 조정하세요 (코드의 partition_pdf 참조)
 
 
