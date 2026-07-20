@@ -260,8 +260,9 @@ python run_webapp.py                 # HOST/PORT env vars change the bind (defau
 **Two modes**
 - **Preview — offline, no cloud credentials:** partitions the PDF device-aware and shows **element/table/image counts + the actual device path + the persona-rendered prompt**. No LLM call, so you can see the **GPU acceleration strength and persona differences without any credentials**.
 - **Full — credentials required:** additionally calls the selected provider (Azure/OpenAI/Bedrock) to **generate Q&A pairs**, returning a results table + a `JSONL` download.
+- **One-click sample:** with no document of your own, the **📄 Try the sample document** button previews the image-bundled `fsi_data.pdf` (International Finance) instantly, so you can inspect the GPU/CPU path and persona prompt without any credentials.
 
-> On load the UI shows a **GPU/CPU badge** (`/api/device`), the persona list with method summaries (`/api/personas`), and provider-configured hints (`/api/providers`). For large / distributed workloads, see the SageMaker / Azure ML parallel processing section below.
+> On load the UI shows a **GPU/CPU badge** (`/api/device`), the persona list with method summaries (`/api/personas`), provider-configured hints (`/api/providers`), and whether the bundled sample is available (`/api/meta`). For large / distributed workloads, see the SageMaker / Azure ML parallel processing section below.
 
 ## Table Extraction Model Comparison
 

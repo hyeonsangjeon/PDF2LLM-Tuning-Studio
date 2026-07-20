@@ -118,6 +118,8 @@ COPY processing_local.py processing_local_openai.py ./
 # Single-node local demo web app (run: `python run_webapp.py`, serves :8000).
 COPY run_webapp.py ./
 COPY webapp ./webapp
+# Bundled sample document so the demo web app's one-click "try sample" works.
+COPY data/fsi_data.pdf ./data/fsi_data.pdf
 
 # The demo web app listens here; harmless metadata for the batch entrypoints.
 EXPOSE 8000

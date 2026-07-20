@@ -93,3 +93,29 @@ def test_extract_rejects_unknown_persona():
         data={"mode": "preview", "persona": "does-not-exist"},
     )
     assert resp.status_code == 400
+
+
+def test_meta_reports_bundled_sample():
+    resp = client.get("/api/meta")
+    assert resp.status_code == 200
+    data = resp.json()
+    # The repo checkout ships pdf_qa_extraction/data/fsi_data.pdf, so the demo's
+    # one-click sample must be advertised as available.
+    assert data["sample_available"] is True
+    assert data["sample_name"] == "fsi_data.pdf"
+    assert data["sample_domain"]
+
+
+def test_extract_requires_file_or_sample():
+    # Neither an uploaded file nor use_sample -> a clear 400, not a 500.
+    resp = client.post("/api/extract", data={"mode": "preview"})
+    assert resp.status_code == 400
+
+
+def test_extract_use_sample_still_validates_persona():
+    # The use_sample branch must not bypass early persona validation.
+    resp = client.post(
+        "/api/extract",
+        data={"mode": "preview", "use_sample": "true", "persona": "does-not-exist"},
+    )
+    assert resp.status_code == 400

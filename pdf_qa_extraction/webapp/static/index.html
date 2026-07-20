@@ -37,6 +37,12 @@
     width: 100%; padding: 9px 10px; background: var(--panel2); color: var(--fg);
     border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px; }
   input[type=file] { width: 100%; font-size: 12.5px; color: var(--mut); }
+  .samplebar { display: flex; align-items: center; gap: 10px; margin-top: 8px;
+    flex-wrap: wrap; }
+  .sample { padding: 7px 11px; background: var(--panel2); color: var(--fg);
+    border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; font-size: 12.5px; }
+  .sample:hover { background: rgba(79,140,255,.16); }
+  .sample:disabled { opacity: .55; cursor: not-allowed; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .hint { font-size: 11.5px; color: var(--mut); margin-top: 5px; min-height: 15px; }
   .seg { display: flex; gap: 6px; margin-top: 6px; }
@@ -95,6 +101,10 @@
     <h2>입력</h2>
     <label>PDF 문서</label>
     <input type="file" id="file" accept="application/pdf,.pdf" />
+    <div class="samplebar" id="sampleBar" hidden>
+      <button type="button" class="sample" id="sample">📄 샘플 문서로 시도</button>
+      <span class="hint" id="sampleHint" style="margin:0"></span>
+    </div>
 
     <label>페르소나 (Q&amp;A 방식)</label>
     <select id="persona"></select>
@@ -149,7 +159,8 @@
   <section class="card out">
     <h2>결과</h2>
     <div id="output"><div class="muted">문서를 올리고 <b>실행</b>을 눌러 보세요.
-      미리보기는 자격 증명 없이도 로컬 추출과 GPU/CPU 경로를 보여줍니다.</div></div>
+      미리보기는 자격 증명 없이도 로컬 추출과 GPU/CPU 경로를 보여줍니다.
+      번들 샘플이 있으면 <b>샘플 문서로 시도</b>로 바로 확인할 수 있습니다.</div></div>
   </section>
 </main>
 
@@ -157,6 +168,8 @@
 const $ = (id) => document.getElementById(id);
 let MODE = "preview";
 let lastJsonl = null;
+let USE_SAMPLE = false;
+let SAMPLE = null;
 
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
@@ -216,6 +229,12 @@ $("modeSeg").addEventListener("click", (e) => {
   $("run").textContent = MODE === "preview" ? "미리보기 실행" : "전체 실행";
 });
 
+function inputChip(r){
+  if(!r || !r.input) return "";
+  const tag = r.input.source === "sample" ? " · 샘플" : "";
+  return `<div class="chip"><span>입력</span> <b>${esc(r.input.name)}${tag}</b></div>`;
+}
+
 function planChips(p, dev){
   const g = p.gpu_accelerated;
   return `<div class="kv">
@@ -230,6 +249,7 @@ function renderPreview(r){
   const c = r.counts || {};
   $("output").innerHTML = planChips(r.plan, r.device) +
     `<div class="kv">
+      ${inputChip(r)}
       <div class="chip"><span>요소</span> <b>${c.elements ?? "-"}</b></div>
       <div class="chip"><span>표</span> <b>${c.tables ?? 0}</b></div>
       <div class="chip"><span>이미지</span> <b>${c.images ?? 0}</b></div>
@@ -249,6 +269,7 @@ function renderFull(r){
   lastJsonl = r.jsonl || "";
   $("output").innerHTML = planChips(r.plan, r.device) +
     `<div class="kv">
+      ${inputChip(r)}
       <div class="chip"><span>총 Q&amp;A</span> <b>${c.total ?? 0}</b></div>
       <div class="chip"><span>텍스트</span> <b>${c.text ?? 0}</b></div>
       <div class="chip"><span>이미지</span> <b>${c.image ?? 0}</b></div>
@@ -267,11 +288,16 @@ function renderFull(r){
   };
 }
 
-$("run").addEventListener("click", async () => {
+async function runExtract(){
   const f = $("file").files[0];
-  if(!f){ $("output").innerHTML = '<div class="err">먼저 PDF 파일을 선택하세요.</div>'; return; }
+  const useSample = USE_SAMPLE && !f;
+  if(!f && !useSample){
+    $("output").innerHTML = '<div class="err">먼저 PDF 파일을 선택하거나 <b>샘플 문서로 시도</b>를 누르세요.</div>';
+    return;
+  }
   const fd = new FormData();
-  fd.append("file", f);
+  if(useSample) fd.append("use_sample", "true");
+  else fd.append("file", f);
   fd.append("persona", $("persona").value);
   fd.append("domain", $("domain").value);
   fd.append("num_questions", $("numQ").value);
@@ -281,8 +307,10 @@ $("run").addEventListener("click", async () => {
   fd.append("gpu_boost", $("gpuBoost").checked ? "true" : "false");
   fd.append("mode", MODE);
 
-  const btn = $("run"); btn.disabled = true;
-  const label = MODE === "preview" ? "추출 중…" : "Q&A 생성 중… (수십 초 소요될 수 있음)";
+  const btn = $("run"), sb = $("sample"); btn.disabled = true; if(sb) sb.disabled = true;
+  const src = useSample ? "샘플 문서 · " : "";
+  const label = MODE === "preview" ? src + "추출 중…"
+    : src + "Q&A 생성 중… (수십 초 소요될 수 있음)";
   $("output").innerHTML = '<div class="muted"><span class="spin"></span>' + label + '</div>';
   try{
     const res = await fetch("/api/extract", { method: "POST", body: fd });
@@ -291,10 +319,30 @@ $("run").addEventListener("click", async () => {
     if(data.mode === "full") renderFull(data); else renderPreview(data);
   }catch(e){
     $("output").innerHTML = '<div class="err">' + esc(e.message) + '</div>';
-  }finally{ btn.disabled = false; }
+  }finally{ btn.disabled = false; if(sb) sb.disabled = false; }
+}
+
+async function loadMeta(){
+  try{
+    const m = await (await fetch("/api/meta")).json();
+    if(m && m.sample_available){
+      SAMPLE = m;
+      $("sampleBar").hidden = false;
+      $("sampleHint").textContent = (m.sample_name || "sample") +
+        (m.sample_domain ? " · " + m.sample_domain : "");
+    }
+  }catch(e){}
+}
+
+$("run").addEventListener("click", runExtract);
+$("file").addEventListener("change", () => { if($("file").files[0]) USE_SAMPLE = false; });
+$("sample").addEventListener("click", () => {
+  USE_SAMPLE = true;
+  if(SAMPLE && SAMPLE.sample_domain) $("domain").value = SAMPLE.sample_domain;
+  runExtract();
 });
 
-loadDevice(); loadPersonas(); loadProviders();
+loadDevice(); loadPersonas(); loadProviders(); loadMeta();
 </script>
 </body>
 </html>

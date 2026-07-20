@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import shutil
 import tempfile
 from typing import List, Optional
 
@@ -28,6 +29,11 @@ from pdf_qa import (
 from pdf_qa.prompts import DEFAULT_PERSONA, build_text_prompt
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+# Bundled demo document (International Finance) so a visitor can run a one-click
+# offline preview with a real PDF and zero setup.
+_SAMPLE_NAME = "fsi_data.pdf"
+_SAMPLE_DOMAIN = "International Finance"
 
 # Env vars that indicate a provider is likely usable (best-effort hint only).
 _PROVIDER_ENV_HINTS = {
@@ -76,6 +82,35 @@ def _providers_payload() -> dict:
     return {
         "default": os.environ.get("LLM_PROVIDER", "azure"),
         "providers": providers,
+    }
+
+
+def _sample_pdf_path() -> Optional[str]:
+    """Absolute path to the bundled demo PDF, or ``None`` if unavailable.
+
+    Resolves ``<app_root>/data/fsi_data.pdf`` -- which is ``pdf_qa_extraction/
+    data`` in a repo checkout and ``/app/data`` in the container image -- and
+    honours a ``SAMPLE_PDF`` env override.
+    """
+    app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidates = [
+        os.environ.get("SAMPLE_PDF"),
+        os.path.join(app_root, "data", _SAMPLE_NAME),
+        os.path.join(os.getcwd(), "data", _SAMPLE_NAME),
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
+def _meta_payload() -> dict:
+    sample = _sample_pdf_path()
+    return {
+        "version": "0.2.0",
+        "sample_available": bool(sample),
+        "sample_name": _SAMPLE_NAME if sample else None,
+        "sample_domain": _SAMPLE_DOMAIN,
     }
 
 
@@ -128,9 +163,13 @@ def create_app() -> FastAPI:
     def api_providers():
         return _providers_payload()
 
+    @app.get("/api/meta")
+    def api_meta():
+        return _meta_payload()
+
     @app.post("/api/extract")
     def api_extract(
-        file: UploadFile = File(...),
+        file: Optional[UploadFile] = File(None),
         persona: str = Form(DEFAULT_PERSONA),
         domain: str = Form("International Finance"),
         num_questions: str = Form("3"),
@@ -140,6 +179,7 @@ def create_app() -> FastAPI:
         gpu_boost: str = Form("true"),
         table_model: str = Form(""),
         mode: str = Form("preview"),
+        use_sample: str = Form("false"),
     ):
         """Run extraction (``preview``) or the full pipeline (``full``).
 
@@ -147,15 +187,36 @@ def create_app() -> FastAPI:
         the persona-rendered prompt, without calling any LLM (works offline).
         ``full`` additionally calls the selected provider to produce Q&A pairs.
         """
-        filename = file.filename or "upload.pdf"
-        if not filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="PDF 파일(.pdf)만 지원합니다.")
-
         # Validate the persona early so a typo fails fast with a clear message.
         try:
             resolved_persona = get_persona(persona)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        # Resolve the input document: an uploaded PDF, or the bundled sample
+        # (one-click demo). An uploaded file always wins over the sample flag.
+        has_upload = file is not None and bool((file.filename or "").strip())
+        sample_path: Optional[str] = None
+        if has_upload:
+            if not (file.filename or "").lower().endswith(".pdf"):
+                raise HTTPException(
+                    status_code=400, detail="PDF 파일(.pdf)만 지원합니다."
+                )
+            input_name = file.filename or "upload.pdf"
+        elif _as_bool(use_sample, default=False):
+            sample_path = _sample_pdf_path()
+            if not sample_path:
+                raise HTTPException(
+                    status_code=404,
+                    detail="샘플 문서(fsi_data.pdf)를 찾을 수 없습니다. "
+                    "PDF 파일을 직접 업로드하세요.",
+                )
+            input_name = _SAMPLE_NAME
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="PDF 파일을 업로드하거나 '샘플 문서로 시도'를 사용하세요.",
+            )
 
         workdir = tempfile.mkdtemp(prefix="pdfqa_")
         pdf_path = os.path.join(workdir, "input.pdf")
@@ -163,8 +224,11 @@ def create_app() -> FastAPI:
         os.makedirs(figures_dir, exist_ok=True)
 
         try:
-            with open(pdf_path, "wb") as handle:
-                handle.write(file.file.read())
+            if sample_path:
+                shutil.copyfile(sample_path, pdf_path)
+            else:
+                with open(pdf_path, "wb") as handle:
+                    handle.write(file.file.read())
 
             config = QAConfig(
                 domain=domain,
@@ -204,6 +268,10 @@ def create_app() -> FastAPI:
 
             common = {
                 "mode": mode,
+                "input": {
+                    "name": input_name,
+                    "source": "sample" if sample_path else "upload",
+                },
                 "persona": {
                     "key": resolved_persona.key,
                     "label": resolved_persona.label,
@@ -219,14 +287,22 @@ def create_app() -> FastAPI:
             }
 
             if mode == "preview":
-                elements = extract_elements_from_pdf(
-                    pdf_path,
-                    table_model=config.table_model,
-                    figures_dir=config.figures_dir,
-                    strategy=config.strategy,
-                    gpu_boost=config.gpu_boost,
-                    device=device,
-                )
+                try:
+                    elements = extract_elements_from_pdf(
+                        pdf_path,
+                        table_model=config.table_model,
+                        figures_dir=config.figures_dir,
+                        strategy=config.strategy,
+                        gpu_boost=config.gpu_boost,
+                        device=device,
+                    )
+                except HTTPException:
+                    raise
+                except Exception as exc:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"PDF 추출 중 오류: {exc}",
+                    ) from exc
                 sample_text = _first_text_sample(elements)
                 images = get_extracted_images(config.figures_dir)
                 table_n = sum(
@@ -289,8 +365,6 @@ def create_app() -> FastAPI:
                 status_code=400, detail=f"알 수 없는 mode: {mode} (preview|full)"
             )
         finally:
-            import shutil
-
             shutil.rmtree(workdir, ignore_errors=True)
 
     return app
