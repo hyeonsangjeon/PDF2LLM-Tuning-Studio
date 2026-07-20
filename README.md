@@ -145,12 +145,16 @@ SageMaker Processing 배치 잡 실행은 [PDF Q&A 추출 가이드](./pdf_qa_ex
 
 CLI 대신 브라우저로 체험하려면 같은 이미지에서 웹앱을 띄웁니다. 문서를 올리고 페르소나를 고른 뒤 실행하면 **호스트 GPU 유무를 자동 감지**합니다. 미리보기 모드는 자격 증명 없이 오프라인으로 추출·페르소나 프롬프트를 보여주고, 전체 모드는 선택한 공급자로 Q&A까지 생성합니다(자세한 내용은 [PDF Q&A 추출 가이드](./pdf_qa_extraction/README.md)의 "로컬 데모 웹앱" 절 참조).
 
+![PDF2LLM 로컬 데모 웹앱 — 미리보기 예시](assets/images/webapp-demo.png)
+
 ```bash
 # http://localhost:8000 접속 (GPU 호스트는 --gpus all 추가)
 docker run --rm -p 8000:8000 --env-file .env \
   ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest \
   python run_webapp.py
 ```
+
+> 처리 방식은 두 가지 중 선택합니다 — **단일 노드·인프로세스**(기본 `WORKERS=1`, GPU 데모 권장)와 **멀티 프로세스**(`WORKERS=N`, CPU 동시성↑). 파일 없이도 UI의 **📄 샘플 문서로 시도**로 번들 PDF를 바로 미리볼 수 있습니다.
 
 ### 2단계: 데이터 전처리 및 분석
 

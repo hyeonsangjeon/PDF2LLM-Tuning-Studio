@@ -14,6 +14,18 @@ auto-detection works exactly as in a normal run. Start it with::
         python run_webapp.py
 
 Then open http://localhost:8000. Configure ``HOST``/``PORT`` via env if needed.
+
+Two processing modes -- pick one with the ``WORKERS`` env var:
+
+* **single-node / in-process** (default, ``WORKERS=1``): one process owns the
+  GPU, so torch/onnxruntime GPU auto-detection is unambiguous. Best for the GPU
+  demo and the simplest thing to reason about.
+* **multi-process** (``WORKERS=N``): N independent worker processes behind one
+  port for higher request concurrency (mainly CPU-bound preview / throughput).
+  On a single GPU, keep ``WORKERS=1`` so the workers don't contend for VRAM::
+
+      WORKERS=4 python run_webapp.py            # 4-worker CPU demo
+      docker run --rm -e WORKERS=4 -p 8000:8000 $IMG python run_webapp.py
 """
 
 from __future__ import annotations
@@ -45,10 +57,27 @@ def main() -> None:
 
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    print(f"[webapp] Serving PDF2LLM local demo on http://{host}:{port}")
+    # WORKERS selects the processing mode: 1 = single-node in-process (default,
+    # GPU-friendly); N>1 = multi-process (N worker processes, higher CPU-bound
+    # concurrency). See the module docstring for guidance.
+    workers = max(1, int(os.getenv("WORKERS", "1") or "1"))
+    mode = (
+        "single-node (in-process)"
+        if workers == 1
+        else f"multi-process ({workers} workers)"
+    )
+    print(
+        f"[webapp] Serving PDF2LLM local demo on http://{host}:{port} "
+        f"— mode: {mode}"
+    )
     import uvicorn
 
-    uvicorn.run("webapp.app:app", host=host, port=port, log_level="info")
+    if workers > 1:
+        uvicorn.run(
+            "webapp.app:app", host=host, port=port, log_level="info", workers=workers
+        )
+    else:
+        uvicorn.run("webapp.app:app", host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":

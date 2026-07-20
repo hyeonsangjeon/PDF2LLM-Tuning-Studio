@@ -235,6 +235,10 @@ docker run --rm --gpus all -e PERSONA=analyst \
 
 Parallel fan-out (SageMaker / Azure ML distributed processing) stays the **advanced** path; for a "this is how you use it locally" experience we ship a **single-node web app inside the same image**. Upload a document → pick a persona → click, and it **auto-detects the host GPU** and runs accordingly.
 
+![PDF2LLM local demo web app — preview example](../assets/images/webapp-demo.png)
+
+> Example view: a **preview** of the bundled sample (`fsi_data.pdf`) on a GPU host. The badge auto-detects the GPU, and the results panel shows the real execution path (`hi_res` · table inference · CUDA provider) and the **actual persona-rendered prompt**. (element/table/image counts are illustrative.)
+
 **Architecture — the container *is* the web app (in-process):** the app does **not** call a separate container as an API, nor spawn a process per request. It imports `pdf_qa` and calls it **in the same process**, so torch/onnxruntime run inline and a GPU passed via `--gpus all` is picked up automatically. It also exposes a REST endpoint (`POST /api/extract`), so it doubles as an API when you need one.
 
 ```bash
@@ -255,6 +259,19 @@ Run locally (no container):
 ```bash
 pip install ".[pdf,azure,webapp]"   # extraction + provider + web app deps
 python run_webapp.py                 # HOST/PORT env vars change the bind (default 0.0.0.0:8000)
+```
+
+**Two processing modes — choose with `WORKERS`**
+
+| Mode | Run | Notes |
+|------|-----|-------|
+| **Single-node · in-process** (default, `WORKERS=1`) | `python run_webapp.py` | One process **owns the GPU** → torch/onnxruntime GPU auto-detection is unambiguous. **Recommended for the GPU demo** |
+| **Multi-process** (`WORKERS=N`) | `WORKERS=4 python run_webapp.py` | N worker processes behind one port for **higher request concurrency** (mainly CPU-bound preview / throughput). On a single GPU keep `WORKERS=1` to avoid VRAM contention |
+
+```bash
+# Multi-process (e.g. 4 workers) for CPU concurrency
+WORKERS=4 python run_webapp.py
+docker run --rm -e WORKERS=4 -p 8000:8000 --env-file .env $IMG python run_webapp.py
 ```
 
 **Two modes**

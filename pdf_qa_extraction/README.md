@@ -222,6 +222,10 @@ docker run --rm --gpus all -e PERSONA=analyst \
 
 병렬 팬아웃(SageMaker/Azure ML 분산 처리)은 **advanced** 경로로 두고, "로컬에서 이렇게 씁니다"를 그대로 보여주는 **싱글 노드 웹앱**을 같은 이미지 안에 넣었습니다. 문서를 올리고 → 페르소나를 고르고 → 버튼을 누르면 **호스트의 GPU 유무를 자동 감지**해 동작합니다.
 
+![PDF2LLM 로컬 데모 웹앱 — 미리보기 예시](../assets/images/webapp-demo.png)
+
+> 예시 화면: GPU 호스트에서 번들 샘플(`fsi_data.pdf`)을 **미리보기**한 모습. 상단 배지가 GPU를 자동 감지하고, 결과 패널은 실제 실행 경로(`hi_res`·표 추론·CUDA provider)와 **페르소나가 렌더한 실제 프롬프트**를 보여줍니다. (요소/표/이미지 수치는 예시 값)
+
 **아키텍처 — 컨테이너가 곧 웹앱 (in-process):** 웹앱은 별도 컨테이너를 API로 호출하거나 요청마다 프로세스를 띄우지 않습니다. `pdf_qa` 코어를 **같은 프로세스 안에서 직접 호출**하므로 torch/onnxruntime가 동일 프로세스에서 돌고, `--gpus all`로 넘어온 GPU가 자동으로 잡힙니다. 동시에 REST 엔드포인트(`POST /api/extract`)도 노출하므로 필요하면 API로도 쓸 수 있습니다.
 
 ```bash
@@ -242,6 +246,19 @@ docker run --rm --gpus all -p 8000:8000 --env-file .env \
 ```bash
 pip install ".[pdf,azure,webapp]"   # 추출 + 공급자 + 웹앱 의존성
 python run_webapp.py                 # HOST/PORT 환경변수로 바인딩 변경 가능(기본 0.0.0.0:8000)
+```
+
+**처리 방식 두 가지 — `WORKERS`로 선택**
+
+| 모드 | 실행 | 특징 |
+|------|------|------|
+| **단일 노드 · 인프로세스** (기본, `WORKERS=1`) | `python run_webapp.py` | 한 프로세스가 GPU를 **단독 소유** → torch/onnxruntime GPU 자동 감지가 명확. **GPU 데모에 권장** |
+| **멀티 프로세스** (`WORKERS=N`) | `WORKERS=4 python run_webapp.py` | 하나의 포트 뒤에 N개 워커 프로세스로 **요청 동시성↑**(주로 CPU 바운드 미리보기·처리량). 단일 GPU에서는 VRAM 경합을 피해 `WORKERS=1` 권장 |
+
+```bash
+# 멀티 프로세스(예: 4 워커)로 CPU 동시성 데모
+WORKERS=4 python run_webapp.py
+docker run --rm -e WORKERS=4 -p 8000:8000 --env-file .env $IMG python run_webapp.py
 ```
 
 **두 가지 모드**
