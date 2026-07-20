@@ -25,9 +25,12 @@ from __future__ import annotations
 import base64
 import glob
 import os
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from .device import DeviceReport, probe_device
+
+if TYPE_CHECKING:  # avoid any import cost at runtime; layout has no heavy deps
+    from .layout import DocumentLayout
 
 _IMAGE_EXTENSIONS = ("*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif")
 
@@ -142,10 +145,12 @@ def extract_elements_from_pdf(
     partition_kwargs = {
         "filename": filepath,
         "extract_images_in_pdf": True,
-        "chunking_strategy": "by_title",
-        "max_characters": 4000,
-        "new_after_n_chars": 3800,
-        "combine_text_under_n_chars": 2000,
+        # NOTE: intentionally *no* ``chunking_strategy`` -- chunking reorders the
+        # stream and detaches figures from their surrounding text. We keep the
+        # raw reading order (each Image element then carries ``image_path`` +
+        # ``coordinates`` next to its paragraphs) and re-chunk the text
+        # ourselves in :mod:`pdf_qa.layout`, which also rebuilds the
+        # figure <-> context linkage.
         "extract_image_block_output_dir": figures_dir,
         # "auto" -> fast for digital PDFs, hi_res (layout + OCR) for scans;
         # escalated to hi_res by the GPU boost so the layout model runs on GPU.
@@ -160,6 +165,35 @@ def extract_elements_from_pdf(
         partition_kwargs["hi_res_model_name"] = plan["hi_res_model_name"]
 
     return partition_pdf(**partition_kwargs)
+
+
+def extract_document_layout(
+    filepath: str,
+    hi_res_model_name: Optional[str] = None,
+    figures_dir: str = "figures",
+    strategy: str = "auto",
+    gpu_boost: bool = True,
+    device: Optional[DeviceReport] = None,
+) -> "DocumentLayout":
+    """Partition ``filepath`` and return an ordered :class:`DocumentLayout`.
+
+    Convenience wrapper that runs :func:`extract_elements_from_pdf` (raw reading
+    order) and :func:`pdf_qa.layout.build_document_layout`, so callers get
+    section-tagged text chunks **and** every figure paired with its surrounding
+    context in one call. ``unstructured`` is still imported lazily inside
+    :func:`extract_elements_from_pdf`; ``layout`` itself has no heavy deps.
+    """
+    from .layout import build_document_layout
+
+    elements = extract_elements_from_pdf(
+        filepath,
+        hi_res_model_name=hi_res_model_name,
+        figures_dir=figures_dir,
+        strategy=strategy,
+        gpu_boost=gpu_boost,
+        device=device,
+    )
+    return build_document_layout(elements)
 
 
 def encode_image_to_base64(image_path: str) -> Optional[str]:

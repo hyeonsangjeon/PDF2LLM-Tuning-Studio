@@ -1,0 +1,87 @@
+# docker-compose.yml — one-command local usage of PDF2LLM Tuning Studio.
+#
+# Setup once:
+#   cp .env.example .env         # then fill in your provider credentials
+#   mkdir -p data/input data/output && cp your.pdf data/input/
+#
+# Web demo (upload a PDF, pick a persona, run in-browser):
+#   docker compose up webapp                       # CPU
+#   docker compose --profile gpu up webapp-gpu     # GPU (needs the NVIDIA runtime)
+#   → open http://localhost:8000
+#
+# Batch (a folder of PDFs → fine-tuning JSONL + manifest.json):
+#   docker compose run --rm batch                  # CPU
+#   docker compose --profile gpu run --rm batch-gpu  # GPU
+#   → drop PDFs in ./data/input, results land in ./data/output
+#
+# Requires Docker Compose v2.24+ (for the optional-.env `required: false`).
+
+x-image-cpu: &image-cpu ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest
+x-image-gpu: &image-gpu ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor:latest-gpu
+
+# Loaded into every container; `required: false` so the local Ollama path works
+# with no .env at all.
+x-envfile: &envfile
+  - path: .env
+    required: false
+
+# GPU reservation (only used by the `gpu` profile services).
+x-gpu-deploy: &gpu-deploy
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: all
+          capabilities: [gpu]
+
+services:
+  # ---- Web demo -----------------------------------------------------------
+  webapp:
+    image: *image-cpu
+    env_file: *envfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    command: python run_webapp.py
+
+  webapp-gpu:
+    image: *image-gpu
+    profiles: ["gpu"]
+    env_file: *envfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    command: python run_webapp.py
+    deploy: *gpu-deploy
+
+  # ---- Batch (INPUT_DIR → OUTPUT_DIR) ------------------------------------
+  batch:
+    image: *image-cpu
+    profiles: ["batch"]
+    env_file: *envfile
+    environment:
+      INPUT_DIR: /data/input
+      OUTPUT_DIR: /data/output
+    volumes:
+      - ./data:/data
+    command: python run_auto.py
+
+  batch-gpu:
+    image: *image-gpu
+    profiles: ["gpu"]
+    env_file: *envfile
+    environment:
+      INPUT_DIR: /data/input
+      OUTPUT_DIR: /data/output
+    volumes:
+      - ./data:/data
+    command: python run_auto.py
+    deploy: *gpu-deploy

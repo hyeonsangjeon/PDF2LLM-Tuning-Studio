@@ -122,3 +122,65 @@ def test_extract_use_sample_still_validates_persona():
         data={"mode": "preview", "use_sample": "true", "persona": "does-not-exist"},
     )
     assert resp.status_code == 400
+
+
+def test_settings_endpoint_grouped_and_secret_safe():
+    resp = client.get("/api/settings")
+    assert resp.status_code == 200
+    groups = {g["group"] for g in resp.json()["groups"]}
+    assert {"core", "provider.azure", "provider.ollama"} <= groups
+    for g in resp.json()["groups"]:
+        for s in g["settings"]:
+            assert "is_set" in s
+            if s["secret"]:
+                # Secret values are never exposed via the ledger endpoint.
+                assert s["default"] == ""
+
+
+def test_providers_reports_missing_required_vars(monkeypatch):
+    # With no Azure endpoint, azure is unconfigured and names the missing var.
+    monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+    by_name = {p["name"]: p for p in client.get("/api/providers").json()["providers"]}
+    assert by_name["azure"]["configured"] is False
+    assert "AZURE_OPENAI_ENDPOINT" in by_name["azure"]["missing"]
+
+
+def test_download_jsonl_is_a_file_attachment():
+    pairs = [{"QUESTION": "q", "ANSWER": "a", "source": "text"}]
+    resp = client.post("/api/download", json={"pairs": pairs, "name": "report.pdf"})
+    assert resp.status_code == 200
+    assert 'filename="report.qa.jsonl"' in resp.headers.get("content-disposition", "")
+    assert "application/x-ndjson" in resp.headers.get("content-type", "")
+    import json as _json
+
+    assert _json.loads(resp.text.strip())["QUESTION"] == "q"
+
+
+def test_download_manifest_exposes_figure_linkage():
+    pairs = [
+        {
+            "source": "image",
+            "image_path": "/f/fig-2.png",
+            "page": 3,
+            "section": "GDP",
+            "figure_index": 2,
+            "context_used": True,
+        }
+    ]
+    resp = client.post(
+        "/api/download", json={"pairs": pairs, "name": "d.pdf", "kind": "manifest"}
+    )
+    assert resp.status_code == 200
+    assert 'filename="d.manifest.json"' in resp.headers.get("content-disposition", "")
+    import json as _json
+
+    m = _json.loads(resp.text)
+    assert m["counts"]["image"] == 1
+    assert m["figures"][0]["section"] == "GDP"
+    assert m["figures"][0]["context_used"] is True
+
+
+def test_download_requires_pairs():
+    resp = client.post("/api/download", json={"name": "x"})
+    assert resp.status_code == 400
+

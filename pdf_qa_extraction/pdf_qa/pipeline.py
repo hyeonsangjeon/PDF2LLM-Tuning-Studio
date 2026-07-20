@@ -14,9 +14,18 @@ from typing import List
 
 from .config import QAConfig
 from .device import probe_device
-from .extract import extract_elements_from_pdf, get_extracted_images
+from .extract import (
+    extract_document_layout,
+    get_extracted_images,
+)
 from .prompts import get_persona
 from .providers.base import LLMProvider
+
+
+def _legacy_glob_forced() -> bool:
+    return str(os.getenv("LEGACY_IMAGE_GLOB", "")).strip().lower() in {
+        "1", "true", "yes", "y", "on",
+    }
 
 
 def generate_qa_pairs(
@@ -28,7 +37,9 @@ def generate_qa_pairs(
     device = probe_device()
     print(device.summary())
 
-    elements = extract_elements_from_pdf(
+    # Ordered layout: section-tagged text chunks + figures paired with the
+    # surrounding text that gives each chart its meaning (see pdf_qa.layout).
+    layout = extract_document_layout(
         pdf_path,
         hi_res_model_name=config.table_model,
         figures_dir=config.figures_dir,
@@ -36,42 +47,72 @@ def generate_qa_pairs(
         gpu_boost=config.gpu_boost,
         device=device,
     )
-    print(f"추출된 요소 수: {len(elements)}")
+    print(
+        f"추출된 요소 수: {len(layout.elements)} "
+        f"(텍스트 청크 {len(layout.text_chunks)}개, 도형 {len(layout.figures)}개)"
+    )
 
     qa_pairs: List[dict] = []
 
-    # --- text elements ---
+    # --- text chunks (each carries its section heading) ---
     text_count = 0
     print("\n=== 텍스트 요소 처리 시작 ===")
-    for element in elements:
-        text = getattr(element, "text", None)
-        if text and text.strip():
-            try:
-                response = provider.generate_text_qa(
-                    text, config.domain, config.num_questions, config.persona
-                )
-                qa_pairs.extend(response)
-                text_count += 1
-                print(f"텍스트 요소 {text_count} 처리 완료 - {len(response)}개 Q&A 생성")
-            except Exception as exc:
-                print(f"텍스트 요소 처리 에러: {exc}")
-    print(f"텍스트 처리 완료: 총 {text_count}개 요소에서 {len(qa_pairs)}개 Q&A 생성")
-
-    # --- image elements ---
-    print("\n=== 이미지 요소 처리 시작 ===")
-    image_files = get_extracted_images(config.figures_dir)
-    image_count = 0
-    if image_files:
-        print(f"발견된 이미지 파일: {len(image_files)}개")
-        for image_path in image_files:
-            image_qa = provider.generate_image_qa(
-                image_path, config.domain, config.num_img_questions, config.persona
+    for chunk in layout.text_chunks:
+        text = (chunk.text or "").strip()
+        if not text:
+            continue
+        try:
+            response = provider.generate_text_qa(
+                text, config.domain, config.num_questions, config.persona
             )
+            qa_pairs.extend(response)
+            text_count += 1
+            print(f"텍스트 청크 {text_count} 처리 완료 - {len(response)}개 Q&A 생성")
+        except Exception as exc:
+            print(f"텍스트 청크 처리 에러: {exc}")
+    print(f"텍스트 처리 완료: 총 {text_count}개 청크에서 {len(qa_pairs)}개 Q&A 생성")
+
+    # --- figures (chart/image), each with its linked context ---
+    print("\n=== 이미지 요소 처리 시작 ===")
+    image_count = 0
+    figures = [] if _legacy_glob_forced() else layout.figures
+    if figures:
+        print(f"문맥 연결된 도형: {len(figures)}개")
+        for fig in figures:
+            image_qa = provider.generate_image_qa(
+                fig.image_path,
+                config.domain,
+                config.num_img_questions,
+                config.persona,
+                context=fig.context_text,
+            )
+            # Record the chunk<->figure linkage on every Q&A for provenance.
+            for qa in image_qa:
+                qa.setdefault("source", "image")
+                qa["page"] = fig.page
+                qa["section"] = fig.section_title
+                qa["figure_index"] = fig.figure_index
+                qa["context_used"] = bool(fig.context_text)
             qa_pairs.extend(image_qa)
             if image_qa:
                 image_count += 1
     else:
-        print("추출된 이미지가 없습니다.")
+        # Fallback: unstructured wrote crops but exposed no ``image_path`` on the
+        # elements (older versions), or LEGACY_IMAGE_GLOB is set. Read images off
+        # disk, context-free -- exactly the pre-linkage behaviour, so nothing
+        # regresses when the ordered stream is unavailable.
+        image_files = get_extracted_images(config.figures_dir)
+        if image_files:
+            print(f"발견된 이미지 파일(문맥 없음): {len(image_files)}개")
+            for image_path in image_files:
+                image_qa = provider.generate_image_qa(
+                    image_path, config.domain, config.num_img_questions, config.persona
+                )
+                qa_pairs.extend(image_qa)
+                if image_qa:
+                    image_count += 1
+        else:
+            print("추출된 이미지가 없습니다.")
     image_qa_total = sum(1 for qa in qa_pairs if qa.get("source") == "image")
     print(f"이미지 처리 완료: 총 {image_count}개 이미지에서 {image_qa_total}개 Q&A 생성")
 

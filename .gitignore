@@ -23,6 +23,7 @@ test-volume.txt
 outputs/
 unsloth_compiled_cache/
 .env*
+!.env.example
 *DE.md
 test.py
 

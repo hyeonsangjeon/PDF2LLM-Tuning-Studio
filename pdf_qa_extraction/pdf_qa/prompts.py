@@ -197,7 +197,7 @@ You must not create more or fewer questions than this number.
 
 # Persona method ({persona_label}) - apply this angle within the rules below:
 {persona_image_method}
-
+{figure_context}
 **MANDATORY RULES - VIOLATION WILL RESULT IN FAILURE:**
 1. **EXACT DATA ONLY**: Use ONLY the exact numbers, dates, and text visible in the image. Do NOT interpret, convert, or modify any values.
 2. **PRECISE READING**: Read dates, numbers, and labels character-by-character as they appear. For example, if you see "12.3일", it means December 3rd, NOT November 13th.
@@ -269,16 +269,39 @@ def build_image_instruction(
     domain: str,
     num_img_questions: str,
     persona: Union[str, "Persona", None] = None,
+    context: str = "",
 ) -> str:
-    """Render the image Q&A instruction text (without the image payload)."""
+    """Render the image Q&A instruction text (without the image payload).
+
+    ``context`` is the surrounding-document text linked to this figure (section
+    heading + the paragraphs/caption immediately around it, assembled by
+    :mod:`pdf_qa.layout`). When provided it is injected as a FIGURE CONTEXT block
+    so the model can interpret *what the chart shows and why it matters* -- while
+    the strict data-accuracy rules still force every number/label to come from
+    the image itself. Empty context renders nothing (identical to the old
+    behaviour), so charts with no detectable surrounding text still work.
+    """
     p = get_persona(persona)
     role = p.image_role.replace("{domain}", str(domain))
     method = p.image_method.replace("{domain}", str(domain))
+    context_block = ""
+    context = (context or "").strip()
+    if context:
+        context_block = (
+            "\n**FIGURE CONTEXT (surrounding document text near this figure — "
+            "use it to understand what the figure shows and why it matters, and "
+            "to phrase questions naturally):**\n"
+            f"{context}\n\n"
+            "Use this context ONLY to frame the meaning/significance of the "
+            "figure. Every number, date, and label in your answers must still be "
+            "read from the image itself, per the rules below.\n"
+        )
     return (
         _IMAGE_INSTRUCTION.replace("{persona_image_role}", role)
         .replace("{artifact}", p.artifact)
         .replace("{persona_label}", p.label)
         .replace("{persona_image_method}", method)
+        .replace("{figure_context}", context_block)
         .replace("{num_img_questions}", str(num_img_questions))
     )
 

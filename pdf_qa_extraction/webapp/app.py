@@ -10,13 +10,14 @@ and -- in ``full`` mode -- a cloud LLM provider.
 from __future__ import annotations
 
 import dataclasses
+import json
 import os
 import shutil
 import tempfile
 from typing import List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from pdf_qa import (
@@ -27,6 +28,8 @@ from pdf_qa import (
     probe_device,
 )
 from pdf_qa.prompts import DEFAULT_PERSONA, build_text_prompt
+from pdf_qa.manifest import build_manifest
+from pdf_qa.settings import grouped_settings, validate_env
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -35,20 +38,8 @@ _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 _SAMPLE_NAME = "fsi_data.pdf"
 _SAMPLE_DOMAIN = "International Finance"
 
-# Env vars that indicate a provider is likely usable (best-effort hint only).
-_PROVIDER_ENV_HINTS = {
-    "azure": (
-        "AZURE_OPENAI_ENDPOINT",
-        "AZURE_OPENAI_API_KEY",
-        "AZURE_OPENAI_KEY",
-        "AZURE_OPENAI_DEPLOYMENT",
-        "AZURE_AI_PROJECT_CONNECTION_STRING",
-        "PROJECT_CONNECTION_STRING",
-    ),
-    "openai": ("OPENAI_API_KEY",),
-    "bedrock": ("AWS_ACCESS_KEY_ID", "AWS_PROFILE", "AWS_DEFAULT_REGION", "AWS_REGION"),
-    "ollama": ("OLLAMA_BASE_URL", "OLLAMA_HOST", "OLLAMA_MODEL"),
-}
+# Known selectable providers (order shown in the UI).
+_KNOWN_PROVIDERS = ("azure", "openai", "bedrock", "ollama")
 
 # Providers that need no cloud credentials (run locally). They are always
 # selectable; the UI shows them as "local" rather than "needs credentials".
@@ -80,16 +71,51 @@ def _device_payload() -> dict:
 
 
 def _providers_payload() -> dict:
+    """Provider readiness driven by the settings ledger (single source of truth).
+
+    ``configured`` is True for local providers, or when every var the ledger
+    marks ``required_for`` that provider is present; ``missing`` lists any gaps.
+    """
     providers = []
-    for name, hints in _PROVIDER_ENV_HINTS.items():
+    for name in _KNOWN_PROVIDERS:
         local = name in _CREDENTIAL_FREE
-        # Local providers need no credentials, so they are always "configured".
-        configured = True if local else any(os.environ.get(h) for h in hints)
-        providers.append({"name": name, "configured": configured, "local": local})
+        missing = [] if local else validate_env(name)
+        providers.append(
+            {
+                "name": name,
+                "configured": local or not missing,
+                "local": local,
+                "missing": missing,
+            }
+        )
     return {
         "default": os.environ.get("LLM_PROVIDER", "azure"),
         "providers": providers,
     }
+
+
+def _settings_payload() -> dict:
+    """Grouped env-var ledger for display (secret *values* are never exposed)."""
+    groups = []
+    for group, items in grouped_settings().items():
+        groups.append(
+            {
+                "group": group,
+                "settings": [
+                    {
+                        "name": s.name,
+                        "description": s.description,
+                        "default": "" if s.secret else s.default,
+                        "secret": s.secret,
+                        "required_for": s.required_for,
+                        "aliases": s.aliases,
+                        "is_set": s.is_set(),
+                    }
+                    for s in items
+                ],
+            }
+        )
+    return {"groups": groups}
 
 
 def _sample_pdf_path() -> Optional[str]:
@@ -169,6 +195,51 @@ def create_app() -> FastAPI:
     @app.get("/api/providers")
     def api_providers():
         return _providers_payload()
+
+    @app.get("/api/settings")
+    def api_settings():
+        return _settings_payload()
+
+    @app.post("/api/download")
+    def api_download(payload: dict = Body(...)):
+        """First-class download: repackage a completed run as a file attachment.
+
+        The client posts the ``pairs`` it already received; the server returns a
+        proper ``Content-Disposition`` attachment — ``<doc>.qa.jsonl`` (default)
+        or ``<doc>.manifest.json`` (``kind=manifest``). Stateless, so no run data
+        is retained server-side. The client-side Blob remains an offline fallback.
+        """
+        pairs = payload.get("pairs")
+        if not isinstance(pairs, list):
+            raise HTTPException(status_code=400, detail="pairs (list) is required.")
+        raw_name = str(payload.get("name") or "extraction")
+        base = os.path.splitext(os.path.basename(raw_name))[0] or "extraction"
+        kind = str(payload.get("kind") or "jsonl").lower()
+
+        if kind == "manifest":
+            manifest = build_manifest(
+                pairs,
+                {
+                    "document": raw_name,
+                    "persona": payload.get("persona"),
+                    "provider": payload.get("provider"),
+                    "domain": payload.get("domain"),
+                    "device": payload.get("device"),
+                },
+            )
+            content = json.dumps(manifest, ensure_ascii=False, indent=2)
+            media, filename = "application/json", f"{base}.manifest.json"
+        else:
+            content = "\n".join(
+                json.dumps(item, ensure_ascii=False) for item in pairs
+            )
+            media, filename = "application/x-ndjson", f"{base}.qa.jsonl"
+
+        return Response(
+            content=content,
+            media_type=media,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @app.get("/api/meta")
     def api_meta():
@@ -361,11 +432,23 @@ def create_app() -> FastAPI:
                 )
                 text_n = len([q for q in pairs if q.get("source") != "image"])
                 image_n = len([q for q in pairs if q.get("source") == "image"])
+                manifest = build_manifest(
+                    pairs,
+                    {
+                        "document": input_name,
+                        "persona": resolved_persona.key,
+                        "provider": provider,
+                        "domain": domain,
+                        "device": dataclasses.asdict(device),
+                    },
+                )
                 return {
                     **common,
                     "counts": {"total": len(pairs), "text": text_n, "image": image_n},
                     "pairs": pairs,
                     "jsonl": jsonl,
+                    "figures": manifest["figures"],
+                    "manifest": manifest,
                 }
 
             raise HTTPException(

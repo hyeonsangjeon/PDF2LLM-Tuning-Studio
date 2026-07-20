@@ -60,7 +60,7 @@ py-modules = []
 
 [tool.setuptools.package-data]
 # Ship the persona ledger inside the wheel / container image.
-pdf_qa = ["personas.yaml"]
+pdf_qa = ["personas.yaml", "settings.yaml"]
 
 [tool.setuptools.packages.find]
 include = ["pdf_qa*"]

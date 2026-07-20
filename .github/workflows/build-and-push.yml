@@ -55,6 +55,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Repo-level artifacts that ship alongside the images (validated on PRs
+      # too, since the image smoke below only runs on pushes): the compose file,
+      # the generated .env.example, and — crucially — that .env.example stays in
+      # sync with the settings.yaml ledger (the single source of truth).
+      - name: Verify repo artifacts (.env.example ↔ ledger sync)
+        run: |
+          test -f docker-compose.yml || { echo '::error::missing docker-compose.yml'; exit 1; }
+          test -f .env.example || { echo '::error::missing .env.example'; exit 1; }
+          grep -q '^LLM_PROVIDER=' .env.example || { echo '::error::.env.example missing LLM_PROVIDER'; exit 1; }
+          python3 -m pip install --quiet pyyaml
+          ( cd pdf_qa_extraction && python3 -m pdf_qa.settings --write-env /tmp/gen.env )
+          if ! diff -q /tmp/gen.env .env.example >/dev/null; then
+            echo '::error::.env.example is out of sync with pdf_qa/settings.yaml. Regenerate: (cd pdf_qa_extraction && python -m pdf_qa.settings --write-env ../.env.example)'
+            diff /tmp/gen.env .env.example || true
+            exit 1
+          fi
+          echo 'repo artifacts OK (.env.example in sync with the ledger)'
+
       # The build still juggles a builder stage (torch/onnxruntime + build
       # tools) and the runtime image at once, plus the gha cache export and the
       # smoke-test pull. GitHub-hosted runners only ship ~14GB free on /, so
@@ -152,4 +170,10 @@ jobs:
           # httpx (a test-only dep not in the image), so call the payload helpers
           # directly instead of issuing HTTP requests.
           docker run --rm "$REF" python -c "from webapp.app import _persona_payload, _device_payload, _meta_payload, _providers_payload; pl=_persona_payload(); keys=[p['key'] for p in pl['personas']]; assert keys[0]=='professor', keys; assert 'memoirist' in keys and 'feynman' in keys, keys; assert len(keys)==7, keys; assert all(p['method_summary'] for p in pl['personas']); dev=_device_payload(); assert 'gpu_ready' in dev and dev['summary']; meta=_meta_payload(); assert meta['sample_available'], 'sample PDF (data/fsi_data.pdf) not packaged in image'; prov={p['name']:p for p in _providers_payload()['providers']}; assert set(prov)=={'azure','openai','bedrock','ollama'}, prov; assert prov['ollama']['local'], 'ollama should be credential-free/local'; import langchain_ollama; import fastapi, uvicorn; print('webapp OK - ${{ matrix.variant }} | fastapi', fastapi.__version__, '| personas', keys, '| providers', sorted(prov), '| sample', meta['sample_name'], '| gpu_ready', dev['gpu_ready'])"
+          echo "::endgroup::"
+          echo "::group::Ledger, facade & automation smoke (${{ matrix.variant }})"
+          # Prove the ergonomic layer ships in-image: the one-call facade, the
+          # env-var ledger (settings.yaml packaged), the chart-linkage manifest,
+          # the batch entrypoint (run_auto), and the webapp settings endpoint.
+          docker run --rm "$REF" python -c "import pdf_qa; from pdf_qa import extract_qa; from pdf_qa.settings import load_settings, validate_env; from pdf_qa.manifest import build_manifest; import run_auto; names={s.name for s in load_settings()}; assert 'LLM_PROVIDER' in names and 'AZURE_OPENAI_ENDPOINT' in names, 'settings.yaml ledger not packaged in image'; assert validate_env('ollama')==[]; from webapp.app import _settings_payload; groups={g['group'] for g in _settings_payload()['groups']}; assert 'provider.azure' in groups, groups; m=build_manifest([{'source':'image','figure_index':1,'page':2,'section':'S','context_used':True}]); assert m['counts']['figures']==1 and m['counts']['figures_with_context']==1; assert callable(extract_qa) and hasattr(run_auto,'main'); print('ledger+facade+automation OK - ${{ matrix.variant }} |', len(names), 'env vars | groups', sorted(groups))"
           echo "::endgroup::"

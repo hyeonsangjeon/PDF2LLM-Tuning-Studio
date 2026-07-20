@@ -1,0 +1,214 @@
+# Environment-variable ledger — the single source of truth for every setting the
+# pipeline, providers and web app read. Edit here (not scattered across the code)
+# and regenerate `.env.example` with `python -m pdf_qa.settings --write-env`.
+#
+# Each entry:
+#   name         env var name
+#   group        section it belongs to (used to group `.env.example`)
+#   default      default value (informational; empty = unset)
+#   description  one-line purpose
+#   secret       true  -> rendered as a placeholder, never a real default
+#   required_for list of provider names that REQUIRE it (drives validate_env)
+#   aliases      other env names that also satisfy it
+#
+# Point PDF2LLM_SETTINGS_FILE at your own copy to manage a custom ledger.
+
+settings:
+  # ---- core -------------------------------------------------------------
+  - name: LLM_PROVIDER
+    group: core
+    default: azure
+    description: "Backend to use: azure | bedrock | openai | ollama (and aliases)."
+  - name: DOMAIN
+    group: core
+    default: International Finance
+    description: "Subject domain injected into the persona prompts."
+  - name: PERSONA
+    group: core
+    default: professor
+    description: "Q&A persona/method: professor, socratic, consultant, interviewer, analyst, feynman, memoirist."
+  - name: PERSONA_FILE
+    group: core
+    default: ""
+    description: "Path to a custom persona YAML ledger (overrides the bundled personas.yaml)."
+  - name: NUM_QUESTIONS
+    group: core
+    default: "5"
+    description: "Questions to generate per text chunk."
+  - name: NUM_IMG_QUESTIONS
+    group: core
+    default: "1"
+    description: "Questions to generate per figure/chart."
+  - name: MODEL_ID
+    group: core
+    default: ""
+    description: "Generic model/deployment id; each provider falls back to its own default."
+
+  # ---- extraction -------------------------------------------------------
+  - name: STRATEGY
+    group: extraction
+    default: auto
+    description: "unstructured strategy: auto | fast | hi_res | ocr_only (auto escalates to hi_res on GPU or when a layout model is set)."
+  - name: GPU_BOOST
+    group: extraction
+    default: "true"
+    description: "Route the heavy layout + table models to the GPU when one is detected."
+  - name: TABLE_MODEL
+    group: extraction
+    default: ""
+    description: "Layout-detection model for the hi_res path (yolox | yolox_quantized | detectron2_onnx ...). Passed to unstructured as hi_res_model_name."
+    aliases: [HI_RES_MODEL_NAME, UNSTRUCTURED_HI_RES_MODEL_NAME]
+  - name: FIGURES_DIR
+    group: extraction
+    default: figures
+    description: "Directory where extracted figure/chart crops are written."
+  - name: EXTRACT_TABLE_IMAGES
+    group: extraction
+    default: ""
+    description: "1 = also send table crops to the vision model (default off: table text is richer)."
+  - name: LEGACY_IMAGE_GLOB
+    group: extraction
+    default: ""
+    description: "1 = force the old context-free image path (glob crops off disk instead of the ordered figure<->context linkage)."
+  - name: FIGURE_CONTEXT_MAX_CHARS
+    group: extraction
+    default: "800"
+    description: "Max characters of surrounding text attached to each figure as context."
+  - name: FIGURE_CONTEXT_MAX_ELEMS
+    group: extraction
+    default: "3"
+    description: "Max preceding paragraphs pulled into a figure's context."
+  - name: FIGURE_CONTEXT_AFTER_ELEMS
+    group: extraction
+    default: "2"
+    description: "Max following paragraphs/caption pulled into a figure's context."
+  - name: TEXT_CHUNK_MAX_CHARS
+    group: extraction
+    default: "4000"
+    description: "Hard character budget per text chunk."
+  - name: TEXT_CHUNK_SOFT_LIMIT
+    group: extraction
+    default: "3800"
+    description: "Prefer to break a text chunk at a section heading once it reaches this size."
+
+  # ---- input / output (local + batch) ----------------------------------
+  - name: PDF_PATH
+    group: io
+    default: data/fsi_data.pdf
+    description: "Input PDF for run_local.py."
+  - name: OUTPUT_PATH
+    group: io
+    default: data/qa_pairs.jsonl
+    description: "Output JSONL for run_local.py."
+  - name: SAMPLE_PDF
+    group: io
+    default: ""
+    description: "Override path to the bundled demo PDF used by the web app."
+  - name: INPUT_DIR
+    group: io
+    default: /data/input
+    description: "Batch mode: folder scanned for *.pdf (run_auto.py)."
+  - name: OUTPUT_DIR
+    group: io
+    default: /data/output
+    description: "Batch mode: folder where per-file JSONL + manifest are written."
+  - name: OVERWRITE
+    group: io
+    default: ""
+    description: "1 = reprocess batch inputs even if their output already exists."
+
+  # ---- provider: azure (Entra ID first-class; API key optional) --------
+  - name: AZURE_OPENAI_ENDPOINT
+    group: provider.azure
+    default: ""
+    description: "Azure OpenAI endpoint, e.g. https://<resource>.openai.azure.com/ (required for the azure provider)."
+    required_for: [azure]
+  - name: AZURE_OPENAI_API_KEY
+    group: provider.azure
+    default: ""
+    description: "API key. LEAVE UNSET for keyless Entra ID (DefaultAzureCredential) — the recommended path."
+    secret: true
+  - name: AZURE_OPENAI_DEPLOYMENT
+    group: provider.azure
+    default: gpt-4o
+    description: "Azure OpenAI deployment name."
+  - name: AZURE_OPENAI_API_VERSION
+    group: provider.azure
+    default: "2024-10-21"
+    description: "Azure OpenAI API version."
+    aliases: [OPENAI_API_VERSION]
+  - name: AZURE_OPENAI_TOKEN_SCOPE
+    group: provider.azure
+    default: https://cognitiveservices.azure.com/.default
+    description: "Entra ID token audience for keyless auth."
+  - name: AZURE_MODE
+    group: provider.azure
+    default: openai
+    description: "azure backend: openai (Azure OpenAI) or agent (Foundry Agent Service)."
+  - name: AZURE_AI_PROJECT_ENDPOINT
+    group: provider.azure
+    default: ""
+    description: "Foundry project endpoint (AZURE_MODE=agent only)."
+    aliases: [PROJECT_ENDPOINT]
+  - name: AZURE_AI_AGENT_MODEL
+    group: provider.azure
+    default: gpt-4o
+    description: "Model deployment for the Foundry Agent (AZURE_MODE=agent only)."
+
+  # ---- provider: openai -------------------------------------------------
+  - name: OPENAI_API_KEY
+    group: provider.openai
+    default: ""
+    description: "OpenAI API key (required for the openai provider)."
+    secret: true
+    required_for: [openai]
+  - name: OPENAI_MODEL
+    group: provider.openai
+    default: gpt-4o
+    description: "OpenAI multimodal model."
+
+  # ---- provider: bedrock (uses boto3 default chain if keys unset) -------
+  - name: AWS_REGION
+    group: provider.bedrock
+    default: us-east-1
+    description: "AWS region for Bedrock runtime."
+  - name: AWS_ACCESS_KEY_ID
+    group: provider.bedrock
+    default: ""
+    description: "AWS access key. Unset = boto3 default chain (role/profile)."
+    secret: true
+  - name: AWS_SECRET_ACCESS_KEY
+    group: provider.bedrock
+    default: ""
+    description: "AWS secret key (with AWS_ACCESS_KEY_ID)."
+    secret: true
+  - name: AWS_SESSION_TOKEN
+    group: provider.bedrock
+    default: ""
+    description: "Optional AWS session token for temporary credentials."
+    secret: true
+
+  # ---- provider: ollama (local, no credentials) ------------------------
+  - name: OLLAMA_MODEL
+    group: provider.ollama
+    default: llama3.1
+    description: "Local Ollama model tag (e.g. llama3.1, llava for vision)."
+  - name: OLLAMA_BASE_URL
+    group: provider.ollama
+    default: http://localhost:11434
+    description: "Ollama server URL."
+    aliases: [OLLAMA_HOST]
+
+  # ---- web app ----------------------------------------------------------
+  - name: HOST
+    group: webapp
+    default: 0.0.0.0
+    description: "Web app bind host."
+  - name: PORT
+    group: webapp
+    default: "8000"
+    description: "Web app port."
+  - name: WORKERS
+    group: webapp
+    default: "1"
+    description: "1 = single-node in-process (GPU demo); N = multi-process CPU concurrency."

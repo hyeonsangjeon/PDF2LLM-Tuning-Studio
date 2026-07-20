@@ -115,6 +115,8 @@ RUN find /opt/venv -type d \( -path '*/nvidia/*/lib' -o -path '*/torch/lib' \) \
 WORKDIR /app
 COPY run_local.py processing.py azureml_job.py ./
 COPY processing_local.py processing_local_openai.py ./
+# Zero-config batch runner (INPUT_DIR -> OUTPUT_DIR; run: `python run_auto.py`).
+COPY run_auto.py ./
 # Single-node local demo web app (run: `python run_webapp.py`, serves :8000).
 COPY run_webapp.py ./
 COPY webapp ./webapp
@@ -124,6 +126,9 @@ COPY data/fsi_data.pdf ./data/fsi_data.pdf
 # The demo web app listens here; harmless metadata for the batch entrypoints.
 EXPOSE 8000
 
-# LLM_PROVIDER env var selects the backend (azure | bedrock | openai).
-# Default CMD stays the batch run; override with `python run_webapp.py` for the UI.
+# LLM_PROVIDER env var selects the backend (azure | bedrock | openai | ollama).
+# Default CMD is the single-file run; the common entrypoints are:
+#   python run_auto.py     # batch a folder: INPUT_DIR -> OUTPUT_DIR (+ manifest)
+#   python run_webapp.py   # single-node demo web app on :8000
+# See docker-compose.yml at the repo root for one-command CPU/GPU usage.
 CMD ["python", "run_local.py"]

@@ -15,6 +15,9 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
 - **클라우드 무관 코어 패키지**: `pdf_qa` 패키지 + 공급자 플러그인 구조로 코드 중복 제거, 런타임별 얇은 진입점
 - **단일 공개 이미지**: `ghcr.io/hyeonsangjeon/pdf2llm-tuning-studio/pdf-qa-extractor` 하나로 로컬·Azure ML·SageMaker 실행
 - **로컬 데모 웹앱(싱글 노드)**: 같은 이미지에서 `python run_webapp.py` → 브라우저에서 문서 업로드·페르소나 선택. 파이프라인을 **같은 프로세스에서 직접 호출(in-process)** 해 GPU 유무를 자동 감지하며, 미리보기 모드는 클라우드 자격 증명 없이 오프라인으로 동작(병렬 팬아웃은 advanced)
+- **아주 쉬운 사용**: 한 줄 함수 API `extract_qa("report.pdf", out="qa.jsonl", provider="ollama")` + 모든 환경변수를 문서화한 원장 `pdf_qa/settings.yaml`(→ `.env.example` 생성/검증: `python -m pdf_qa.settings --check`)
+- **차트-문맥 추출 파이프라인**: 차트/도표 PNG를 단독으로 넘기지 않고 **읽기 순서·좌표·이미지 경로**로 각 도표를 주변 절·문단·캡션과 연결해 비전 프롬프트에 문맥을 주입(숫자·라벨은 이미지에서만). 각 이미지 Q&A에 `page·section·figure_index·context_used` 출처 기록
+- **폴더 일괄 처리 & Compose**: 레포 루트 `docker-compose.yml`로 웹앱/배치를 CPU·GPU 한 번에 구동, `run_auto.py`가 `INPUT_DIR`→`OUTPUT_DIR`로 파일별 JSONL + `all.qa.jsonl` + `manifest.json`(차트 연결 포함) 생성. 웹앱은 `<문서>.qa.jsonl`·`manifest.json` **서버 다운로드** 제공
 - **메모리 효율적 파인튜닝**: Unsloth 최적화와 LoRA 어댑터로 제한된 GPU 환경에서도 대형 모델 학습
 
 ## 🏗️ 아키텍처
@@ -63,12 +66,17 @@ PDF2LLM-Tuning-Studio/
 ├── pdf_qa_extraction/       # PDF 처리 및 Q&A 추출 모듈
 │   ├── pdf_qa/              # ⭐ 클라우드 무관 코어 패키지
 │   │   ├── config.py · parsing.py · prompts.py · extract.py · pipeline.py · device.py
+│   │   ├── api.py           # 🟢 한 줄 함수 API (extract_qa)
+│   │   ├── layout.py        # 📊 정렬된 레이아웃 + 차트↔문맥 연결
+│   │   ├── manifest.py      # 실행 매니페스트 + 도표 연결 요약
+│   │   ├── settings.py · settings.yaml   # 🗒️ 환경변수 원장 (.env 생성/검증)
 │   │   ├── personas.yaml    # 🎭 페르소나 원장 (YAML, PERSONA_FILE로 외부 지정 가능)
 │   │   └── providers/       # azure_foundry · openai · bedrock · ollama (+ base 팩토리)
 │   ├── webapp/              # 🖥️ 로컬 데모 웹앱 (FastAPI, in-process 파이프라인)
-│   │   ├── app.py           # /api/{personas,device,providers,extract} 엔드포인트
-│   │   └── static/index.html    # 싱글 페이지 UI (GPU/CPU 배지, 페르소나 선택)
+│   │   ├── app.py           # /api/{personas,device,providers,settings,extract,download}
+│   │   └── static/index.html    # 싱글 페이지 UI (GPU/CPU 배지, 페르소나, 차트 연결·다운로드)
 │   ├── run_local.py         # 로컬/컨테이너 통합 진입점 (LLM_PROVIDER로 전환)
+│   ├── run_auto.py          # 📁 폴더 일괄 처리 (INPUT_DIR→OUTPUT_DIR, JSONL+manifest)
 │   ├── run_webapp.py        # 로컬 데모 웹앱 진입점 (uvicorn, 기본 :8000)
 │   ├── azureml_job.py       # Azure ML 잡 진입점
 │   ├── processing.py        # SageMaker Processing Job 진입점
@@ -76,6 +84,9 @@ PDF2LLM-Tuning-Studio/
 │   ├── pyproject.toml · requirements.txt
 │   ├── Dockerfile · Dockerfile_event_eng
 │   └── README.md · README_en.md
+│
+├── docker-compose.yml       # 🐳 웹앱/배치 원커맨드 구동 (CPU·GPU 프로필)
+├── .env.example             # 🗒️ settings.yaml 원장에서 생성된 환경변수 예시
 │
 └── fine_tuning/             # LLM 파인튜닝 모듈
     ├── 01_setup_environment.ipynb
@@ -85,6 +96,25 @@ PDF2LLM-Tuning-Studio/
 ```
 
 ## 🚀 시작 가이드
+
+### ⚡ 가장 쉬운 방법 (한 줄 / 원커맨드)
+
+```python
+# 파이썬 한 줄: PDF → Q&A JSONL (GPU/CPU·페르소나·차트 문맥 자동)
+from pdf_qa import extract_qa
+extract_qa("report.pdf", out="qa_pairs.jsonl", provider="ollama", persona="feynman")
+```
+
+```bash
+# 또는 Docker Compose 원커맨드 (레포 루트)
+cp .env.example .env                       # 공급자 자격 증명 입력 (Ollama는 불필요)
+docker compose up webapp                   # 데모 웹앱 → http://localhost:8000
+mkdir -p data/input && cp *.pdf data/input/
+docker compose run --rm batch              # 폴더 일괄 처리 → data/output/*.qa.jsonl + manifest.json
+# GPU: docker compose --profile gpu up webapp-gpu  /  --profile gpu run --rm batch-gpu
+```
+
+> 환경변수는 `pdf_qa/settings.yaml` 원장에서 관리합니다 — `python -m pdf_qa.settings --check azure`로 검증, `--write-env`로 `.env.example` 재생성.
 
 ### 0단계: 컨테이너 이미지 준비
 

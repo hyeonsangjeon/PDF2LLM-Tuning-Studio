@@ -4,7 +4,7 @@
 
 이 도구는 PDF 문서에서 블록 단위로 텍스트/표/이미지를 추출하고, LLM으로 고품질 질문-답변 쌍을 자동 생성합니다(레이아웃 감지는 onnxruntime, OCR은 tesseract — 기본 이미지는 CPU 슬림). 이 과정을 통해 문서의 지식을 구조화된 QA JSONL 데이터셋으로 변환하여 학습, 미세 조정 또는 지식 베이스 구축에 활용할 수 있습니다.
 
-LLM 공급자는 환경 변수 `LLM_PROVIDER` 하나로 전환합니다 — **`azure`(기본, Azure AI Foundry / Azure OpenAI)**, `openai`, `bedrock`(AWS). 코어 로직은 클라우드 무관 `pdf_qa` 패키지에 있고, 런타임별 진입점(`run_local.py` 로컬·컨테이너, `azureml_job.py` Azure ML, `processing.py` SageMaker)은 이 패키지를 얇게 감쌉니다.
+LLM 공급자는 환경 변수 `LLM_PROVIDER` 하나로 전환합니다 — **`azure`(기본, Azure AI Foundry / Azure OpenAI)**, `openai`, `bedrock`(AWS), `ollama`(로컬, 자격 증명 불필요). 코어 로직은 클라우드 무관 `pdf_qa` 패키지에 있고, 런타임별 진입점(`run_local.py` 로컬·컨테이너, `run_auto.py` 폴더 일괄 처리, `azureml_job.py` Azure ML, `processing.py` SageMaker)은 이 패키지를 얇게 감쌉니다.
 
 > Azure ML/Foundry 상세 설정은 [`../azure/README.md`](../azure/README.md)를 참조하세요.
 
@@ -20,6 +20,72 @@ LLM 공급자는 환경 변수 `LLM_PROVIDER` 하나로 전환합니다 — **`a
 ![GPU Container Process](../assets/images/flow.png)
 
 *위 다이어그램은 PDF에서 QA 데이터를 추출하는 전체 프로세스를 보여줍니다. PDF 문서가 입력되면 Unstructured 파티션 추출기를 통해 텍스트 블록으로 변환되고, 이 데이터는 선택한 LLM 공급자(Azure AI Foundry / OpenAI / Bedrock Claude)를 활용하여 구조화된 JSONL QA 데이터로 가공됩니다.*
+
+## 빠른 시작 — 아주 쉽게
+
+### 1) 한 줄 함수 API (`extract_qa`)
+
+파이썬에서 한 번의 호출로 PDF → Q&A JSONL을 만듭니다. GPU/CPU 자동 감지, 페르소나 원장, 차트-문맥 연결이 모두 자동 적용됩니다.
+
+```python
+from pdf_qa import extract_qa
+
+# 환경변수(.env)만으로:
+pairs = extract_qa("report.pdf")
+
+# 또는 키워드로 필요한 것만 오버라이드 (env가 기본값, 인자가 우선):
+extract_qa(
+    "report.pdf",
+    out="qa_pairs.jsonl",   # 주면 JSONL로도 저장
+    provider="ollama",       # azure | openai | bedrock | ollama
+    persona="feynman",
+    num_questions="5",
+)
+```
+
+### 2) 환경변수 원장 (`settings.yaml` → `.env`)
+
+흩어져 있던 모든 환경변수를 하나의 원장 [`pdf_qa/settings.yaml`](pdf_qa/settings.yaml)에서 문서화해 관리합니다(이름·기본값·설명·필수 공급자·시크릿 여부). 원장에서 `.env.example`을 생성하고 `.env` 상태를 검증합니다.
+
+```bash
+cp .env.example .env                          # 레포 루트의 생성된 예시를 복사해 채우기
+
+python -m pdf_qa.settings --list              # 전체 환경변수 원장 보기
+python -m pdf_qa.settings --check azure        # azure에 필요한 값이 채워졌는지 검증
+python -m pdf_qa.settings --write-env .env.example   # 원장에서 예시 재생성
+```
+
+> 시크릿(키/토큰)은 원장에 **값이 저장되지 않습니다** — `.env.example`에는 주석 처리된 자리표시자만 들어갑니다. Azure는 키리스(Entra ID) 경로를 우선합니다.
+
+### 3) 컨테이너 자동화 (Docker Compose · 폴더 일괄 처리)
+
+레포 루트의 [`docker-compose.yml`](../docker-compose.yml) 하나로 데모 웹앱과 폴더 일괄 처리를 CPU/GPU에서 한 번에 구동합니다.
+
+```bash
+cp .env.example .env                          # 공급자 자격 증명 입력
+mkdir -p data/input data/output && cp *.pdf data/input/
+
+# 데모 웹앱 (http://localhost:8000)
+docker compose up webapp                       # CPU
+docker compose --profile gpu up webapp-gpu     # GPU (NVIDIA 런타임 필요)
+
+# 폴더 일괄 처리: data/input/*.pdf → data/output/<name>.qa.jsonl (+ manifest.json)
+docker compose run --rm batch                  # CPU
+docker compose --profile gpu run --rm batch-gpu  # GPU
+```
+
+`run_auto.py`는 `INPUT_DIR`의 모든 PDF를 처리해 파일별 JSONL, 통합 `all.qa.jsonl`, 그리고 문서별 개수·페르소나·디바이스·**차트 연결 정보**를 담은 `manifest.json`을 만듭니다. 이미 결과가 있으면 건너뛰며, `OVERWRITE=1`로 강제 재실행합니다.
+
+### 4) 차트-문맥 추출 파이프라인 (도표 이해)
+
+기존에는 차트 PNG를 주변 문맥 없이 비전 모델에 단독으로 넘겨, "숫자를 읽어라" 수준의 얕은 Q&A만 나왔습니다. 이제 [`pdf_qa/layout.py`](pdf_qa/layout.py)가 unstructured의 **읽기 순서·페이지·좌표(bbox)·이미지 경로**를 활용해 문서를 정렬된 레이아웃으로 재구성하고, 각 도표를 그 의미를 설명하는 주변 텍스트와 연결합니다:
+
+- **절(section)** = 도표 바로 앞의 가장 가까운 제목(Title)
+- **앞 문맥** = 같은 페이지에서 도표 직전 문단(최대 ~3요소·800자, 제목·다른 도표에서 중단)
+- **캡션/뒤 문맥** = 도표 뒤 1~2개 요소(예: "그림 N", FigureCaption)
+- **공간 보정** = 좌표가 있으면 도표 바로 아래/위 텍스트 상자로 근접도 정렬
+
+연결된 문맥은 비전 프롬프트의 **FIGURE CONTEXT** 블록으로 주입되어 모델이 *차트의 의미와 중요성*을 해석하게 하되, **모든 숫자·라벨은 여전히 이미지에서만** 읽도록 강제합니다. 생성된 각 이미지 Q&A에는 `page`·`section`·`figure_index`·`context_used` 출처 메타데이터가 붙어 JSONL에서 추적 가능합니다. (unstructured가 이미지 경로를 노출하지 못하는 구버전이면 기존 글롭 방식으로 안전하게 폴백하며, `LEGACY_IMAGE_GLOB=1`로 강제할 수 있습니다.)
 
 ## 설치 안내
 
@@ -270,10 +336,10 @@ docker run --rm -e WORKERS=4 -p 8000:8000 --env-file .env $IMG python run_webapp
 
 **두 가지 모드**
 - **미리보기(preview) — 오프라인, 클라우드 자격 증명 불필요:** PDF를 디바이스 인지 방식으로 파싱해 **요소/표/이미지 개수 + 실제 사용된 디바이스 경로 + 페르소나가 적용된 프롬프트**를 보여줍니다. LLM을 호출하지 않으므로 **GPU 가속의 강점과 페르소나 차이를 자격 증명 없이** 확인할 수 있습니다.
-- **전체(full) — 자격 증명 필요:** 위 추출에 더해 선택한 공급자(Azure/OpenAI/Bedrock)로 **Q&A 쌍을 생성**하고 결과 표 + `JSONL` 다운로드를 제공합니다.
+- **전체(full) — 자격 증명 필요:** 위 추출에 더해 선택한 공급자(Azure/OpenAI/Bedrock/Ollama)로 **Q&A 쌍을 생성**하고, 결과 표와 함께 **차트↔문맥 연결 패널**(각 도표의 절·페이지·문맥 사용 여부·Q&A 수)을 보여줍니다. 결과는 서버 다운로드 엔드포인트(`POST /api/download`)로 **`<문서>.qa.jsonl`** 파일과 **`manifest.json`**(개수 + 도표별 연결)으로 내려받을 수 있으며, 오프라인 시 클라이언트 Blob으로 폴백합니다.
 - **원클릭 샘플:** 올릴 문서가 없어도 UI의 **📄 샘플 문서로 시도** 버튼으로 이미지에 번들된 `fsi_data.pdf`(International Finance)를 즉시 미리보기해 GPU/CPU 경로와 페르소나 프롬프트를 자격 증명 없이 확인할 수 있습니다.
 
-> UI는 로드 시 `/api/device`로 **GPU/CPU 배지**를, `/api/personas`로 페르소나 목록(방식 요약 포함)을, `/api/providers`로 공급자 설정 여부를, `/api/meta`로 번들 샘플 제공 여부를 표시합니다. 대량·분산 처리는 아래 SageMaker/Azure ML 병렬 처리 섹션을 참고하세요.
+> UI는 로드 시 `/api/device`로 **GPU/CPU 배지**를, `/api/personas`로 페르소나 목록(방식 요약 포함)을, `/api/providers`로 공급자 설정 여부(원장 기준 누락 변수 포함)를, `/api/settings`로 환경변수 원장을, `/api/meta`로 번들 샘플 제공 여부를 표시합니다. 대량·분산 처리는 아래 SageMaker/Azure ML 병렬 처리 섹션을 참고하세요.
 
 ## 테이블 추출 모델 비교
 

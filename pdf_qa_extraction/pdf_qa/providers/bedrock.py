@@ -65,7 +65,12 @@ class BedrockProvider(LLMProvider):
         return custom_json_parser(response)
 
     def generate_image_qa(
-        self, image_path: str, domain: str, num_img_questions: str, persona: str = "professor"
+        self,
+        image_path: str,
+        domain: str,
+        num_img_questions: str,
+        persona: str = "professor",
+        context: str = "",
     ) -> List[dict]:
         from langchain_core.messages import HumanMessage
 
@@ -74,7 +79,7 @@ class BedrockProvider(LLMProvider):
             return []
 
         image_format = detect_image_format(image_path)
-        instruction = build_image_instruction(domain, num_img_questions, persona)
+        instruction = build_image_instruction(domain, num_img_questions, persona, context)
         message = HumanMessage(
             content=[
                 {"type": "text", "text": instruction},

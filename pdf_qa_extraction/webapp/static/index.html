@@ -79,6 +79,11 @@
     margin-bottom: 12px; gap: 12px; }
   .dl { padding: 8px 14px; background: var(--panel2); color: var(--fg);
     border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .figpanel { margin: 6px 0 14px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; background: var(--panel2); }
+  .figpanel > summary { cursor: pointer; font-weight: 600; }
+  .figpanel table { margin-top: 4px; }
+  .figpanel td, .figpanel th { padding: 5px 8px; font-size: 12.5px; }
   .spin { display: inline-block; width: 15px; height: 15px; border: 2px solid #fff;
     border-top-color: transparent; border-radius: 50%; animation: sp .8s linear infinite;
     vertical-align: -2px; margin-right: 8px; }
@@ -168,6 +173,7 @@
 const $ = (id) => document.getElementById(id);
 let MODE = "preview";
 let lastJsonl = null;
+let lastResult = null;
 let USE_SAMPLE = false;
 let SAMPLE = null;
 
@@ -265,6 +271,23 @@ function renderPreview(r){
      <pre>${esc(r.sample_prompt)}</pre>`;
 }
 
+function figurePanel(figs){
+  if(!figs || !figs.length) return "";
+  const rows = figs.map(f => `<tr>
+     <td><b>#${f.figure_index ?? "?"}</b>${f.image_path ? ' · '+esc(f.image_path) : ''}</td>
+     <td>${f.page ?? "-"}</td>
+     <td>${esc(f.section || "-")}</td>
+     <td>${f.context_used ? '<span class="tag">문맥 연결됨</span>' : '<span class="muted">문맥 없음</span>'}</td>
+     <td>${f.questions ?? 0}</td>
+   </tr>`).join("");
+  return `<details class="figpanel" open>
+     <summary>차트↔문맥 연결 (${figs.length}개 도표)</summary>
+     <div class="muted" style="margin:4px 0 6px">각 차트가 문서의 어느 절·페이지에서 나왔고, 주변 본문 문맥이 비전 모델에 함께 전달됐는지 보여줍니다.</div>
+     <table><thead><tr><th>도표</th><th>페이지</th><th>절(section)</th><th>문맥</th><th>Q&amp;A</th></tr></thead>
+       <tbody>${rows}</tbody></table>
+   </details>`;
+}
+
 function renderFull(r){
   const c = r.counts || {};
   const rows = (r.pairs||[]).map((p,i) => `<tr>
@@ -273,6 +296,7 @@ function renderFull(r){
        ${p.source==="image" ? '<span class="tag">image</span>' : ''}</td>
    </tr>`).join("");
   lastJsonl = r.jsonl || "";
+  lastResult = r;
   $("output").innerHTML = planChips(r.plan, r.device) +
     `<div class="kv">
       ${inputChip(r)}
@@ -281,17 +305,47 @@ function renderFull(r){
       <div class="chip"><span>이미지</span> <b>${c.image ?? 0}</b></div>
       <div class="chip"><span>페르소나</span> <b>${esc(r.persona.label)}</b></div>
      </div>
+     ${figurePanel(r.figures)}
      <div class="toolbar"><div class="muted">생성된 Q&amp;A (파인튜닝용 JSONL)</div>
-       <button class="dl" id="dl">JSONL 다운로드</button></div>
+       <span><button class="dl" id="dl">JSONL 다운로드</button>
+       <button class="dl" id="dlm">manifest.json</button></span></div>
      <table><thead><tr><th>QUESTION</th><th>ANSWER</th></tr></thead>
        <tbody>${rows || '<tr><td colspan=2 class="muted">생성된 Q&amp;A가 없습니다.</td></tr>'}</tbody></table>`;
   const dl = $("dl");
-  if(dl) dl.onclick = () => {
-    const blob = new Blob([lastJsonl], {type: "application/jsonl"});
+  if(dl) dl.onclick = () => downloadRun("jsonl");
+  const dlm = $("dlm");
+  if(dlm) dlm.onclick = () => downloadRun("manifest");
+}
+
+// First-class download via the server (proper filename + Content-Disposition);
+// falls back to a client-side Blob if the endpoint is unreachable (offline).
+async function downloadRun(kind){
+  const r = lastResult || {};
+  const name = (r.input && r.input.name) || "qa_pairs.pdf";
+  try{
+    const resp = await fetch("/api/download", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        pairs: r.pairs || [], name: name, kind: kind,
+        persona: r.persona && r.persona.key, device: r.device,
+      }),
+    });
+    if(!resp.ok) throw new Error("server download failed");
+    const cd = resp.headers.get("content-disposition") || "";
+    const m = cd.match(/filename="?([^"]+)"?/);
+    const fname = m ? m[1] : (kind === "manifest" ? "manifest.json" : "qa_pairs.jsonl");
+    const blob = await resp.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = fname; a.click();
+    URL.revokeObjectURL(a.href);
+  }catch(e){
+    if(kind === "manifest") return;
+    const blob = new Blob([lastJsonl || ""], {type: "application/jsonl"});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "qa_pairs.jsonl"; a.click();
     URL.revokeObjectURL(a.href);
-  };
+  }
 }
 
 async function runExtract(){

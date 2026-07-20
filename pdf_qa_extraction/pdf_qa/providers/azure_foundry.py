@@ -174,9 +174,14 @@ class AzureFoundryProvider(LLMProvider):
         return custom_json_parser(self._llm.invoke(prompt))
 
     def generate_image_qa(
-        self, image_path: str, domain: str, num_img_questions: str, persona: str = "professor"
+        self,
+        image_path: str,
+        domain: str,
+        num_img_questions: str,
+        persona: str = "professor",
+        context: str = "",
     ) -> List[dict]:
-        instruction = build_image_instruction(domain, num_img_questions, persona)
+        instruction = build_image_instruction(domain, num_img_questions, persona, context)
         try:
             if self.mode == "agent":
                 raw = self._agent.run_image(instruction, image_path)

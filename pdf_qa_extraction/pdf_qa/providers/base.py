@@ -26,9 +26,21 @@ class LLMProvider(ABC):
 
     @abstractmethod
     def generate_image_qa(
-        self, image_path: str, domain: str, num_img_questions: str, persona: str = "professor"
+        self,
+        image_path: str,
+        domain: str,
+        num_img_questions: str,
+        persona: str = "professor",
+        context: str = "",
     ) -> List[dict]:
-        """Generate Q&A pairs from a single image file in the given ``persona`` style."""
+        """Generate Q&A pairs from a single image file in the given ``persona`` style.
+
+        ``context`` is the surrounding-document text linked to this figure (see
+        :mod:`pdf_qa.layout`); providers pass it to
+        :func:`pdf_qa.prompts.build_image_instruction` so the chart is
+        interpreted with its caption/section in view. Optional for
+        backward-compatibility (empty = the old context-free behaviour).
+        """
 
     @staticmethod
     def tag_image_source(qa_list: List[dict], image_path: str) -> List[dict]:

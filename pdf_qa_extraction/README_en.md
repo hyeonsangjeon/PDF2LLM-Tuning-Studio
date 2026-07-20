@@ -4,7 +4,7 @@
 
 This tool extracts text/tables/images from PDF documents (layout detection via onnxruntime, OCR via tesseract — the default image is a CPU slim build) and uses an LLM to automatically generate high-quality question-answer pairs from the extracted content. Through this process, document knowledge is transformed into structured QA JSONL datasets that can be used for training, fine-tuning, or knowledge base construction.
 
-The LLM provider is selected with a single environment variable `LLM_PROVIDER` — **`azure` (default, Azure AI Foundry / Azure OpenAI)**, `openai`, or `bedrock` (AWS). The core logic lives in the cloud-agnostic `pdf_qa` package, and thin per-runtime entrypoints (`run_local.py` local/container, `azureml_job.py` Azure ML, `processing.py` SageMaker) wrap it.
+The LLM provider is selected with a single environment variable `LLM_PROVIDER` — **`azure` (default, Azure AI Foundry / Azure OpenAI)**, `openai`, `bedrock` (AWS), or `ollama` (local, no credentials). The core logic lives in the cloud-agnostic `pdf_qa` package, and thin per-runtime entrypoints (`run_local.py` local/container, `run_auto.py` folder batch, `azureml_job.py` Azure ML, `processing.py` SageMaker) wrap it.
 
 > For Azure ML/Foundry setup details, see [`../azure/README.md`](../azure/README.md).
 
@@ -17,6 +17,72 @@ The LLM provider is selected with a single environment variable `LLM_PROVIDER` �
 ![GPU Container Process](../assets/images/flow.png)
 
 *The above diagram shows the complete process of extracting QA data from PDF documents. When a PDF document is input, it is converted into text blocks through the Unstructured partition extractor, and this data is processed into structured JSONL QA data using the selected LLM provider (Azure AI Foundry / OpenAI / Bedrock Claude).*
+
+## Quick Start — Dead Simple
+
+### 1) One-call function API (`extract_qa`)
+
+Turn a PDF into a Q&A JSONL in a single call. GPU/CPU auto-detection, the persona ledger, and the chart↔context linkage all apply automatically.
+
+```python
+from pdf_qa import extract_qa
+
+# From the environment (.env) only:
+pairs = extract_qa("report.pdf")
+
+# Or override just what you need (env is the baseline, kwargs win):
+extract_qa(
+    "report.pdf",
+    out="qa_pairs.jsonl",   # also write JSONL when given
+    provider="ollama",       # azure | openai | bedrock | ollama
+    persona="feynman",
+    num_questions="5",
+)
+```
+
+### 2) Environment-variable ledger (`settings.yaml` → `.env`)
+
+Every environment variable is documented in one ledger, [`pdf_qa/settings.yaml`](pdf_qa/settings.yaml) (name, default, description, which provider requires it, secret flag). Generate `.env.example` from it and validate your `.env`.
+
+```bash
+cp .env.example .env                          # copy the generated example (repo root) and fill it in
+
+python -m pdf_qa.settings --list              # show the full env-var ledger
+python -m pdf_qa.settings --check azure        # verify azure has everything it needs
+python -m pdf_qa.settings --write-env .env.example   # regenerate the example from the ledger
+```
+
+> Secrets (keys/tokens) are **never stored as values** in the ledger — `.env.example` carries only commented placeholders. Azure prefers the keyless (Entra ID) path.
+
+### 3) Container automation (Docker Compose · folder batch)
+
+A single repo-root [`docker-compose.yml`](../docker-compose.yml) runs the demo web app and folder batch on CPU/GPU.
+
+```bash
+cp .env.example .env                          # fill in provider credentials
+mkdir -p data/input data/output && cp *.pdf data/input/
+
+# Demo web app (http://localhost:8000)
+docker compose up webapp                       # CPU
+docker compose --profile gpu up webapp-gpu     # GPU (needs the NVIDIA runtime)
+
+# Folder batch: data/input/*.pdf → data/output/<name>.qa.jsonl (+ manifest.json)
+docker compose run --rm batch                  # CPU
+docker compose --profile gpu run --rm batch-gpu  # GPU
+```
+
+`run_auto.py` processes every PDF in `INPUT_DIR` into per-file JSONL, a combined `all.qa.jsonl`, and a `manifest.json` with per-document counts, persona, device, and the **chart-linkage** summary. It skips documents already done; set `OVERWRITE=1` to redo them.
+
+### 4) Chart-context extraction pipeline (figure understanding)
+
+Previously a chart PNG was sent to the vision model **alone**, with no surrounding text, yielding shallow "read the number" Q&A. Now [`pdf_qa/layout.py`](pdf_qa/layout.py) uses unstructured's **reading order, page, coordinates (bbox), and image path** to rebuild an ordered layout and link each figure to the text that explains it:
+
+- **section** = the nearest preceding `Title` before the figure
+- **before context** = the paragraphs just above the figure on the same page (up to ~3 elements / 800 chars, stopping at a Title or another figure)
+- **caption / after context** = 1–2 following elements (e.g. "Figure N", `FigureCaption`)
+- **spatial tie-break** = when coordinates exist, rank candidates by proximity to the box directly below/above the figure
+
+The linked context is injected as a **FIGURE CONTEXT** block in the vision prompt so the model interprets *what the chart shows and why it matters* — while the strict rules still force **every number/label to be read from the image**. Each image Q&A carries `page`/`section`/`figure_index`/`context_used` provenance, so it is auditable in the JSONL. (On older unstructured that doesn't expose image paths, it falls back safely to the legacy glob path; force it with `LEGACY_IMAGE_GLOB=1`.)
 
 ## Installation Guide
 
@@ -285,10 +351,10 @@ docker run --rm -e WORKERS=4 -p 8000:8000 --env-file .env $IMG python run_webapp
 
 **Two modes**
 - **Preview — offline, no cloud credentials:** partitions the PDF device-aware and shows **element/table/image counts + the actual device path + the persona-rendered prompt**. No LLM call, so you can see the **GPU acceleration strength and persona differences without any credentials**.
-- **Full — credentials required:** additionally calls the selected provider (Azure/OpenAI/Bedrock) to **generate Q&A pairs**, returning a results table + a `JSONL` download.
+- **Full — credentials required:** additionally calls the selected provider (Azure/OpenAI/Bedrock/Ollama) to **generate Q&A pairs**, returning a results table plus a **chart↔context linkage panel** (per figure: section, page, whether context was used, Q&A count). Download the results via the server endpoint (`POST /api/download`) as **`<doc>.qa.jsonl`** and **`manifest.json`** (counts + per-figure linkage); it falls back to a client-side Blob when offline.
 - **One-click sample:** with no document of your own, the **📄 Try the sample document** button previews the image-bundled `fsi_data.pdf` (International Finance) instantly, so you can inspect the GPU/CPU path and persona prompt without any credentials.
 
-> On load the UI shows a **GPU/CPU badge** (`/api/device`), the persona list with method summaries (`/api/personas`), provider-configured hints (`/api/providers`), and whether the bundled sample is available (`/api/meta`). For large / distributed workloads, see the SageMaker / Azure ML parallel processing section below.
+> On load the UI shows a **GPU/CPU badge** (`/api/device`), the persona list with method summaries (`/api/personas`), provider-configured hints incl. missing vars (`/api/providers`), the env-var ledger (`/api/settings`), and whether the bundled sample is available (`/api/meta`). For large / distributed workloads, see the SageMaker / Azure ML parallel processing section below.
 
 ## Table Extraction Model Comparison
 

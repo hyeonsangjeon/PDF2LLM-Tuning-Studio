@@ -28,17 +28,15 @@ try:
 except ModuleNotFoundError:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from pdf_qa import QAConfig, get_provider, run_pipeline
+from pdf_qa import extract_qa
 
 
 def main() -> None:
-    provider_name = os.getenv("LLM_PROVIDER", "azure")
-    pdf_path = os.getenv("PDF_PATH", "data/fsi_data.pdf")
-    output_path = os.getenv("OUTPUT_PATH", "data/qa_pairs.jsonl")
-
-    config = QAConfig.from_env()
-    provider = get_provider(provider_name, config=config)
-    run_pipeline(pdf_path, output_path, provider, config)
+    extract_qa(
+        os.getenv("PDF_PATH", "data/fsi_data.pdf"),
+        out=os.getenv("OUTPUT_PATH", "data/qa_pairs.jsonl"),
+        provider=os.getenv("LLM_PROVIDER"),
+    )
 
 
 if __name__ == "__main__":
