@@ -34,7 +34,7 @@ _IMAGE_EXTENSIONS = ("*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif")
 
 def resolve_extraction_plan(
     strategy: str = "auto",
-    table_model: Optional[str] = None,
+    hi_res_model_name: Optional[str] = None,
     gpu_boost: bool = True,
     device: Optional[DeviceReport] = None,
 ) -> dict:
@@ -48,21 +48,32 @@ def resolve_extraction_plan(
     torch). Both are far too slow to enable by default on CPU, so on a CPU host
     the pipeline stays on the light path.
 
-    An explicit ``strategy`` (anything other than ``"auto"``) or an explicit
-    ``table_model`` is always respected -- the boost only fills in defaults.
+    ``hi_res_model_name`` selects the layout-detection model (``yolox`` default,
+    ``detectron2_onnx``, ``yolox_quantized`` ...). Because that model is only
+    consulted under the ``hi_res`` strategy, an explicit choice **forces**
+    ``hi_res`` (otherwise unstructured would silently ignore it). An explicit
+    ``strategy`` other than ``"auto"`` is always respected -- the boost and the
+    model selection only fill in / escalate defaults.
 
     Returns a dict with keys ``strategy``, ``infer_table_structure``,
-    ``table_model`` and ``gpu_accelerated``.
+    ``hi_res_model_name`` and ``gpu_accelerated``.
     """
     report = device if device is not None else probe_device()
 
     effective_strategy = strategy
-    infer_tables = table_model is not None
+    # Selecting a layout model only makes sense on the hi_res path, and it
+    # implies we want the richer (layout + table) extraction.
+    infer_tables = hi_res_model_name is not None
     gpu_accelerated = False
+
+    # An explicit model must actually take effect: escalate auto -> hi_res so
+    # unstructured consults ``hi_res_model_name`` instead of ignoring it.
+    if hi_res_model_name and effective_strategy == "auto":
+        effective_strategy = "hi_res"
 
     if gpu_boost and report.gpu_ready:
         gpu_accelerated = True
-        if strategy == "auto":
+        if effective_strategy == "auto":
             # Force the layout model even for digital PDFs -> exercises the GPU.
             effective_strategy = "hi_res"
         # Turn table-structure inference on if the caller did not opt out.
@@ -70,24 +81,25 @@ def resolve_extraction_plan(
         print(
             "[extract] GPU 감지 → hi_res 레이아웃(onnxruntime-gpu) + "
             "표 구조 추론(CUDA torch)을 GPU로 실행합니다."
+            + (f" 레이아웃 모델={hi_res_model_name}." if hi_res_model_name else "")
         )
     else:
         print(
             f"[extract] CPU 경로 → strategy={effective_strategy}, "
-            f"표 추론={infer_tables}."
+            f"표 추론={infer_tables}, 레이아웃 모델={hi_res_model_name or '기본(yolox)'}."
         )
 
     return {
         "strategy": effective_strategy,
         "infer_table_structure": infer_tables,
-        "table_model": table_model,
+        "hi_res_model_name": hi_res_model_name,
         "gpu_accelerated": gpu_accelerated,
     }
 
 
 def extract_elements_from_pdf(
     filepath: str,
-    table_model: Optional[str] = None,
+    hi_res_model_name: Optional[str] = None,
     figures_dir: str = "figures",
     strategy: str = "auto",
     gpu_boost: bool = True,
@@ -97,13 +109,15 @@ def extract_elements_from_pdf(
 
     Args:
         filepath: Path to the PDF file.
-        table_model: Table detection model (``yolox``, ``tatr``,
-            ``table-transformer``, ``detectron2``, ...). ``None`` lets the GPU
-            boost decide; on CPU it disables table-structure inference.
+        hi_res_model_name: Layout-detection model for the ``hi_res`` path
+            (``yolox`` default, ``yolox_quantized``, ``detectron2_onnx`` ...).
+            Passed to ``unstructured`` as ``hi_res_model_name`` and, when set,
+            escalates ``strategy="auto"`` to ``hi_res`` so the choice actually
+            takes effect. ``None`` uses unstructured's default model.
         figures_dir: Directory where extracted image blocks are written.
         strategy: ``unstructured`` strategy (``auto`` | ``fast`` | ``hi_res`` |
             ``ocr_only``). ``auto`` is escalated to ``hi_res`` when a GPU is
-            reachable and ``gpu_boost`` is on.
+            reachable and ``gpu_boost`` is on, or when a model is selected.
         gpu_boost: When True (default), route the heavy layout + table models to
             the GPU whenever one is detected. Set False to keep the light path.
         device: Pre-computed :class:`~pdf_qa.device.DeviceReport` (probed if
@@ -117,7 +131,7 @@ def extract_elements_from_pdf(
 
     plan = resolve_extraction_plan(
         strategy=strategy,
-        table_model=table_model,
+        hi_res_model_name=hi_res_model_name,
         gpu_boost=gpu_boost,
         device=device,
     )
@@ -136,10 +150,11 @@ def extract_elements_from_pdf(
         "infer_table_structure": plan["infer_table_structure"],
     }
 
-    # Only pass an explicit table model when the caller set one (the GPU boost
-    # enables table inference with unstructured's default Table Transformer).
-    if plan["table_model"]:
-        partition_kwargs["table_model"] = plan["table_model"]
+    # Select the layout-detection model only when the caller asked for one.
+    # ``hi_res_model_name`` is the correct unstructured knob (the older
+    # ``model_name`` is deprecated); it is consulted under the hi_res strategy.
+    if plan["hi_res_model_name"]:
+        partition_kwargs["hi_res_model_name"] = plan["hi_res_model_name"]
 
     return partition_pdf(**partition_kwargs)
 

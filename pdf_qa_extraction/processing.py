@@ -56,8 +56,11 @@ def main() -> None:
                         help="GPU 감지 시 레이아웃+표 모델을 GPU로 가속 (true/false)")
     parser.add_argument("--model_id", default=None,
                         help="공급자별 모델/디플로이먼트 ID (미지정 시 공급자 기본값)")
-    parser.add_argument("--table_model", default="yolox",
-                        help="테이블 구조 추론 모델 (yolox, tatr, detectron2, ...). None이면 비활성화")
+    parser.add_argument("--table_model", default=os.getenv("TABLE_MODEL", ""),
+                        help="hi_res 레이아웃 모델 선택(unstructured의 hi_res_model_name): "
+                             "yolox(기본) | yolox_quantized | detectron2_onnx ... "
+                             "지정하면 strategy=auto가 hi_res로 승격돼 실제 적용됩니다. "
+                             "비우면 auto/GPU 부스트가 결정")
     parser.add_argument("--pdf", default=None, help="입력 PDF 경로(선택)")
     parser.add_argument("--output", default=os.path.join(OUTPUT_DIR, "qa_pairs.jsonl"))
     args = parser.parse_args()

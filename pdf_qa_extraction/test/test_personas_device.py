@@ -242,7 +242,7 @@ def test_cpu_plan_stays_light():
     assert plan == {
         "strategy": "auto",
         "infer_table_structure": False,
-        "table_model": None,
+        "hi_res_model_name": None,
         "gpu_accelerated": False,
     }
 
@@ -267,7 +267,11 @@ def test_explicit_strategy_is_respected_on_gpu():
     assert plan["infer_table_structure"] is True  # tables still enabled by boost
 
 
-def test_explicit_table_model_passed_through():
-    plan = resolve_extraction_plan("hi_res", "yolox", gpu_boost=True, device=_cpu_report())
-    assert plan["table_model"] == "yolox"
+def test_explicit_layout_model_selected_and_forces_hires():
+    # An explicit layout model must actually reach unstructured: it is surfaced
+    # as hi_res_model_name AND escalates auto -> hi_res so it is not ignored.
+    plan = resolve_extraction_plan("auto", "detectron2_onnx", gpu_boost=False,
+                                   device=_cpu_report())
+    assert plan["hi_res_model_name"] == "detectron2_onnx"
+    assert plan["strategy"] == "hi_res"
     assert plan["infer_table_structure"] is True

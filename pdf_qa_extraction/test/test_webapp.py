@@ -68,13 +68,16 @@ def test_device_endpoint_reports_gpu_readiness():
     assert data["summary"]
 
 
-def test_providers_endpoint_lists_three_backends():
+def test_providers_endpoint_lists_backends_including_local_ollama():
     resp = client.get("/api/providers")
     assert resp.status_code == 200
     data = resp.json()
-    names = {p["name"] for p in data["providers"]}
-    assert names == {"azure", "openai", "bedrock"}
+    by_name = {p["name"]: p for p in data["providers"]}
+    assert set(by_name) == {"azure", "openai", "bedrock", "ollama"}
     assert all("configured" in p for p in data["providers"])
+    # Ollama is local / credential-free: always selectable, flagged as local.
+    assert by_name["ollama"]["local"] is True
+    assert by_name["ollama"]["configured"] is True
 
 
 def test_extract_rejects_non_pdf():

@@ -107,11 +107,13 @@ Unstructured는 PDF에서 콘텐츠를 추출하고 처리하기 위한 강력�
 **모델 선택 방법 (여러 개 중 고르기)**
 - **전략**: `partition_pdf(strategy=...)` — `"fast"`(pdfminer, 모델 없음) · `"hi_res"`(레이아웃+선택적
   OCR/표) · `"ocr_only"`(Tesseract) · `"auto"`(기본, 문서/옵션에 따라 자동 선택).
-- **레이아웃 모델**: `hi_res_model_name=` 인자 또는 `UNSTRUCTURED_DEFAULT_MODEL_NAME` 환경변수.
+- **레이아웃 모델**: `hi_res_model_name=` 인자 또는 `UNSTRUCTURED_HI_RES_MODEL_NAME` 환경변수.
   선택지: `yolox`(기본) · `yolox_tiny` · `yolox_quantized` · `detectron2_onnx` · `detectron2_quantized`
-  · `detectron2_mask_rcnn` (모두 ONNX → `:latest-gpu`에선 onnxruntime-gpu로 GPU 실행).
-- **표 인식**: `infer_table_structure=True` → Table Transformer(PyTorch). 이 저장소에선 `TABLE_MODEL`
-  환경변수로 켭니다.
+  · `detectron2_mask_rcnn` (모두 ONNX → `:latest-gpu`에선 onnxruntime-gpu로 GPU 실행). **이 저장소에선
+  `TABLE_MODEL`(또는 `HI_RES_MODEL_NAME`) 환경변수가 이 `hi_res_model_name`으로 그대로 전달**되며, 값을
+  지정하면 모델이 실제로 적용되도록 `strategy=auto`를 자동으로 `hi_res`로 승격합니다.
+- **표 인식**: `infer_table_structure=True` → Table Transformer(PyTorch). 이 저장소에선 레이아웃 모델을
+  고르면(`TABLE_MODEL` 지정) 함께 켜지고, GPU 부스트 경로에서도 자동으로 활성화됩니다.
 
 > **참고 — 예전 이미지에서 3080이 돌던 이유**: 구버전 unstructured는 레이아웃 기본 모델로 **PyTorch
 > detectron2**(layoutparser)를 썼기 때문에 CUDA torch만으로도 레이아웃이 GPU를 탔습니다. 현재 버전은
@@ -204,11 +206,11 @@ docker run --rm --gpus all -e PERSONA=analyst \
 
 **☁️ Azure AI Foundry / Azure OpenAI 사용 시 (기본, `LLM_PROVIDER=azure`)**
 - `AZURE_MODE`: `openai`(기본) 또는 `agent`(Foundry Agent Service)
-- `AZURE_OPENAI_ENDPOINT`: 예) `https://<res>.openai.azure.com/`
+- `AZURE_OPENAI_ENDPOINT`: 예) `https://<res>.openai.azure.com/` (**필수** — 없으면 즉시 명확한 에러로 실패)
 - `AZURE_OPENAI_DEPLOYMENT`: 배포 이름 (예: gpt-4o)
 - `AZURE_OPENAI_API_VERSION`: 예) 2024-10-21
-- `AZURE_OPENAI_API_KEY`: (선택) 미설정 시 `DefaultAzureCredential`(Managed Identity / `az login`)로 키리스 인증
-- (agent 모드) `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_AGENT_MODEL`
+- `AZURE_OPENAI_API_KEY`: (선택) **미설정이 기본 권장** — 이때 **Entra ID 키리스**(`DefaultAzureCredential`: Managed Identity / `az login`)로 **한 번에 기동**됩니다. 토큰 스코프는 `AZURE_OPENAI_TOKEN_SCOPE`로 재정의 가능
+- (agent 모드) `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_AGENT_MODEL` — 같은 Entra ID 자격 증명을 공유해 openai/agent 모두 단일 로그인으로 기동
 
 **🟧 AWS Bedrock 사용 시 (`LLM_PROVIDER=bedrock`)**
 - `AWS_REGION`: AWS 리전 (예: us-east-1)
@@ -217,6 +219,11 @@ docker run --rm --gpus all -e PERSONA=analyst \
 
 **OpenAI 사용 시 (`LLM_PROVIDER=openai`)**
 - `OPENAI_API_KEY`: OpenAI API 키
+
+**🖥️ 로컬 Ollama 사용 시 (`LLM_PROVIDER=ollama`, 자격 증명 불필요)**
+- `OLLAMA_MODEL`: 모델 태그 (기본 `llama3.1`; 이미지 Q&A는 `llama3.2-vision`·`llava` 등 멀티모달 태그)
+- `OLLAMA_BASE_URL`: 서버 URL (기본 `http://localhost:11434`)
+- 로컬에 Ollama 서버가 떠 있고 모델을 받아둬야 합니다(`ollama pull llama3.1`). 클라우드 자격 증명은 필요 없습니다.
 
 #### 2. 🖥️ 로컬 데모 웹앱 (싱글 노드)
 
@@ -376,6 +383,25 @@ LLM_PROVIDER=openai
 
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key_here
+
+# Press ESC and type :wq to save and exit
+```
+
+**🖥️ 로컬 Ollama 사용 시 (자격 증명 불필요):**
+```bash
+# App Setting
+PDF_PATH=data/fsi_data.pdf
+DOMAIN=International Finance
+NUM_QUESTIONS=5
+NUM_IMG_QUESTIONS=1
+TABLE_MODEL=yolox
+
+# LLM Provider
+LLM_PROVIDER=ollama
+
+# Ollama Configuration (로컬 서버 — ollama serve + ollama pull llama3.1)
+OLLAMA_MODEL=llama3.1
+OLLAMA_BASE_URL=http://localhost:11434
 
 # Press ESC and type :wq to save and exit
 ```

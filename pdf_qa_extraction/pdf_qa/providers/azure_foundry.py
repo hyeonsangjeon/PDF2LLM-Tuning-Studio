@@ -8,16 +8,21 @@ Two interchangeable modes (env ``AZURE_MODE``):
   versioned "professor" agent - through ``azure-ai-projects`` /
   ``azure-ai-agents``. Showcases Foundry's agentic capabilities.
 
-Authentication:
-  * ``AZURE_OPENAI_API_KEY`` -> API-key auth.
-  * Otherwise ``DefaultAzureCredential`` (Managed Identity / Entra ID) is used,
-    which is the recommended pattern on Azure ML.
+Authentication - **Entra ID first, one-shot bring-up**
+------------------------------------------------------
+Keyless **Microsoft Entra ID** is the default and recommended path: when no
+``AZURE_OPENAI_API_KEY`` is set, a single process-wide
+``DefaultAzureCredential`` (Managed Identity on Azure, ``az login`` locally) is
+resolved once and **shared** by both the Azure OpenAI token provider and the
+Foundry Agent client - so one sign-in / token cache boots the whole app in one
+go. Set ``AZURE_OPENAI_API_KEY`` to opt into API-key auth instead. The token
+scope can be overridden with ``AZURE_OPENAI_TOKEN_SCOPE``.
 
 Required environment variables
 ------------------------------
 openai mode:
   AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT (or MODEL_ID),
-  AZURE_OPENAI_API_VERSION (optional), AZURE_OPENAI_API_KEY (optional)
+  AZURE_OPENAI_API_VERSION (optional), AZURE_OPENAI_API_KEY (optional -> keyless)
 agent mode:
   AZURE_AI_PROJECT_ENDPOINT, AZURE_AI_AGENT_MODEL (or MODEL_ID)
 """
@@ -34,6 +39,8 @@ from .base import LLMProvider
 
 _DEFAULT_DEPLOYMENT = "gpt-4o"
 _DEFAULT_API_VERSION = "2024-10-21"
+# Entra ID token audience for Azure OpenAI / Cognitive Services.
+_DEFAULT_TOKEN_SCOPE = "https://cognitiveservices.azure.com/.default"
 
 # Persona-neutral base instruction for the Foundry Agent; the per-request prompt
 # carries the concrete role/persona (see pdf_qa.prompts) and the task/format.
@@ -42,6 +49,35 @@ _AGENT_INSTRUCTIONS = (
     "Adopt the role and follow the formatting instructions in each user message "
     "exactly, always answer in Korean, and return only the requested JSON block."
 )
+
+# Process-wide credential, resolved lazily and reused everywhere.
+_SHARED_CREDENTIAL = None
+
+
+def azure_credential():
+    """Return a single, process-wide ``DefaultAzureCredential`` (Entra ID).
+
+    Reused by both the Azure OpenAI token provider and the Foundry Agent client
+    so one sign-in / Managed Identity token cache serves the whole app. This is
+    what lets the provider come up keyless in a single shot.
+    """
+    global _SHARED_CREDENTIAL
+    if _SHARED_CREDENTIAL is None:
+        from azure.identity import DefaultAzureCredential
+
+        _SHARED_CREDENTIAL = DefaultAzureCredential()
+    return _SHARED_CREDENTIAL
+
+
+def _token_scope() -> str:
+    return os.getenv("AZURE_OPENAI_TOKEN_SCOPE", _DEFAULT_TOKEN_SCOPE)
+
+
+def _bearer_token_provider():
+    """Entra ID bearer-token provider bound to the shared credential + scope."""
+    from azure.identity import get_bearer_token_provider
+
+    return get_bearer_token_provider(azure_credential(), _token_scope())
 
 
 class AzureFoundryProvider(LLMProvider):
@@ -60,6 +96,7 @@ class AzureFoundryProvider(LLMProvider):
         self.mode = (mode or os.getenv("AZURE_MODE", "openai")).strip().lower()
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.auth_mode = "entra-id"
 
         if self.mode == "agent":
             self.model_id = (
@@ -68,7 +105,6 @@ class AzureFoundryProvider(LLMProvider):
             )
             self._agent = _FoundryAgentBackend(self.model_id, _AGENT_INSTRUCTIONS)
             self.name = "azure-foundry-agent"
-            print(f"[AzureFoundryProvider:agent] model={self.model_id}")
         else:
             self.model_id = (
                 model_id or os.getenv("AZURE_OPENAI_DEPLOYMENT") or os.getenv("MODEL_ID")
@@ -76,7 +112,6 @@ class AzureFoundryProvider(LLMProvider):
             )
             self._llm = self._build_azure_openai(streaming)
             self.name = "azure-foundry-openai"
-            print(f"[AzureFoundryProvider:openai] deployment={self.model_id}")
 
     # ------------------------------------------------------------------
     # openai mode
@@ -86,6 +121,13 @@ class AzureFoundryProvider(LLMProvider):
         from langchain_openai import AzureChatOpenAI
 
         endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        if not endpoint:
+            # Fail fast with an actionable message so bring-up is one-shot.
+            raise ValueError(
+                "AZURE_OPENAI_ENDPOINT is required for the Azure Foundry provider "
+                "(e.g. https://<resource>.openai.azure.com/). Set it in your .env "
+                "or environment."
+            )
         api_version = (
             os.getenv("AZURE_OPENAI_API_VERSION")
             or os.getenv("OPENAI_API_VERSION")
@@ -104,16 +146,21 @@ class AzureFoundryProvider(LLMProvider):
 
         api_key = os.getenv("AZURE_OPENAI_API_KEY")
         if api_key:
+            self.auth_mode = "api-key"
+            print(
+                f"[AzureFoundryProvider:openai] endpoint={endpoint} "
+                f"deployment={self.model_id} auth=api-key"
+            )
             return AzureChatOpenAI(api_key=api_key, **common)
 
-        # Keyless: Managed Identity / Entra ID (recommended on Azure ML).
-        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-
-        token_provider = get_bearer_token_provider(
-            DefaultAzureCredential(),
-            "https://cognitiveservices.azure.com/.default",
+        # Keyless: shared Entra ID credential (Managed Identity / az login).
+        self.auth_mode = "entra-id"
+        print(
+            f"[AzureFoundryProvider:openai] endpoint={endpoint} "
+            f"deployment={self.model_id} auth=entra-id "
+            f"(DefaultAzureCredential, scope={_token_scope()})"
         )
-        return AzureChatOpenAI(azure_ad_token_provider=token_provider, **common)
+        return AzureChatOpenAI(azure_ad_token_provider=_bearer_token_provider(), **common)
 
     # ------------------------------------------------------------------
     # public API
@@ -181,15 +228,19 @@ class _FoundryAgentBackend:
 
     def __init__(self, model: str, instructions: str) -> None:
         from azure.ai.projects import AIProjectClient
-        from azure.identity import DefaultAzureCredential
 
         endpoint = os.getenv("AZURE_AI_PROJECT_ENDPOINT") or os.getenv("PROJECT_ENDPOINT")
         if not endpoint:
             raise ValueError(
                 "AZURE_AI_PROJECT_ENDPOINT is required when AZURE_MODE=agent"
             )
+        # Same shared Entra ID credential as the openai path -> one-shot bring-up.
+        print(
+            f"[AzureFoundryProvider:agent] endpoint={endpoint} model={model} "
+            f"auth=entra-id (DefaultAzureCredential)"
+        )
         self._project = AIProjectClient(
-            endpoint=endpoint, credential=DefaultAzureCredential()
+            endpoint=endpoint, credential=azure_credential()
         )
         self._agents = self._project.agents
         self._agent = self._agents.create_agent(

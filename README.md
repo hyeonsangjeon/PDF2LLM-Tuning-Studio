@@ -9,7 +9,7 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
 ## 📚 주요 기능
 
 - **경량 PDF 추출**: Unstructured 라이브러리로 텍스트/표/이미지 추출 (CPU 슬림 이미지 `:latest` ~2GB, 레이아웃+표를 GPU로 가속하는 `:latest-gpu` ~8GB는 선택)
-- **Q&A 자동 생성 (멀티 공급자)**: Azure AI Foundry(Azure OpenAI · Foundry Agent), OpenAI, Amazon Bedrock Claude 중 환경 변수 하나로 전환
+- **Q&A 자동 생성 (멀티 공급자)**: Azure AI Foundry(Azure OpenAI · Foundry Agent), OpenAI, Amazon Bedrock Claude, **로컬 Ollama**(자격 증명 불필요) 중 환경 변수 하나로 전환. Azure는 **Entra ID 키리스 인증으로 한 번에 기동**(키 없이 `DefaultAzureCredential`)
 - **다중 페르소나**: `PERSONA`로 교수·소크라테스식 튜터·실무 컨설턴트·기술 면접관·리서치 분석가·파인만(쉬운 설명)·자서전 저자(1인칭 회고) 등 **서로 다른 방식**을 전환해 하나의 PDF로 여러 파인튜닝 데이터셋 생성. 페르소나는 `pdf_qa/personas.yaml` 원장에서 관리하며 `PERSONA_FILE`로 외부 파일 지정 가능
 - **GPU 자동 가속(디바이스 인지)**: 실행 시 GPU를 점검해 감지되면 `hi_res` 레이아웃(onnxruntime-gpu)+표 구조(CUDA torch)를 자동으로 GPU에 태우고, CPU에서는 경량 경로 유지
 - **클라우드 무관 코어 패키지**: `pdf_qa` 패키지 + 공급자 플러그인 구조로 코드 중복 제거, 런타임별 얇은 진입점
@@ -24,7 +24,7 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
                            │
              ┌─────────────▼──────────────┐
              │  pdf_qa 코어 패키지 (파싱·프롬프트·파이프라인)  │
-             │  providers: azure · openai · bedrock         │
+             │  providers: azure · openai · bedrock · ollama │
              └─────────────┬──────────────┘
                            │  빌드/배포
         ghcr.io/.../pdf-qa-extractor  (공개 경량 컨테이너 이미지 1개)
@@ -64,7 +64,7 @@ PDF2LLM-Tuning-Studio/
 │   ├── pdf_qa/              # ⭐ 클라우드 무관 코어 패키지
 │   │   ├── config.py · parsing.py · prompts.py · extract.py · pipeline.py · device.py
 │   │   ├── personas.yaml    # 🎭 페르소나 원장 (YAML, PERSONA_FILE로 외부 지정 가능)
-│   │   └── providers/       # azure_foundry · openai · bedrock (+ base 팩토리)
+│   │   └── providers/       # azure_foundry · openai · bedrock · ollama (+ base 팩토리)
 │   ├── webapp/              # 🖥️ 로컬 데모 웹앱 (FastAPI, in-process 파이프라인)
 │   │   ├── app.py           # /api/{personas,device,providers,extract} 엔드포인트
 │   │   └── static/index.html    # 싱글 페이지 UI (GPU/CPU 배지, 페르소나 선택)
@@ -119,16 +119,25 @@ AZURE_MODE=openai
 AZURE_OPENAI_ENDPOINT=https://<res>.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=gpt-4o
 AZURE_OPENAI_API_VERSION=2024-10-21
-# 키 대신 Managed Identity/az login 사용 시 API_KEY 생략
+# 키 대신 Managed Identity/az login 사용 시 API_KEY 생략 → Entra ID로 한 번에 기동
 PDF_PATH=data/fsi_data.pdf
 DOMAIN=International Finance
 NUM_QUESTIONS=5
 NUM_IMG_QUESTIONS=1
+# hi_res 레이아웃 모델 선택(=unstructured의 hi_res_model_name): yolox(기본)·detectron2_onnx 등
 TABLE_MODEL=yolox
 ```
 
 - **Azure ML 배치 잡**으로 실행: [`azure/README.md`](./azure/README.md), `azure/azureml_job.yml`, `azure/azureml_pdf_qa_extraction.ipynb`
 - **Foundry Agent Service**(교수 페르소나 에이전트)로 생성: `azure/foundry_agent_quickstart.ipynb` (`AZURE_MODE=agent`)
+
+#### 🖥️ 로컬 Ollama (also supported, 자격 증명 불필요)
+
+```bash
+# 로컬에서 Ollama 서버를 띄우고 모델을 받은 뒤(예: ollama pull llama3.1)
+LLM_PROVIDER=ollama OLLAMA_MODEL=llama3.1 \
+  OLLAMA_BASE_URL=http://localhost:11434 python run_local.py
+```
 
 #### 🟧 AWS (also supported)
 

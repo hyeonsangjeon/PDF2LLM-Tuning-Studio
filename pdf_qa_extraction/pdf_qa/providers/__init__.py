@@ -22,6 +22,8 @@ _ALIASES = {
     "bedrock": "bedrock",
     "aws": "bedrock",
     "openai": "openai",
+    "ollama": "ollama",
+    "local": "ollama",
 }
 
 
@@ -29,15 +31,15 @@ def get_provider(name: Optional[str] = None, config=None, **kwargs) -> LLMProvid
     """Instantiate an :class:`LLMProvider`.
 
     Args:
-        name: ``azure`` (default) | ``bedrock`` | ``openai`` and aliases. Falls
-            back to the ``LLM_PROVIDER`` env var, then ``azure``.
+        name: ``azure`` (default) | ``bedrock`` | ``openai`` | ``ollama`` and
+            aliases. Falls back to the ``LLM_PROVIDER`` env var, then ``azure``.
         config: Optional :class:`~pdf_qa.config.QAConfig`; its ``model_id`` is
             used when not passed explicitly.
     """
     name = (name or os.getenv("LLM_PROVIDER", "azure")).strip().lower()
     key = _ALIASES.get(name)
     if key is None:
-        valid = "azure | bedrock | openai"
+        valid = "azure | bedrock | openai | ollama"
         raise ValueError(f"Unknown LLM provider '{name}'. Valid options: {valid}")
 
     if "model_id" not in kwargs and config is not None:
@@ -55,6 +57,10 @@ def get_provider(name: Optional[str] = None, config=None, **kwargs) -> LLMProvid
         from .openai import OpenAIProvider
 
         return OpenAIProvider(**kwargs)
+    if key == "ollama":
+        from .ollama import OllamaProvider
+
+        return OllamaProvider(**kwargs)
 
     raise ValueError(f"Unhandled provider key: {key}")  # pragma: no cover
 

@@ -54,7 +54,9 @@ def main() -> None:
     parser.add_argument("--gpu_boost", default=os.getenv("GPU_BOOST", "true"),
                         help="GPU 감지 시 레이아웃+표 모델을 GPU로 가속 (true/false)")
     parser.add_argument("--model_id", default=None)
-    parser.add_argument("--table_model", default="yolox")
+    parser.add_argument("--table_model", default=os.getenv("TABLE_MODEL", ""),
+                        help="hi_res 레이아웃 모델 선택(unstructured의 hi_res_model_name): "
+                             "yolox | detectron2_onnx ... 지정 시 auto→hi_res 승격")
     args = parser.parse_args()
 
     config = QAConfig.from_args(args)

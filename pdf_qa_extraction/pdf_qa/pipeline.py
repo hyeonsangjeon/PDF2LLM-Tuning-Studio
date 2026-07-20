@@ -30,7 +30,7 @@ def generate_qa_pairs(
 
     elements = extract_elements_from_pdf(
         pdf_path,
-        table_model=config.table_model,
+        hi_res_model_name=config.table_model,
         figures_dir=config.figures_dir,
         strategy=config.strategy,
         gpu_boost=config.gpu_boost,

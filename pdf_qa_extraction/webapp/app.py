@@ -47,7 +47,12 @@ _PROVIDER_ENV_HINTS = {
     ),
     "openai": ("OPENAI_API_KEY",),
     "bedrock": ("AWS_ACCESS_KEY_ID", "AWS_PROFILE", "AWS_DEFAULT_REGION", "AWS_REGION"),
+    "ollama": ("OLLAMA_BASE_URL", "OLLAMA_HOST", "OLLAMA_MODEL"),
 }
+
+# Providers that need no cloud credentials (run locally). They are always
+# selectable; the UI shows them as "local" rather than "needs credentials".
+_CREDENTIAL_FREE = {"ollama"}
 
 
 def _persona_payload() -> dict:
@@ -77,8 +82,10 @@ def _device_payload() -> dict:
 def _providers_payload() -> dict:
     providers = []
     for name, hints in _PROVIDER_ENV_HINTS.items():
-        configured = any(os.environ.get(h) for h in hints)
-        providers.append({"name": name, "configured": configured})
+        local = name in _CREDENTIAL_FREE
+        # Local providers need no credentials, so they are always "configured".
+        configured = True if local else any(os.environ.get(h) for h in hints)
+        providers.append({"name": name, "configured": configured, "local": local})
     return {
         "default": os.environ.get("LLM_PROVIDER", "azure"),
         "providers": providers,
@@ -261,7 +268,7 @@ def create_app() -> FastAPI:
 
             plan = resolve_extraction_plan(
                 strategy=config.strategy,
-                table_model=config.table_model,
+                hi_res_model_name=config.table_model,
                 gpu_boost=config.gpu_boost,
                 device=device,
             )
@@ -290,7 +297,7 @@ def create_app() -> FastAPI:
                 try:
                     elements = extract_elements_from_pdf(
                         pdf_path,
-                        table_model=config.table_model,
+                        hi_res_model_name=config.table_model,
                         figures_dir=config.figures_dir,
                         strategy=config.strategy,
                         gpu_boost=config.gpu_boost,

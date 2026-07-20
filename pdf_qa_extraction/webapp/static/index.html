@@ -208,14 +208,20 @@ async function loadProviders(){
   d.providers.forEach(p => {
     const o = document.createElement("option");
     o.value = p.name;
-    o.textContent = p.name + (p.configured ? "  ✓ 자격증명 감지" : "  · 미설정");
+    const tag = p.local ? "  · 로컬(자격증명 불필요)"
+                        : (p.configured ? "  ✓ 자격증명 감지" : "  · 미설정");
+    o.textContent = p.name + tag;
+    o.dataset.local = p.local ? "1" : "";
     if(p.name === d.default) o.selected = true;
     sel.appendChild(o);
   });
   const upd = () => { const o = sel.selectedOptions[0];
-    $("providerHint").textContent = o && o.textContent.includes("미설정")
-      ? "이 공급자의 자격 증명이 .env에 없어 보입니다 — 전체 실행이 실패할 수 있어요."
-      : ""; };
+    let msg = "";
+    if(o && o.dataset.local)
+      msg = "로컬 Ollama 서버(기본 http://localhost:11434)와 모델(OLLAMA_MODEL)이 필요합니다 — 클라우드 자격 증명은 불필요.";
+    else if(o && o.textContent.includes("미설정"))
+      msg = "이 공급자의 자격 증명이 .env에 없어 보입니다 — 전체 실행이 실패할 수 있어요.";
+    $("providerHint").textContent = msg; };
   sel.onchange = upd; upd();
 }
 

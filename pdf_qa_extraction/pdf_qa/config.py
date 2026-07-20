@@ -38,13 +38,15 @@ class QAConfig:
     domain: str = "International Finance"
     num_questions: str = "5"
     num_img_questions: str = "1"
+    # Layout-detection model for the ``hi_res`` path (``yolox`` default,
+    # ``detectron2_onnx``, ``yolox_quantized`` ...). Passed to unstructured as
+    # ``hi_res_model_name``; env ``TABLE_MODEL`` (legacy) or ``HI_RES_MODEL_NAME``.
     table_model: Optional[str] = None
     figures_dir: str = "figures"
     # Q&A persona/style (see ``pdf_qa.prompts.PERSONAS`` / ``personas.yaml``):
     # professor (default), socratic, consultant, interviewer, analyst, feynman,
     # memoirist. The ledger is editable and overridable via ``PERSONA_FILE``.
-    persona: str = "professor"
-    # ``unstructured`` strategy: auto | fast | hi_res | ocr_only. ``auto`` is
+    persona: str = "professor"    # ``unstructured`` strategy: auto | fast | hi_res | ocr_only. ``auto`` is
     # escalated to ``hi_res`` when a GPU is detected and ``gpu_boost`` is on.
     strategy: str = "auto"
     # Route the heavy layout + table models to the GPU when one is reachable.
@@ -60,7 +62,11 @@ class QAConfig:
             domain=os.environ.get("DOMAIN", "International Finance"),
             num_questions=os.environ.get("NUM_QUESTIONS", "5"),
             num_img_questions=os.environ.get("NUM_IMG_QUESTIONS", "1"),
-            table_model=_clean_optional(os.environ.get("TABLE_MODEL")),
+            table_model=_clean_optional(
+                os.environ.get("TABLE_MODEL")
+                or os.environ.get("HI_RES_MODEL_NAME")
+                or os.environ.get("UNSTRUCTURED_HI_RES_MODEL_NAME")
+            ),
             figures_dir=os.environ.get("FIGURES_DIR", "figures"),
             persona=os.environ.get("PERSONA", "professor"),
             strategy=os.environ.get("STRATEGY", "auto"),

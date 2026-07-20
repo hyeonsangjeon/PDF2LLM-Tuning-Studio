@@ -115,12 +115,16 @@ torch + onnxruntime-gpu**):
 - **Strategy**: `partition_pdf(strategy=...)` — `"fast"` (pdfminer, no model),
   `"hi_res"` (layout + optional OCR/table), `"ocr_only"` (Tesseract), `"auto"`
   (default; picks per document/options).
-- **Layout model**: `hi_res_model_name=` arg or `UNSTRUCTURED_DEFAULT_MODEL_NAME`
+- **Layout model**: `hi_res_model_name=` arg or `UNSTRUCTURED_HI_RES_MODEL_NAME`
   env. Options: `yolox` (default), `yolox_tiny`, `yolox_quantized`,
   `detectron2_onnx`, `detectron2_quantized`, `detectron2_mask_rcnn` (all ONNX →
-  run on the GPU via onnxruntime-gpu in `:latest-gpu`).
+  run on the GPU via onnxruntime-gpu in `:latest-gpu`). **In this repo the
+  `TABLE_MODEL` (or `HI_RES_MODEL_NAME`) env var is passed straight through as
+  this `hi_res_model_name`**, and setting it auto-escalates `strategy=auto` to
+  `hi_res` so the chosen model actually takes effect.
 - **Table**: `infer_table_structure=True` → Table Transformer (PyTorch). Enabled
-  here via the `TABLE_MODEL` env var.
+  here whenever a layout model is chosen (`TABLE_MODEL` set) and on the GPU-boost
+  path.
 
 > **Why your 3080 lit up on the old image**: older unstructured used a **PyTorch
 > detectron2** (layoutparser) layout model by default, so CUDA torch alone put
@@ -217,11 +221,11 @@ docker run --rm --gpus all -e PERSONA=analyst \
 
 **☁️ For Azure AI Foundry / Azure OpenAI (default, `LLM_PROVIDER=azure`)**
 - `AZURE_MODE`: `openai` (default) or `agent` (Foundry Agent Service)
-- `AZURE_OPENAI_ENDPOINT`: e.g., `https://<res>.openai.azure.com/`
+- `AZURE_OPENAI_ENDPOINT`: e.g., `https://<res>.openai.azure.com/` (**required** — missing it fails fast with a clear message)
 - `AZURE_OPENAI_DEPLOYMENT`: deployment name (e.g., gpt-4o)
 - `AZURE_OPENAI_API_VERSION`: e.g., 2024-10-21
-- `AZURE_OPENAI_API_KEY`: (optional) keyless via `DefaultAzureCredential` (Managed Identity / `az login`) when unset
-- (agent mode) `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_AGENT_MODEL`
+- `AZURE_OPENAI_API_KEY`: (optional) **leaving it unset is the recommended default** — the provider then boots keyless in one shot via **Entra ID** (`DefaultAzureCredential`: Managed Identity / `az login`). Override the token audience with `AZURE_OPENAI_TOKEN_SCOPE`
+- (agent mode) `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_AGENT_MODEL` — shares the same Entra ID credential, so openai/agent both come up from a single sign-in
 
 **🟧 For AWS Bedrock (`LLM_PROVIDER=bedrock`)**
 - `AWS_REGION`: AWS region (e.g., us-east-1)
@@ -230,6 +234,11 @@ docker run --rm --gpus all -e PERSONA=analyst \
 
 **For OpenAI (`LLM_PROVIDER=openai`)**
 - `OPENAI_API_KEY`: OpenAI API key
+
+**🖥️ For local Ollama (`LLM_PROVIDER=ollama`, no credentials)**
+- `OLLAMA_MODEL`: model tag (default `llama3.1`; use a multimodal tag like `llama3.2-vision` / `llava` for image Q&A)
+- `OLLAMA_BASE_URL`: server URL (default `http://localhost:11434`)
+- Needs a running Ollama server with the model pulled (`ollama pull llama3.1`). No cloud credentials required.
 
 #### 2. 🖥️ Local Demo Web App (Single Node)
 
@@ -389,6 +398,25 @@ LLM_PROVIDER=openai
 
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key_here
+
+# Press ESC and type :wq to save and exit
+```
+
+**🖥️ For local Ollama (no credentials):**
+```bash
+# App Setting
+PDF_PATH=data/fsi_data.pdf
+DOMAIN=International Finance
+NUM_QUESTIONS=5
+NUM_IMG_QUESTIONS=1
+TABLE_MODEL=yolox
+
+# LLM Provider
+LLM_PROVIDER=ollama
+
+# Ollama Configuration (local server — ollama serve + ollama pull llama3.1)
+OLLAMA_MODEL=llama3.1
+OLLAMA_BASE_URL=http://localhost:11434
 
 # Press ESC and type :wq to save and exit
 ```

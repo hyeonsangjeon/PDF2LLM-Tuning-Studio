@@ -44,6 +44,10 @@ openai = [
     "langchain-openai>=0.2",
     "openai>=1.40",
 ]
+# Ollama - local, credential-free models (Llama, Qwen, llava ...)
+ollama = [
+    "langchain-ollama>=0.2",
+]
 # Single-node local demo web app (thin UI over the in-process pipeline)
 webapp = [
     "fastapi>=0.110",
