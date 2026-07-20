@@ -172,17 +172,17 @@ Common: `PDF_PATH`, `DOMAIN`, `NUM_QUESTIONS`, `NUM_IMG_QUESTIONS`, `TABLE_MODEL
 
 ##### 🎭 Personas (choosing the Q&A style)
 
-One PDF can seed **several different fine-tuning datasets**. The `PERSONA` env var (or `--persona`) swaps the role the model plays and its question/answer style. Each persona follows a **genuinely different method (방식)**, while the output JSON schema (`QUESTION`/`ANSWER`) stays the same.
+One PDF can seed **several different fine-tuning datasets**. The `PERSONA` env var (or `--persona`) swaps the role the model plays and its question/answer style. Each persona follows a **genuinely different method**, while the output JSON schema (`QUESTION`/`ANSWER`) stays the same.
 
 | `PERSONA` | Role | Method |
 |---|---|---|
 | `professor` (default) | Teacher/Professor | Exam-setter method — broad, single-answer factual questions |
-| `socratic` | Socratic tutor | "Why/how" prompts; answers reason 근거→과정→결론 step by step |
+| `socratic` | Socratic tutor | "Why/how" prompts; answers reason step by step (evidence → process → conclusion) |
 | `consultant` | Senior practitioner | Decision/risk/implication-oriented advisory Q&A |
 | `interviewer` | Technical interviewer | Escalating interview questions with concise model answers |
 | `analyst` | Research analyst | Synthesis/comparison across the document, drawing implications |
 | `feynman` | Feynman (plain talk) | First-principles + everyday analogies, no jargon (Feynman technique) |
-| `memoirist` | Autobiographer (1st person) | Recounts a life story in the first person ("나는…") — events, people, feelings, decisions and lessons — without inventing anything absent from the context |
+| `memoirist` | Autobiographer (1st person) | Recounts a life story in the first person ("I…") — events, people, feelings, decisions and lessons — without inventing anything absent from the context |
 
 > Personas live in a **YAML ledger (`pdf_qa/personas.yaml`)**, not in code. Edit that file to tweak wording/methods or add new personas, or point the `PERSONA_FILE` env var at your own external YAML to manage a separate ledger.
 
@@ -200,7 +200,7 @@ PERSONA_FILE=/path/to/my_personas.yaml PERSONA=feynman python run_local.py
 
 ##### ⚡ Automatic GPU acceleration (device-aware logic)
 
-At startup the pipeline **probes the device** and logs it ("디바이스 점검(GPU/CPU)"). When a GPU is actually reachable (`torch.cuda.is_available()` = NVIDIA driver present) it **routes the heavier, higher-quality path to the GPU automatically**:
+At startup the pipeline **probes the device** and logs a device-check banner (GPU/CPU). When a GPU is actually reachable (`torch.cuda.is_available()` = NVIDIA driver present) it **routes the heavier, higher-quality path to the GPU automatically**:
 
 - with `STRATEGY=auto` (default), a detected GPU **escalates to `hi_res`**, so the layout model (YOLOX/detectron2_onnx) runs on **onnxruntime-gpu**;
 - **table-structure inference (Table Transformer, CUDA torch)** is turned on automatically (it is too slow to enable by default on CPU);
