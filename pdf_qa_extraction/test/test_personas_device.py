@@ -275,3 +275,15 @@ def test_explicit_layout_model_selected_and_forces_hires():
     assert plan["hi_res_model_name"] == "detectron2_onnx"
     assert plan["strategy"] == "hi_res"
     assert plan["infer_table_structure"] is True
+
+
+def test_empty_layout_model_behaves_like_none():
+    # An empty string must be treated exactly like ``None``: no escalation, no
+    # table inference -- never an inconsistent (auto + infer_tables) plan.
+    plan = resolve_extraction_plan("auto", "", gpu_boost=False, device=_cpu_report())
+    assert plan == {
+        "strategy": "auto",
+        "infer_table_structure": False,
+        "hi_res_model_name": "",
+        "gpu_accelerated": False,
+    }

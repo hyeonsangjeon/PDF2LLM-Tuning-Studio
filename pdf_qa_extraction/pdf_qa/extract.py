@@ -62,8 +62,11 @@ def resolve_extraction_plan(
 
     effective_strategy = strategy
     # Selecting a layout model only makes sense on the hi_res path, and it
-    # implies we want the richer (layout + table) extraction.
-    infer_tables = hi_res_model_name is not None
+    # implies we want the richer (layout + table) extraction. Use truthiness
+    # (not ``is not None``) so an empty string behaves exactly like ``None`` --
+    # otherwise it would enable table inference without escalating to hi_res,
+    # yielding an inconsistent plan.
+    infer_tables = bool(hi_res_model_name)
     gpu_accelerated = False
 
     # An explicit model must actually take effect: escalate auto -> hi_res so
