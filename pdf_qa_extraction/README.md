@@ -224,7 +224,7 @@ docker run --rm -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
 
 #### 환경 변수 설정
 
-공통: `PDF_PATH`(처리할 PDF 경로), `DOMAIN`(문서 도메인), `NUM_QUESTIONS`(텍스트 요소당 질문 수), `NUM_IMG_QUESTIONS`(이미지당 질문 수), `TABLE_MODEL`(표 구조 추론 모델, 예: yolox), `PERSONA`(Q&A 페르소나/스타일), `STRATEGY`(추출 전략), `GPU_BOOST`(GPU 자동 가속 on/off).
+공통: `PDF_PATH`(처리할 PDF 경로), `DOMAIN`(문서 도메인), `OUTPUT_LANGUAGE`(출력 언어 고정, 기본 `auto`=원문 언어 자동 감지), `NUM_QUESTIONS`(텍스트 요소당 질문 수), `NUM_IMG_QUESTIONS`(이미지당 질문 수), `TABLE_MODEL`(표 구조 추론 모델, 예: yolox), `PERSONA`(Q&A 페르소나/스타일), `STRATEGY`(추출 전략), `GPU_BOOST`(GPU 자동 가속 on/off). 데이터 품질: `VALIDATE_QA`·`DEDUP_QA`·`DEDUP_SIMILARITY`(생성 Q&A 검증·중복 제거).
 
 ##### 🎭 페르소나 (Q&A 스타일 선택)
 
@@ -251,6 +251,42 @@ PERSONA=memoirist DOMAIN="아버지의 생애" PDF_PATH=data/memoir.pdf python r
 
 # 예: 나만의 페르소나 원장을 외부 파일로 운영
 PERSONA_FILE=/path/to/my_personas.yaml PERSONA=feynman python run_local.py
+```
+
+##### 🌐 출력 언어 고정 (드리프트 방지)
+
+작은 로컬 모델은 영문 PDF를 읽고도 한국어로 답하는 등 **언어 드리프트**가 생기기 쉽습니다. `OUTPUT_LANGUAGE`(별칭 `QA_LANGUAGE`·`LANGUAGE`)로 생성 Q&A 언어를 고정하면 프롬프트에 **언어 락 지시**가 주입돼 텍스트·이미지 Q&A 모두 지정 언어로 나옵니다.
+
+| 값 | 동작 |
+|---|---|
+| `auto` (기본) | **원문 언어 자동 감지** — 영문 문서→영문 Q&A, 국문 문서→국문 Q&A (드리프트 차단) |
+| `korean`/`ko` | 항상 한국어로 강제 |
+| `english`/`en` | 항상 영어로 강제 |
+| `japanese`, `chinese`, … | 해당 언어로 강제 |
+
+```bash
+# 영문 PDF를 원문 그대로 영어 Q&A로 (드리프트 방지)
+OUTPUT_LANGUAGE=auto PDF_PATH=data/report_en.pdf python run_local.py
+
+# 번역 학습용으로 국문 데이터셋 강제
+OUTPUT_LANGUAGE=korean PDF_PATH=data/report_en.pdf python run_local.py
+```
+
+##### ✅ 데이터 품질 관리 (검증 · 중복 제거)
+
+데이터셋을 저장하기 **직전**에 파인튜닝에 해로운 쌍을 자동으로 걸러냅니다(원시 생성 결과는 유지하고 경계에서만 정제). 제거 사유별 통계가 로그·웹앱·`manifest.json`에 리포트됩니다.
+
+- 빈 항목 / 너무 짧은 질문·답변 / 질문=답변 제거 (`MIN_QUESTION_CHARS`·`MIN_ANSWER_CHARS`)
+- 모델 **거부/모름** 응답 제거("제공된 정보로는 알 수 없…", "I don't know" 등) — `DROP_REFUSALS`
+- **정확·유사 중복 질문** 제거(정규화 + 질문 토큰 Jaccard) — `DEDUP_SIMILARITY`(0~1, `1.0`=정확 중복만)
+- 전체 스위치: `VALIDATE_QA`(기본 on) · `DEDUP_QA`(기본 on)
+
+```bash
+# 유사 중복까지 공격적으로 제거 (임계값 낮춤)
+DEDUP_SIMILARITY=0.8 python run_local.py
+
+# 검증/중복 제거를 끄고 원시 생성 결과 그대로 저장
+VALIDATE_QA=false DEDUP_QA=false python run_local.py
 ```
 
 ##### ⚡ GPU 자동 가속 (디바이스 인지 로직)
@@ -287,9 +323,12 @@ docker run --rm --gpus all -e PERSONA=analyst \
 - `OPENAI_API_KEY`: OpenAI API 키
 
 **🖥️ 로컬 Ollama 사용 시 (`LLM_PROVIDER=ollama`, 자격 증명 불필요)**
-- `OLLAMA_MODEL`: 모델 태그 (기본 `llama3.1`; 이미지 Q&A는 `llama3.2-vision`·`llava` 등 멀티모달 태그)
+- `OLLAMA_MODEL`: 텍스트 모델 태그 (기본 `llama3.1`, 예: `qwen2.5`)
+- `OLLAMA_VISION_MODEL`: **차트/도표용 멀티모달 태그**를 별도 지정 (예: `qwen2.5vl`·`minicpm-v`·`llama3.2-vision`·`llava`). 비우면 `OLLAMA_MODEL`을 그대로 재사용
 - `OLLAMA_BASE_URL`: 서버 URL (기본 `http://localhost:11434`)
-- 로컬에 Ollama 서버가 떠 있고 모델을 받아둬야 합니다(`ollama pull llama3.1`). 클라우드 자격 증명은 필요 없습니다.
+- 로컬에 Ollama 서버가 떠 있고 모델을 받아둬야 합니다(`ollama pull llama3.1`, `ollama pull qwen2.5vl`). 클라우드 자격 증명은 필요 없습니다.
+
+> **멀티모달 태그 선택**: 한국어·차트·표 OCR에는 `qwen2.5vl`·`minicpm-v`가 강하고, `llama3.2-vision`·`llava`·`bakllava`·`moondream`·`gemma3`도 지원됩니다. **`MAI`(MAI-DS-R1)는 텍스트 전용**이라 Ollama 라이브러리에 없습니다(멀티모달 아님) — 고성능 텍스트 추론은 Azure Foundry로 사용하세요.
 
 #### 2. 🖥️ 로컬 데모 웹앱 (싱글 노드)
 
@@ -458,15 +497,22 @@ OPENAI_API_KEY=your_openai_api_key_here
 # App Setting
 PDF_PATH=data/fsi_data.pdf
 DOMAIN=International Finance
+OUTPUT_LANGUAGE=auto          # 출력 언어 고정 (auto=원문 자동 감지 | korean | english ...)
 NUM_QUESTIONS=5
 NUM_IMG_QUESTIONS=1
 TABLE_MODEL=yolox
+
+# Data quality (검증 · 중복 제거)
+VALIDATE_QA=true
+DEDUP_QA=true
+DEDUP_SIMILARITY=0.9          # 1.0 = 정확 중복만 제거
 
 # LLM Provider
 LLM_PROVIDER=ollama
 
 # Ollama Configuration (로컬 서버 — ollama serve + ollama pull llama3.1)
 OLLAMA_MODEL=llama3.1
+OLLAMA_VISION_MODEL=qwen2.5vl # 차트/도표용 멀티모달 태그 (비우면 OLLAMA_MODEL 재사용)
 OLLAMA_BASE_URL=http://localhost:11434
 
 # Press ESC and type :wq to save and exit

@@ -30,6 +30,7 @@ from pdf_qa import (
 from pdf_qa.prompts import DEFAULT_PERSONA, build_text_prompt
 from pdf_qa.manifest import build_manifest
 from pdf_qa.settings import grouped_settings, validate_env
+from pdf_qa.validate import clean_qa_pairs
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -250,6 +251,7 @@ def create_app() -> FastAPI:
         file: Optional[UploadFile] = File(None),
         persona: str = Form(DEFAULT_PERSONA),
         domain: str = Form("International Finance"),
+        language: str = Form("auto"),
         num_questions: str = Form("3"),
         num_img_questions: str = Form("1"),
         provider: str = Form("azure"),
@@ -310,6 +312,7 @@ def create_app() -> FastAPI:
 
             config = QAConfig(
                 domain=domain,
+                language=language,
                 num_questions=num_questions,
                 num_img_questions=num_img_questions,
                 table_model=(table_model.strip() or None),
@@ -394,6 +397,7 @@ def create_app() -> FastAPI:
                         config.domain,
                         config.num_questions,
                         resolved_persona.key,
+                        config.language,
                     )
                 )
                 return {
@@ -419,12 +423,15 @@ def create_app() -> FastAPI:
                     ) from exc
 
                 try:
-                    pairs: List[dict] = generate_qa_pairs(pdf_path, llm, config)
+                    raw_pairs: List[dict] = generate_qa_pairs(pdf_path, llm, config)
                 except Exception as exc:
                     raise HTTPException(
                         status_code=502,
                         detail=f"Q&A 생성 중 오류: {exc}",
                     ) from exc
+
+                # Validate + de-duplicate before returning the dataset.
+                pairs, quality = clean_qa_pairs(raw_pairs, config)
 
                 jsonl = "\n".join(
                     __import__("json").dumps(item, ensure_ascii=False)
@@ -442,6 +449,7 @@ def create_app() -> FastAPI:
                         "device": dataclasses.asdict(device),
                     },
                 )
+                manifest["quality"] = quality
                 return {
                     **common,
                     "counts": {"total": len(pairs), "text": text_n, "image": image_n},
@@ -449,6 +457,7 @@ def create_app() -> FastAPI:
                     "jsonl": jsonl,
                     "figures": manifest["figures"],
                     "manifest": manifest,
+                    "quality": quality,
                 }
 
             raise HTTPException(

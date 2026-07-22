@@ -46,6 +46,8 @@ def main() -> None:
     parser.add_argument("--provider", default=os.getenv("LLM_PROVIDER", "bedrock"),
                         help="LLM 공급자: bedrock(기본) | azure | openai")
     parser.add_argument("--domain", default="International Finance")
+    parser.add_argument("--language", default=os.getenv("OUTPUT_LANGUAGE", "auto"),
+                        help="출력 언어 고정: auto(원문 언어 자동 감지) | korean | english | japanese ...")
     parser.add_argument("--num_questions", default="5")
     parser.add_argument("--num_img_questions", default="1")
     parser.add_argument("--persona", default=os.getenv("PERSONA", "professor"),

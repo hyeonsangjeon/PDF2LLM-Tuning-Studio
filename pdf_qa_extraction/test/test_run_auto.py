@@ -22,10 +22,14 @@ class _Dummy:
 
 def _fake_gen(pdf, llm, config):
     return [
-        {"QUESTION": "q", "ANSWER": "a", "source": "text"},
         {
-            "QUESTION": "iq",
-            "ANSWER": "ia",
+            "QUESTION": "이 문서의 핵심 주제는 무엇입니까?",
+            "ANSWER": "이 문서의 핵심 주제는 국제 금융 시장의 동향입니다.",
+            "source": "text",
+        },
+        {
+            "QUESTION": "차트에서 3분기 성장률은 얼마입니까?",
+            "ANSWER": "차트에서 3분기 성장률은 3.8%입니다.",
             "source": "image",
             "image_path": "/f/fig-1.png",
             "page": 1,
@@ -62,7 +66,7 @@ def test_batches_all_pdfs_and_writes_manifest(tmp_path, monkeypatch):
 
     # per-file JSONL is valid ndjson
     lines = (out_dir / "doc_0.qa.jsonl").read_text(encoding="utf-8").strip().splitlines()
-    assert len(lines) == 2 and json.loads(lines[0])["QUESTION"] == "q"
+    assert len(lines) == 2 and json.loads(lines[0])["QUESTION"] == "이 문서의 핵심 주제는 무엇입니까?"
 
     manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["totals"]["documents"] == 2

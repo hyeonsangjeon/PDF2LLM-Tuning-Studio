@@ -21,13 +21,14 @@ def test_returns_pairs_and_passes_provider_obj(monkeypatch):
 
     def fake_gen(pdf, llm, config):
         seen.update(pdf=pdf, llm=llm, config=config)
-        return [{"QUESTION": "q", "ANSWER": "a"}]
+        return [{"QUESTION": "What is the topic?", "ANSWER": "The topic is finance."}]
 
     monkeypatch.setattr(api, "generate_qa_pairs", fake_gen)
     sentinel = object()
     out = extract_qa("r.pdf", provider_obj=sentinel)
 
-    assert out == [{"QUESTION": "q", "ANSWER": "a"}]
+    # The facade returns validated + de-duplicated pairs.
+    assert out == [{"QUESTION": "What is the topic?", "ANSWER": "The topic is finance."}]
     assert seen["pdf"] == "r.pdf"
     assert seen["llm"] is sentinel
     # env baseline still yields a valid config (persona default present).
@@ -89,9 +90,16 @@ def test_builds_provider_when_no_provider_obj(monkeypatch):
 
     monkeypatch.setattr(api, "get_provider", fake_get_provider)
     monkeypatch.setattr(
-        api, "generate_qa_pairs", lambda pdf, llm, cfg: [{"llm": llm}]
+        api,
+        "generate_qa_pairs",
+        lambda pdf, llm, cfg: [
+            {"QUESTION": "Which backend?", "ANSWER": "The selected one.", "llm": llm}
+        ],
     )
 
     res = extract_qa("r.pdf", provider="ollama")
     assert picked["name"] == "ollama"
-    assert res == [{"llm": "LLM"}]
+    # The built provider object was threaded into generation; pairs are curated.
+    assert res == [
+        {"QUESTION": "Which backend?", "ANSWER": "The selected one.", "llm": "LLM"}
+    ]

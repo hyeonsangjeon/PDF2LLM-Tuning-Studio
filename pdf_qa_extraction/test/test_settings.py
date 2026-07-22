@@ -44,9 +44,23 @@ def test_grouped_has_all_provider_groups():
         "provider.openai",
         "provider.bedrock",
         "provider.ollama",
+        "quality",
         "webapp",
     ):
         assert g in groups
+
+
+def test_ledger_declares_new_language_vision_and_quality_vars():
+    by_name = {s.name: s for s in load_settings()}
+    # Output-language lock, with its aliases.
+    assert "OUTPUT_LANGUAGE" in by_name
+    assert set(by_name["OUTPUT_LANGUAGE"].aliases) >= {"QA_LANGUAGE", "LANGUAGE"}
+    # Separate Ollama vision model.
+    assert "OLLAMA_VISION_MODEL" in by_name
+    assert by_name["OLLAMA_VISION_MODEL"].group == "provider.ollama"
+    # Quality-control knobs.
+    for name in ("VALIDATE_QA", "DEDUP_QA", "MIN_QUESTION_CHARS", "DEDUP_SIMILARITY"):
+        assert name in by_name and by_name[name].group == "quality"
 
 
 def test_validate_env_azure_requires_endpoint():

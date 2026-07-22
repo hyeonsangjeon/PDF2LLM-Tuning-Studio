@@ -9,7 +9,9 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
 ## 📚 주요 기능
 
 - **경량 PDF 추출**: Unstructured 라이브러리로 텍스트/표/이미지 추출 (CPU 슬림 이미지 `:latest` ~2GB, 레이아웃+표를 GPU로 가속하는 `:latest-gpu` ~8GB는 선택)
-- **Q&A 자동 생성 (멀티 공급자)**: Azure AI Foundry(Azure OpenAI · Foundry Agent), OpenAI, Amazon Bedrock Claude, **로컬 Ollama**(자격 증명 불필요) 중 환경 변수 하나로 전환. Azure는 **Entra ID 키리스 인증으로 한 번에 기동**(키 없이 `DefaultAzureCredential`)
+- **Q&A 자동 생성 (멀티 공급자)**: Azure AI Foundry(Azure OpenAI · Foundry Agent), OpenAI, Amazon Bedrock Claude, **로컬 Ollama**(자격 증명 불필요) 중 환경 변수 하나로 전환. Azure는 **Entra ID 키리스 인증으로 한 번에 기동**(키 없이 `DefaultAzureCredential`). Ollama는 텍스트·비전 모델을 **분리 지정**(`OLLAMA_VISION_MODEL`로 `qwen2.5vl`·`minicpm-v`·`llama3.2-vision` 등 멀티모달 태그)
+- **출력 언어 고정(드리프트 방지)**: `OUTPUT_LANGUAGE`로 생성 Q&A 언어를 고정 — 기본 `auto`(원문 언어 자동 감지)로 영문 PDF→한국어 답변 같은 드리프트를 차단하고, `korean`/`english`/`japanese` 등으로 강제도 가능. 프롬프트에 언어 락 지시가 주입됨
+- **데이터 품질 관리(검증·중복 제거)**: 데이터셋 저장 직전 빈 항목·너무 짧은 응답·질문=답변·모델 거부("제공된 정보로는 알 수 없…")를 제거하고, 정규화 기반 **정확/유사 중복 질문**을 제거. `VALIDATE_QA`·`DEDUP_QA`·`DEDUP_SIMILARITY` 등으로 조절하며 제거 사유 통계를 리포트(웹앱·manifest에 노출)
 - **다중 페르소나**: `PERSONA`로 교수·소크라테스식 튜터·실무 컨설턴트·기술 면접관·리서치 분석가·파인만(쉬운 설명)·자서전 저자(1인칭 회고) 등 **서로 다른 방식**을 전환해 하나의 PDF로 여러 파인튜닝 데이터셋 생성. 페르소나는 `pdf_qa/personas.yaml` 원장에서 관리하며 `PERSONA_FILE`로 외부 파일 지정 가능
 - **GPU 자동 가속(디바이스 인지)**: 실행 시 GPU를 점검해 감지되면 `hi_res` 레이아웃(onnxruntime-gpu)+표 구조(CUDA torch)를 자동으로 GPU에 태우고, CPU에서는 경량 경로 유지
 - **클라우드 무관 코어 패키지**: `pdf_qa` 패키지 + 공급자 플러그인 구조로 코드 중복 제거, 런타임별 얇은 진입점
@@ -167,7 +169,14 @@ TABLE_MODEL=yolox
 # 로컬에서 Ollama 서버를 띄우고 모델을 받은 뒤(예: ollama pull llama3.1)
 LLM_PROVIDER=ollama OLLAMA_MODEL=llama3.1 \
   OLLAMA_BASE_URL=http://localhost:11434 python run_local.py
+
+# 차트/도표를 읽으려면 멀티모달 태그를 따로 지정 (텍스트=llama3.1, 비전=qwen2.5vl)
+LLM_PROVIDER=ollama OLLAMA_MODEL=llama3.1 \
+  OLLAMA_VISION_MODEL=qwen2.5vl python run_local.py   # 대안: minicpm-v, llama3.2-vision, llava
 ```
+
+> **비전 태그 선택**: 한국어·차트·표 OCR에는 `qwen2.5vl`·`minicpm-v`가 강하고, `llama3.2-vision`·`llava`도 지원됩니다. `OLLAMA_VISION_MODEL`을 비우면 `OLLAMA_MODEL`을 그대로 재사용합니다.
+> **참고**: `MAI`(MAI-DS-R1)는 **텍스트 전용**이며 Ollama 라이브러리에 없습니다(멀티모달 아님) — 텍스트 추론은 Azure Foundry로 사용하세요.
 
 #### 🟧 AWS (also supported)
 

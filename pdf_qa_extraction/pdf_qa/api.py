@@ -22,6 +22,7 @@ from .config import QAConfig
 from .pipeline import generate_qa_pairs, run_pipeline
 from .providers import get_provider
 from .providers.base import LLMProvider
+from .validate import clean_qa_pairs
 
 
 def extract_qa(
@@ -31,6 +32,7 @@ def extract_qa(
     provider: Optional[str] = None,
     persona: Optional[str] = None,
     domain: Optional[str] = None,
+    language: Optional[str] = None,
     num_questions: Optional[str] = None,
     num_img_questions: Optional[str] = None,
     strategy: Optional[str] = None,
@@ -48,6 +50,8 @@ def extract_qa(
         provider: Backend name (``azure`` | ``bedrock`` | ``openai`` | ``ollama``
             and aliases). ``None`` uses the ``LLM_PROVIDER`` env var, then
             ``azure``. Ignored when ``provider_obj`` is supplied.
+        language: Output-language lock (``auto`` matches the source document;
+            ``korean``/``en``/... forces it).
         persona, domain, num_questions, num_img_questions, strategy, gpu_boost,
         model_id, table_model, figures_dir: Optional overrides; anything left as
             ``None`` falls back to the environment (:meth:`QAConfig.from_env`).
@@ -69,6 +73,7 @@ def extract_qa(
         "model_id": model_id,
         "table_model": table_model,
         "figures_dir": figures_dir,
+        "language": language,
     }
     for key, value in overrides.items():
         if value is not None:
@@ -79,4 +84,8 @@ def extract_qa(
     pdf = str(pdf)
     if out:
         return run_pipeline(pdf, str(out), llm, config)
-    return generate_qa_pairs(pdf, llm, config)
+    # No output file: still return curated pairs (validate + de-dup) so the
+    # one-call API is consistent with the saved-dataset path.
+    raw = generate_qa_pairs(pdf, llm, config)
+    cleaned, _ = clean_qa_pairs(raw, config)
+    return cleaned

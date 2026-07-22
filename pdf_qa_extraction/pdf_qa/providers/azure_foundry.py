@@ -43,11 +43,14 @@ _DEFAULT_API_VERSION = "2024-10-21"
 _DEFAULT_TOKEN_SCOPE = "https://cognitiveservices.azure.com/.default"
 
 # Persona-neutral base instruction for the Foundry Agent; the per-request prompt
-# carries the concrete role/persona (see pdf_qa.prompts) and the task/format.
+# carries the concrete role/persona (see pdf_qa.prompts), the task/format AND the
+# output-language lock, so the agent must defer to each message rather than
+# hard-coding a language.
 _AGENT_INSTRUCTIONS = (
     "You generate high-quality Q&A pairs from the material the user provides. "
     "Adopt the role and follow the formatting instructions in each user message "
-    "exactly, always answer in Korean, and return only the requested JSON block."
+    "exactly, obey the LANGUAGE LOCK stated in the message, and return only the "
+    "requested JSON block."
 )
 
 # Process-wide credential, resolved lazily and reused everywhere.
@@ -166,9 +169,14 @@ class AzureFoundryProvider(LLMProvider):
     # public API
     # ------------------------------------------------------------------
     def generate_text_qa(
-        self, context: str, domain: str, num_questions: str, persona: str = "professor"
+        self,
+        context: str,
+        domain: str,
+        num_questions: str,
+        persona: str = "professor",
+        language: str = "auto",
     ) -> List[dict]:
-        prompt = build_text_prompt(context, domain, num_questions, persona)
+        prompt = build_text_prompt(context, domain, num_questions, persona, language)
         if self.mode == "agent":
             return custom_json_parser(self._agent.run_text(prompt))
         return custom_json_parser(self._llm.invoke(prompt))
@@ -180,8 +188,11 @@ class AzureFoundryProvider(LLMProvider):
         num_img_questions: str,
         persona: str = "professor",
         context: str = "",
+        language: str = "auto",
     ) -> List[dict]:
-        instruction = build_image_instruction(domain, num_img_questions, persona, context)
+        instruction = build_image_instruction(
+            domain, num_img_questions, persona, context, language
+        )
         try:
             if self.mode == "agent":
                 raw = self._agent.run_image(instruction, image_path)

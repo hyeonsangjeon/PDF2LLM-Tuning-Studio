@@ -20,6 +20,7 @@ from .extract import (
 )
 from .prompts import get_persona
 from .providers.base import LLMProvider
+from .validate import clean_qa_pairs, format_stats
 
 
 def _legacy_glob_forced() -> bool:
@@ -63,7 +64,8 @@ def generate_qa_pairs(
             continue
         try:
             response = provider.generate_text_qa(
-                text, config.domain, config.num_questions, config.persona
+                text, config.domain, config.num_questions, config.persona,
+                config.language,
             )
             qa_pairs.extend(response)
             text_count += 1
@@ -85,6 +87,7 @@ def generate_qa_pairs(
                 config.num_img_questions,
                 config.persona,
                 context=fig.context_text,
+                language=config.language,
             )
             # Record the chunk<->figure linkage on every Q&A for provenance.
             for qa in image_qa:
@@ -106,7 +109,8 @@ def generate_qa_pairs(
             print(f"발견된 이미지 파일(문맥 없음): {len(image_files)}개")
             for image_path in image_files:
                 image_qa = provider.generate_image_qa(
-                    image_path, config.domain, config.num_img_questions, config.persona
+                    image_path, config.domain, config.num_img_questions,
+                    config.persona, language=config.language,
                 )
                 qa_pairs.extend(image_qa)
                 if image_qa:
@@ -132,18 +136,25 @@ def save_jsonl(qa_pairs: List[dict], output_path: str) -> None:
 def run_pipeline(
     pdf_path: str, output_path: str, provider: LLMProvider, config: QAConfig
 ) -> List[dict]:
-    """Full run: generate Q&A pairs and persist them to ``output_path``."""
+    """Full run: generate Q&A pairs and persist them to ``output_path``.
+
+    The raw pairs are validated + de-duplicated (see :mod:`pdf_qa.validate`)
+    before they are written, so the saved dataset is already curated.
+    """
     print(f"PDF 처리 시작: {pdf_path}")
     persona = get_persona(config.persona)
     print(
         f"LLM 공급자: {provider.name} | 도메인: {config.domain} | "
-        f"페르소나: {persona.label}({persona.key}) | "
+        f"페르소나: {persona.label}({persona.key}) | 언어: {config.language} | "
         f"텍스트질문: {config.num_questions} | 이미지질문: {config.num_img_questions} | "
         f"전략: {config.strategy} | GPU부스트: {config.gpu_boost} | "
         f"테이블모델: {config.table_model or 'None'}"
     )
 
-    qa_pairs = generate_qa_pairs(pdf_path, provider, config)
+    raw_pairs = generate_qa_pairs(pdf_path, provider, config)
+    qa_pairs, qc = clean_qa_pairs(raw_pairs, config)
+    if qc["removed"]:
+        print(f"[품질 검증] {format_stats(qc)}")
     save_jsonl(qa_pairs, output_path)
 
     text_n = len([qa for qa in qa_pairs if qa.get("source") != "image"])

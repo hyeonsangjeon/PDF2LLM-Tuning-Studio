@@ -20,9 +20,18 @@ class LLMProvider(ABC):
 
     @abstractmethod
     def generate_text_qa(
-        self, context: str, domain: str, num_questions: str, persona: str = "professor"
+        self,
+        context: str,
+        domain: str,
+        num_questions: str,
+        persona: str = "professor",
+        language: str = "auto",
     ) -> List[dict]:
-        """Generate Q&A pairs from a text chunk in the given ``persona`` style."""
+        """Generate Q&A pairs from a text chunk in the given ``persona`` style.
+
+        ``language`` locks the output language (``"auto"`` matches the source
+        document; a name/code forces it). Optional for backward-compatibility.
+        """
 
     @abstractmethod
     def generate_image_qa(
@@ -32,14 +41,16 @@ class LLMProvider(ABC):
         num_img_questions: str,
         persona: str = "professor",
         context: str = "",
+        language: str = "auto",
     ) -> List[dict]:
         """Generate Q&A pairs from a single image file in the given ``persona`` style.
 
         ``context`` is the surrounding-document text linked to this figure (see
         :mod:`pdf_qa.layout`); providers pass it to
         :func:`pdf_qa.prompts.build_image_instruction` so the chart is
-        interpreted with its caption/section in view. Optional for
-        backward-compatibility (empty = the old context-free behaviour).
+        interpreted with its caption/section in view. ``language`` locks the
+        output language. Both are optional for backward-compatibility (empty
+        context + ``auto`` language = the old behaviour).
         """
 
     @staticmethod

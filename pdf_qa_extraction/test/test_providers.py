@@ -51,7 +51,26 @@ def test_ollama_provider_reads_env(monkeypatch):
 
     monkeypatch.setenv("OLLAMA_MODEL", "qwen2.5")
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama.internal:11434")
+    monkeypatch.delenv("OLLAMA_VISION_MODEL", raising=False)
     provider = OllamaProvider(streaming=False)
     assert provider.model_id == "qwen2.5"
     assert provider.base_url == "http://ollama.internal:11434"
     assert provider.name == "ollama"
+    # With no vision override, the text model is reused for images (one client).
+    assert provider.vision_model_id == "qwen2.5"
+    assert provider._vision_llm is provider._llm
+
+
+def test_ollama_separate_vision_model(monkeypatch):
+    pytest.importorskip("langchain_ollama")
+    from pdf_qa.providers.ollama import OllamaProvider
+
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.1")
+    monkeypatch.setenv("OLLAMA_VISION_MODEL", "qwen2.5vl")
+    provider = OllamaProvider(streaming=False)
+    # Text and image Q&A use distinct clients / model tags.
+    assert provider.model_id == "llama3.1"
+    assert provider.vision_model_id == "qwen2.5vl"
+    assert provider._vision_llm is not provider._llm
+    assert provider._llm.model == "llama3.1"
+    assert provider._vision_llm.model == "qwen2.5vl"

@@ -238,7 +238,7 @@ docker run --rm -v %cd%:/app -w /app --env-file .env %IMG% python run_local.py
 
 #### Environment Variable Configuration
 
-Common: `PDF_PATH`, `DOMAIN`, `NUM_QUESTIONS`, `NUM_IMG_QUESTIONS`, `TABLE_MODEL` (e.g., yolox), `PERSONA` (Q&A style), `STRATEGY` (extraction strategy), `GPU_BOOST` (auto GPU acceleration on/off).
+Common: `PDF_PATH`, `DOMAIN`, `OUTPUT_LANGUAGE` (output-language lock, default `auto` = match the source document), `NUM_QUESTIONS`, `NUM_IMG_QUESTIONS`, `TABLE_MODEL` (e.g., yolox), `PERSONA` (Q&A style), `STRATEGY` (extraction strategy), `GPU_BOOST` (auto GPU acceleration on/off). Data quality: `VALIDATE_QA` · `DEDUP_QA` · `DEDUP_SIMILARITY` (validate + de-duplicate generated Q&A).
 
 ##### 🎭 Personas (choosing the Q&A style)
 
@@ -266,6 +266,42 @@ PERSONA=memoirist DOMAIN="my father's life" PDF_PATH=data/memoir.pdf python run_
 
 # e.g. run your own persona ledger from an external file
 PERSONA_FILE=/path/to/my_personas.yaml PERSONA=feynman python run_local.py
+```
+
+##### 🌐 Output-language lock (prevents drift)
+
+Small local models tend to **drift** — e.g. reading an English PDF but answering in Korean. Set `OUTPUT_LANGUAGE` (aliases `QA_LANGUAGE` · `LANGUAGE`) to inject a **language-lock directive** into the prompts so both text and image Q&A come out in the target language.
+
+| Value | Behavior |
+|---|---|
+| `auto` (default) | **Detect and match the source document** — English doc → English Q&A, Korean doc → Korean Q&A (blocks drift) |
+| `korean`/`ko` | Always force Korean |
+| `english`/`en` | Always force English |
+| `japanese`, `chinese`, … | Force that language |
+
+```bash
+# Keep an English PDF's Q&A in English (no drift)
+OUTPUT_LANGUAGE=auto PDF_PATH=data/report_en.pdf python run_local.py
+
+# Force a Korean dataset (e.g. for translation training)
+OUTPUT_LANGUAGE=korean PDF_PATH=data/report_en.pdf python run_local.py
+```
+
+##### ✅ Data quality (validation · de-duplication)
+
+Right **before** the dataset is written, pairs that hurt fine-tuning are dropped automatically (raw generation is preserved; cleaning happens only at the boundary). Per-reason stats are reported in the logs, the web app, and `manifest.json`.
+
+- Empty / too-short question·answer / question==answer removal (`MIN_QUESTION_CHARS` · `MIN_ANSWER_CHARS`)
+- Model **refusal / "not in the provided context"** removal ("I don't know", etc.) — `DROP_REFUSALS`
+- **Exact + near-duplicate question** removal (normalization + question-token Jaccard) — `DEDUP_SIMILARITY` (0–1, `1.0` = exact-only)
+- Master switches: `VALIDATE_QA` (default on) · `DEDUP_QA` (default on)
+
+```bash
+# Aggressively drop near-duplicates (lower threshold)
+DEDUP_SIMILARITY=0.8 python run_local.py
+
+# Disable validation/dedup and keep raw generation as-is
+VALIDATE_QA=false DEDUP_QA=false python run_local.py
 ```
 
 ##### ⚡ Automatic GPU acceleration (device-aware logic)
@@ -302,9 +338,12 @@ docker run --rm --gpus all -e PERSONA=analyst \
 - `OPENAI_API_KEY`: OpenAI API key
 
 **🖥️ For local Ollama (`LLM_PROVIDER=ollama`, no credentials)**
-- `OLLAMA_MODEL`: model tag (default `llama3.1`; use a multimodal tag like `llama3.2-vision` / `llava` for image Q&A)
+- `OLLAMA_MODEL`: text model tag (default `llama3.1`, e.g. `qwen2.5`)
+- `OLLAMA_VISION_MODEL`: a separate **multimodal tag for chart/figure Q&A** (e.g. `qwen2.5vl` · `minicpm-v` · `llama3.2-vision` · `llava`). Unset = reuse `OLLAMA_MODEL`
 - `OLLAMA_BASE_URL`: server URL (default `http://localhost:11434`)
-- Needs a running Ollama server with the model pulled (`ollama pull llama3.1`). No cloud credentials required.
+- Needs a running Ollama server with the models pulled (`ollama pull llama3.1`, `ollama pull qwen2.5vl`). No cloud credentials required.
+
+> **Choosing a multimodal tag**: `qwen2.5vl` · `minicpm-v` are strong at Korean/chart/table OCR; `llama3.2-vision` · `llava` · `bakllava` · `moondream` · `gemma3` also work. **`MAI` (MAI-DS-R1) is text-only** and not in the Ollama library (not multimodal) — use Azure Foundry for high-end text reasoning.
 
 #### 2. 🖥️ Local Demo Web App (Single Node)
 
@@ -473,15 +512,22 @@ OPENAI_API_KEY=your_openai_api_key_here
 # App Setting
 PDF_PATH=data/fsi_data.pdf
 DOMAIN=International Finance
+OUTPUT_LANGUAGE=auto          # output-language lock (auto=match source | korean | english ...)
 NUM_QUESTIONS=5
 NUM_IMG_QUESTIONS=1
 TABLE_MODEL=yolox
+
+# Data quality (validation · de-duplication)
+VALIDATE_QA=true
+DEDUP_QA=true
+DEDUP_SIMILARITY=0.9          # 1.0 = remove exact duplicates only
 
 # LLM Provider
 LLM_PROVIDER=ollama
 
 # Ollama Configuration (local server — ollama serve + ollama pull llama3.1)
 OLLAMA_MODEL=llama3.1
+OLLAMA_VISION_MODEL=qwen2.5vl # multimodal tag for charts/figures (unset = reuse OLLAMA_MODEL)
 OLLAMA_BASE_URL=http://localhost:11434
 
 # Press ESC and type :wq to save and exit

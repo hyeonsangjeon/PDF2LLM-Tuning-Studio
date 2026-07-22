@@ -31,6 +31,11 @@ settings:
     group: core
     default: ""
     description: "Path to a custom persona YAML ledger (overrides the bundled personas.yaml)."
+  - name: OUTPUT_LANGUAGE
+    group: core
+    default: auto
+    description: "Output-language lock for the generated Q&A: auto (match the source document) | korean | english | japanese | ... (fixes English-source -> Korean-answer drift)."
+    aliases: [QA_LANGUAGE, LANGUAGE]
   - name: NUM_QUESTIONS
     group: core
     default: "5"
@@ -192,12 +197,42 @@ settings:
   - name: OLLAMA_MODEL
     group: provider.ollama
     default: llama3.1
-    description: "Local Ollama model tag (e.g. llama3.1, llava for vision)."
+    description: "Local Ollama text model tag (e.g. llama3.1, qwen2.5)."
+  - name: OLLAMA_VISION_MODEL
+    group: provider.ollama
+    default: ""
+    description: "Separate multimodal Ollama tag for figure/chart Q&A (e.g. qwen2.5vl, minicpm-v, llama3.2-vision, llava). Unset = reuse OLLAMA_MODEL."
   - name: OLLAMA_BASE_URL
     group: provider.ollama
     default: http://localhost:11434
     description: "Ollama server URL."
     aliases: [OLLAMA_HOST]
+
+  # ---- quality control (validation + de-duplication) -------------------
+  - name: VALIDATE_QA
+    group: quality
+    default: "true"
+    description: "Drop empty / too-short / question==answer / refusal pairs before writing the dataset."
+  - name: DEDUP_QA
+    group: quality
+    default: "true"
+    description: "Remove exact + near-duplicate questions."
+  - name: MIN_QUESTION_CHARS
+    group: quality
+    default: "6"
+    description: "Minimum characters for a kept question."
+  - name: MIN_ANSWER_CHARS
+    group: quality
+    default: "4"
+    description: "Minimum characters for a kept answer."
+  - name: DEDUP_SIMILARITY
+    group: quality
+    default: "0.9"
+    description: "Jaccard similarity (0-1) above which two questions are near-duplicates; 1.0 = exact-duplicate removal only."
+  - name: DROP_REFUSALS
+    group: quality
+    default: "true"
+    description: "Drop answers that are model refusals / 'not in the provided context'."
 
   # ---- web app ----------------------------------------------------------
   - name: HOST

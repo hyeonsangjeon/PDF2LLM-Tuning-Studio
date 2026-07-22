@@ -126,6 +126,15 @@
       </div>
     </div>
 
+    <label>출력 언어 <span class="muted">(언어 고정 · 드리프트 방지)</span></label>
+    <select id="language">
+      <option value="auto">auto · 원문 언어 자동 감지 (권장)</option>
+      <option value="korean">한국어 (Korean)</option>
+      <option value="english">English</option>
+      <option value="japanese">日本語 (Japanese)</option>
+      <option value="chinese">中文 (Chinese)</option>
+    </select>
+
     <div class="row">
       <div>
         <label>이미지당 질문 수</label>
@@ -288,6 +297,23 @@ function figurePanel(figs){
    </details>`;
 }
 
+function qualityPanel(q){
+  if(!q || !q.input) return "";
+  const R = q.reasons || {};
+  const labels = {empty:"빈 항목", too_short:"너무 짧음", q_equals_a:"질문=답변",
+    refusal:"거부/모름", duplicate:"중복 제거", near_duplicate:"유사 중복"};
+  const chips = Object.keys(labels)
+    .filter(k => (R[k]||0) > 0)
+    .map(k => `<span class="tag">${labels[k]} ${R[k]}</span>`).join(" ");
+  const removed = q.removed ?? 0;
+  return `<div class="kv" style="margin-top:8px">
+     <div class="chip"><span>품질 검증 입력</span> <b>${q.input}</b></div>
+     <div class="chip"><span>유지</span> <b>${q.kept ?? 0}</b></div>
+     <div class="chip"><span>제거</span> <b>${removed}</b></div>
+     ${removed ? '<div class="chip" style="flex:1 1 auto"><span>사유</span> <b>'+chips+'</b></div>' : ''}
+   </div>`;
+}
+
 function renderFull(r){
   const c = r.counts || {};
   const rows = (r.pairs||[]).map((p,i) => `<tr>
@@ -305,6 +331,7 @@ function renderFull(r){
       <div class="chip"><span>이미지</span> <b>${c.image ?? 0}</b></div>
       <div class="chip"><span>페르소나</span> <b>${esc(r.persona.label)}</b></div>
      </div>
+     ${qualityPanel(r.quality)}
      ${figurePanel(r.figures)}
      <div class="toolbar"><div class="muted">생성된 Q&amp;A (파인튜닝용 JSONL)</div>
        <span><button class="dl" id="dl">JSONL 다운로드</button>
@@ -360,6 +387,7 @@ async function runExtract(){
   else fd.append("file", f);
   fd.append("persona", $("persona").value);
   fd.append("domain", $("domain").value);
+  fd.append("language", $("language").value);
   fd.append("num_questions", $("numQ").value);
   fd.append("num_img_questions", $("numImgQ").value);
   fd.append("provider", $("provider").value);

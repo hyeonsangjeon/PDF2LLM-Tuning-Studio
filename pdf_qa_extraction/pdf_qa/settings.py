@@ -119,6 +119,7 @@ _GROUP_TITLES = {
     "provider.openai": "Provider: OpenAI",
     "provider.bedrock": "Provider: AWS Bedrock",
     "provider.ollama": "Provider: Ollama (local, no credentials)",
+    "quality": "Quality control (validation + de-duplication)",
     "webapp": "Web app",
 }
 

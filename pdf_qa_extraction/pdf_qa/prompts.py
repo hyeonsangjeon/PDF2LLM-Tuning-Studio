@@ -144,6 +144,56 @@ def get_persona(persona: Union[str, "Persona", None]) -> Persona:
 
 
 # ---------------------------------------------------------------------------
+# Output-language lock
+# ---------------------------------------------------------------------------
+#: Common language names / ISO codes -> the canonical English name we inject
+#: into the prompt. Extend freely; any value not listed is passed through as-is
+#: (title-cased) so an arbitrary language name still works.
+_LANGUAGE_ALIASES = {
+    "ko": "Korean", "kor": "Korean", "korean": "Korean", "한국어": "Korean", "국문": "Korean",
+    "en": "English", "eng": "English", "english": "English", "영어": "English", "영문": "English",
+    "ja": "Japanese", "jp": "Japanese", "jpn": "Japanese", "japanese": "Japanese", "일본어": "Japanese",
+    "zh": "Chinese", "zh-cn": "Chinese", "chinese": "Chinese", "중국어": "Chinese",
+    "es": "Spanish", "spa": "Spanish", "spanish": "Spanish",
+    "fr": "French", "fra": "French", "french": "French",
+    "de": "German", "deu": "German", "german": "German",
+    "vi": "Vietnamese", "vietnamese": "Vietnamese",
+}
+
+#: Values that mean "match the source document's language".
+_AUTO_LANGUAGE = {"", "auto", "source", "same", "match", "detect", "자동"}
+
+
+def resolve_language(language: Union[str, None]) -> str:
+    """Normalise a language knob to a canonical name, or ``"auto"``.
+
+    ``auto`` / ``source`` / empty -> ``"auto"`` (match the document). A known
+    code/name (``ko``, ``korean``, ``en`` ...) maps to its canonical English
+    name; anything else is passed through as given so an arbitrary language
+    (e.g. ``"Portuguese"``) still works.
+    """
+    key = ("" if language is None else str(language)).strip().lower()
+    if key in _AUTO_LANGUAGE:
+        return "auto"
+    return _LANGUAGE_ALIASES.get(key, str(language).strip())
+
+
+def language_directive(language: Union[str, None]) -> str:
+    """Render the sentence fragment the prompts embed after "write in ...".
+
+    For ``auto`` this instructs the model to detect and match the source
+    document's language; otherwise it names the fixed target language.
+    """
+    lang = resolve_language(language)
+    if lang == "auto":
+        return (
+            "the SAME language as the source document/context above (automatically "
+            "detect the document's language and mirror it exactly)"
+        )
+    return lang
+
+
+# ---------------------------------------------------------------------------
 # Text prompt
 # ---------------------------------------------------------------------------
 _TEXT_PROMPT = """Context information is below. You are only aware of this context and nothing else.
@@ -164,7 +214,10 @@ The question(s) should be diverse in nature across the document.
 You must also provide the answer to each question. The answer should be based on the context information provided only.
 
 Restrict the question(s) to the context information provided only.
-QUESTION and ANSWER should be written in Korean. response in JSON format which contains the `question` and `answer`.
+
+**LANGUAGE LOCK — CRITICAL:** Write EVERY QUESTION and ANSWER in {language_directive}. Do NOT switch languages anywhere in the output. The JSON examples below illustrate the FORMAT ONLY — never copy their language; always write in {language_directive}.
+
+response in JSON format which contains the `question` and `answer`.
 DO NOT USE List in JSON format.
 ANSWER should be a complete sentence.
 
@@ -183,6 +236,8 @@ ANSWER should be a complete sentence.
     "ANSWER": "파이낸셜 타임즈 보고서에 따르면 2030년까지 글로벌 양자컴퓨팅 시장 규모는 125억 달러로 예상됩니다."
 }
 ```
+
+Remember: regardless of the example language above, the QUESTION and ANSWER you output MUST be written in {language_directive}.
 """
 
 # ---------------------------------------------------------------------------
@@ -223,8 +278,10 @@ You must not create more or fewer questions than this number.
 - Reading of section titles, page numbers, or menu items
 - Comparison of clearly visible values (highest, lowest, specific dates)
 
-Write questions and answers in Korean and respond in JSON format.
+Write questions and answers in {language_directive} and respond in JSON format.
 Do not use arrays/lists in the JSON format.
+
+**LANGUAGE LOCK — CRITICAL:** Every question and answer MUST be written in {language_directive}. Do NOT switch languages. The JSON examples below show the FORMAT ONLY — never copy their language.
 
 
 #Format:
@@ -242,6 +299,8 @@ Do not use arrays/lists in the JSON format.
     "ANSWER": "9월 전후 지표 악화 차트에서 외환 차익거래유인 최고점은 10월 2일경에 기록되었습니다."
 }
 ```
+
+Remember: regardless of the example language above, your QUESTION and ANSWER MUST be written in {language_directive}.
 """
 
 
@@ -250,8 +309,14 @@ def build_text_prompt(
     domain: str,
     num_questions: str,
     persona: Union[str, "Persona", None] = None,
+    language: Union[str, None] = "auto",
 ) -> str:
-    """Render the text Q&A prompt for the given context, domain and persona."""
+    """Render the text Q&A prompt for the given context, domain and persona.
+
+    ``language`` locks the output language: ``"auto"`` (default) makes the model
+    match the source document; a name/code (``"korean"``, ``"en"`` ...) forces
+    that language regardless of the source or the Korean few-shot examples.
+    """
     p = get_persona(persona)
     role = p.text_role.replace("{domain}", str(domain))
     method = p.method.replace("{domain}", str(domain))
@@ -262,6 +327,7 @@ def build_text_prompt(
         .replace("{persona_label}", p.label)
         .replace("{persona_method}", method)
         .replace("{num_questions}", str(num_questions))
+        .replace("{language_directive}", language_directive(language))
     )
 
 
@@ -270,6 +336,7 @@ def build_image_instruction(
     num_img_questions: str,
     persona: Union[str, "Persona", None] = None,
     context: str = "",
+    language: Union[str, None] = "auto",
 ) -> str:
     """Render the image Q&A instruction text (without the image payload).
 
@@ -280,6 +347,8 @@ def build_image_instruction(
     the strict data-accuracy rules still force every number/label to come from
     the image itself. Empty context renders nothing (identical to the old
     behaviour), so charts with no detectable surrounding text still work.
+
+    ``language`` locks the output language exactly as in :func:`build_text_prompt`.
     """
     p = get_persona(persona)
     role = p.image_role.replace("{domain}", str(domain))
@@ -303,6 +372,7 @@ def build_image_instruction(
         .replace("{persona_image_method}", method)
         .replace("{figure_context}", context_block)
         .replace("{num_img_questions}", str(num_img_questions))
+        .replace("{language_directive}", language_directive(language))
     )
 
 

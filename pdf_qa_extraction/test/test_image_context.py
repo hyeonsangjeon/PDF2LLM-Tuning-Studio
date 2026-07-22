@@ -45,12 +45,16 @@ class _FakeProvider:
         self.image_calls = []
         self.text_calls = []
 
-    def generate_text_qa(self, text, domain, num, persona):
-        self.text_calls.append(text)
+    def generate_text_qa(self, text, domain, num, persona, language="auto"):
+        self.text_calls.append({"text": text, "language": language})
         return [{"QUESTION": "tq", "ANSWER": "ta"}]
 
-    def generate_image_qa(self, image_path, domain, num, persona, context=""):
-        self.image_calls.append({"image_path": image_path, "context": context})
+    def generate_image_qa(
+        self, image_path, domain, num, persona, context="", language="auto"
+    ):
+        self.image_calls.append(
+            {"image_path": image_path, "context": context, "language": language}
+        )
         return [{"QUESTION": "iq", "ANSWER": "ia"}]
 
 
@@ -82,6 +86,7 @@ def test_pipeline_threads_context_and_tags_linkage(monkeypatch):
         num_questions="1",
         num_img_questions="1",
         persona="professor",
+        language="english",
     )
     pairs = pipeline.generate_qa_pairs("x.pdf", provider, cfg)
 
@@ -89,6 +94,9 @@ def test_pipeline_threads_context_and_tags_linkage(monkeypatch):
     assert provider.image_calls and provider.image_calls[0]["context"].startswith(
         "[Section] GDP"
     )
+    # The configured output language was threaded to both text and image calls.
+    assert provider.text_calls[0]["language"] == "english"
+    assert provider.image_calls[0]["language"] == "english"
 
     image_pairs = [p for p in pairs if p.get("source") == "image"]
     assert len(image_pairs) == 1
