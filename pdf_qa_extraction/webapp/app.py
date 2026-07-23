@@ -52,13 +52,17 @@ def _persona_payload() -> dict:
     personas = []
     for key in list_personas():
         p = PERSONAS[key]
-        # First non-empty content line of the method block, sans the header.
+        # First descriptive line of the method block: skip the "Method —" header
+        # and any bare section headers (ALL-CAPS labels ending in ":").
         summary = ""
         for line in p.method.splitlines():
             stripped = line.strip().lstrip("-").strip()
-            if stripped and not stripped.lower().startswith("method"):
-                summary = stripped
-                break
+            if not stripped or stripped.lower().startswith("method"):
+                continue
+            if stripped.endswith(":"):
+                continue
+            summary = stripped
+            break
         personas.append({"key": key, "label": p.label, "method_summary": summary})
     return {"default": DEFAULT_PERSONA, "personas": personas}
 

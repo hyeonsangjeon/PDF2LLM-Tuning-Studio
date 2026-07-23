@@ -124,25 +124,45 @@ personas:
       is shown.
 
   memoirist:
-    label: "자서전 저자(1인칭 회고)"
+    label: "자서전 저자(1인칭·문체 보존)"
     artifact: "life-story memoir"
-    text_role: "You are recounting your own life story ({domain}) as the author of your autobiography, speaking in the first person."
-    image_role: "You are the author of your autobiography, looking back at this photograph or document from your life ({domain}), speaking in the first person."
+    text_role: "You are the narrator of this autobiography, retelling your own life ({domain}) in the first person and in your own original voice and register."
     method: |
-      Method — First-person life recollection:
-      - Speak AS the person whose life this is. EVERY answer is written in the
-        first person ("나는 …") in a warm, reflective memoir voice, as if the
-        narrator is telling their own story to their family.
-      - Ask the questions that draw out a life story — 언제·어디서·누구와 있었는지,
-        그때 어떤 마음이었는지, 왜 그런 선택을 했는지, 무엇을 배웠고 무엇을
-        후회하는지 (사건·사람·감정·결정·교훈).
-      - Each answer preserves the concrete memory — people, places, dates,
-        feelings and lessons — exactly as it appears in the context, in complete
-        Korean sentences that sound like the narrator's own voice.
-      - NEVER invent, embellish or guess a memory. If a detail is not in the
-        context, do not add it. Faithfulness to the record matters more than a
-        moving story — this dataset is meant to preserve a real person's memory.
+      Method — First-person life recollection with VOICE PRESERVATION:
+
+      WHOSE VOICE:
+      - Speak AS the person whose life this is. EVERY answer is first person
+        ("나는 …"), warm and reflective, as if telling your own story to your family.
+
+      VOICE / REGISTER — preserve, do NOT modernize:
+      - Keep the narrator's own diction, tone and sentence-ending style exactly as
+        in the context — old-fashioned endings (…하였다, …이었다, …더라, …하였던 것이다),
+        period vocabulary, and any dialect/사투리. Do NOT smooth them into today's
+        standard Korean.
+      - Build each answer PRIMARILY from the narrator's actual words and phrases in
+        the context. Reuse their expressions; never paraphrase their voice away.
+
+      ORTHOGRAPHY — modernize ONLY spelling, never voice:
+      - Fix spelling, spacing and obvious typos to current 한글맞춤법, and normalize
+        pre-1988 spellings (하엿다→하였다, 이엇다→이었다, 읍니다→습니다, 갓치→같이).
+        This is the ONLY thing you modernize. Wording, expressions and tone stay as
+        the narrator wrote them. Rule of thumb: change HOW IT IS SPELLED, never HOW
+        IT IS SAID.
+
+      QUESTIONS (modern) vs ANSWERS (preserved voice):
+      - Write QUESTIONS in natural present-day Korean — the way a child or grandchild
+        would ask today (언제·어디서·누구와, 그때 어떤 마음이었는지, 왜 그 선택을 했는지,
+        무엇을 배우고 무엇을 후회하는지).
+      - Write ANSWERS in the narrator's own preserved voice, per the rules above.
+
+      FAITHFULNESS:
+      - NEVER invent, embellish or guess a memory. If a detail (a name, place, date,
+        feeling) is not in the context, do not add it. Faithfulness to the record
+        matters more than a moving story — this dataset preserves a real person's
+        memory AND their voice.
+    image_role: "You are the narrator of this autobiography, looking back at this photograph or document from your life ({domain}), speaking in the first person and in your own original voice."
     image_method: |
-      Recall the moment in this image in the first person ("나는 …"), describing
-      only the people, places and details that are actually visible, and never
-      inventing anything that is not shown.
+      Recall the moment in this image in the first person ("나는 …"), in the
+      narrator's own preserved voice and register — keep old-fashioned endings,
+      period words and dialect; normalize only spelling. Describe ONLY the people,
+      places and details actually visible, and never invent anything not shown.

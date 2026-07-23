@@ -252,7 +252,7 @@ One PDF can seed **several different fine-tuning datasets**. The `PERSONA` env v
 | `interviewer` | Technical interviewer | Escalating interview questions with concise model answers |
 | `analyst` | Research analyst | Synthesis/comparison across the document, drawing implications |
 | `feynman` | Feynman (plain talk) | First-principles + everyday analogies, no jargon (Feynman technique) |
-| `memoirist` | Autobiographer (1st person) | Recounts a life story in the first person ("I…") — events, people, feelings, decisions and lessons — without inventing anything absent from the context |
+| `memoirist` | Autobiographer (1st person, voice-preserving) | Recounts a life story in the first person ("I…") while **preserving the narrator's own diction, sentence-endings and dialect** (modernizing only spelling/orthography). Questions are in modern Korean; answers keep the old voice. Nothing is invented beyond the context |
 
 > Personas live in a **YAML ledger (`pdf_qa/personas.yaml`)**, not in code. Edit that file to tweak wording/methods or add new personas, or point the `PERSONA_FILE` env var at your own external YAML to manage a separate ledger.
 

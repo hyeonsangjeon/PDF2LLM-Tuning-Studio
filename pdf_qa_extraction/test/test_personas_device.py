@@ -106,9 +106,9 @@ def test_default_persona_reproduces_professor_wording():
         ),
         (
             "memoirist",
-            "You are recounting your own life story (금융) as the author of your autobiography, speaking in the first person.",
+            "You are the narrator of this autobiography, retelling your own life (금융) in the first person and in your own original voice and register.",
             "life-story memoir",
-            "Method — First-person life recollection:",
+            "Method — First-person life recollection with VOICE PRESERVATION:",
         ),
     ],
 )
@@ -128,14 +128,24 @@ def test_feynman_uses_analogy_and_first_principles():
 def test_memoirist_is_first_person_and_faithful():
     prompt = build_text_prompt("CTX", "아버지의 생애", "3", "memoirist")
     # role weaves the domain in and asks for a first-person voice
-    assert "as the author of your autobiography" in prompt
+    assert "the narrator of this autobiography" in prompt
     assert "first person" in prompt
     assert '"나는 …"' in prompt
     # the memory-preservation guardrail must be present
     assert "NEVER invent" in prompt
+    # voice-preservation doctrine: keep the narrator's register, modernize only spelling
+    assert "VOICE PRESERVATION" in prompt
+    assert "Do NOT smooth them into today's" in prompt
+    assert "modernize ONLY spelling" in prompt
+    assert "change HOW IT IS SPELLED, never HOW" in prompt
+    # questions modern, answers in the preserved voice
+    assert "Write QUESTIONS in natural present-day Korean" in prompt
+    assert "Write ANSWERS in the narrator's own preserved voice" in prompt
     img = build_image_instruction("아버지의 생애", "1", "memoirist")
     assert '"나는 …"' in img
     assert "never" in img.lower()
+    assert "preserved voice" in img
+    assert "normalize only spelling" in img
 
 
 def test_image_instruction_uses_persona_and_domain():
