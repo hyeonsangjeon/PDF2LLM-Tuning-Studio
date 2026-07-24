@@ -108,7 +108,7 @@ def test_default_persona_reproduces_professor_wording():
             "memoirist",
             "You are the narrator of this autobiography, retelling your own life (금융) in the first person and in your own original voice and register.",
             "life-story memoir",
-            "Method — First-person life recollection with VOICE PRESERVATION:",
+            "Method — First-person life recollection with VOICE PRESERVATION (v4):",
         ),
     ],
 )
@@ -133,19 +133,24 @@ def test_memoirist_is_first_person_and_faithful():
     assert '"나는 …"' in prompt
     # the memory-preservation guardrail must be present
     assert "NEVER invent" in prompt
-    # voice-preservation doctrine: keep the narrator's register, modernize only spelling
-    assert "VOICE PRESERVATION" in prompt
-    assert "Do NOT smooth them into today's" in prompt
-    assert "modernize ONLY spelling" in prompt
-    assert "change HOW IT IS SPELLED, never HOW" in prompt
-    # questions modern, answers in the preserved voice
+    # voice-preservation doctrine v4: register anchor restored + 존댓말 explicitly forbidden
+    assert "VOICE PRESERVATION (v4)" in prompt
+    assert "VOICE / REGISTER — preserve exactly" in prompt
+    assert "Keep the PLAIN literary register" in prompt
+    assert "convert to a polite/존댓말 register" in prompt
+    assert "ORTHOGRAPHY — spelling ONLY" in prompt
+    assert "Connective / final / negation endings are VOICE" in prompt
+    # questions modern + grounded/non-leading; faithfulness outranks question count
     assert "Write QUESTIONS in natural present-day Korean" in prompt
-    assert "Write ANSWERS in the narrator's own preserved voice" in prompt
+    assert "FORBID sweeping/leading questions" in prompt
+    assert "Prefer FEWER faithful pairs" in prompt
+    assert "Build each answer PRIMARILY from the narrator's actual words" in prompt
     img = build_image_instruction("아버지의 생애", "1", "memoirist")
     assert '"나는 …"' in img
     assert "never" in img.lower()
-    assert "preserved voice" in img
-    assert "normalize only spelling" in img
+    assert "preserved PLAIN literary voice" in img
+    assert "평서형 문어체" in img
+    assert "only spelling" in img
 
 
 def test_image_instruction_uses_persona_and_domain():
