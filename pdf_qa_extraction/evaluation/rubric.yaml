@@ -1,0 +1,158 @@
+# =============================================================================
+# QA scorer rubric — the *only* place detection rules live (no code hardcoding,
+# same convention as pdf_qa/personas.yaml). Edit here to tune the scorer.
+#
+# Two layers:
+#   Layer 1 (deterministic, no LLM)  — register / first-person / leading-Q / format
+#   Layer 2 (LLM judge, temp=0)      — grounded / coherent / voice_preserved / q_grounded
+#
+# The memoirist target: QUESTION is intentionally modern-polite, the ANSWER must
+# stay in the old literary plain register (…다/…하였다), only spelling modernized.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Layer 1 — REGISTER (존댓말 검출). Checked on the ANSWER only (questions are
+# intentionally modern-polite, so they are exempt).
+# ---------------------------------------------------------------------------
+register:
+  # A sentence-final word ending with one of these *is honorific* -> FAIL.
+  # These are unambiguous polite (해요체 / 죠) endings that plain 문어체 never uses.
+  honorific_suffixes:
+    - "요"    # …어요/…아요/…에요/…예요/…세요/…네요/…군요/…지요/…데요 … (all 해요체)
+    - "죠"    # …죠 (지요 축약)
+  # Formal-polite -ㅂ니다/습니다 family. A word ending with one of these is
+  # honorific ONLY when the syllable right before it carries a ㅂ-batchim (or is
+  # 습) — this distinguishes 입니다/합니다/생생합니다 (polite) from 아니다/지니다
+  # (plain). The ㅂ-batchim guard is applied by the scorer.
+  formal_polite_suffixes:
+    - "니다"  # …습니다 / …ㅂ니다 (…이었습니다, …합니다, …됩니다 …)
+    - "니까"  # …습니까 / …ㅂ니까
+  # Allowed plain / 문어체 / 해라체 endings — informational (used only to explain
+  # a PASS in the report; not required for matching).
+  plain_examples:
+    - "다"
+    - "이다"
+    - "았다"
+    - "었다"
+    - "였다"
+    - "하였다"
+    - "이었다"
+    - "던 것이다"
+    - "더라"
+    - "노라"
+    - "리라"
+    - "이라"
+
+# ---------------------------------------------------------------------------
+# Layer 1 — FIRST_PERSON. The memoirist speaks AS the person (1인칭). Absence of
+# a first-person marker is a WARN (deferred to the judge), not a hard fail —
+# maxims/imperatives legitimately omit the pronoun.
+# ---------------------------------------------------------------------------
+first_person:
+  markers:
+    - "나는"
+    - "내가"
+    - "나의"
+    - "나도"
+    - "나를"
+    - "나에게"
+    - "내게"
+    - "우리"
+    - "제가"       # humble 1인칭
+  # If NO first-person marker AND one of these 3rd-person subjects appears, the
+  # answer is treated as clearly 3rd-person narration (FIRST_PERSON fails).
+  third_person_markers:
+    - "그는"
+    - "그가"
+    - "그녀는"
+    - "그녀가"
+    - "그 사람은"
+    - "그 사람이"
+    - "그들은"
+    - "그들이"
+
+# ---------------------------------------------------------------------------
+# Layer 1 — LEADING_Q. Questions that force an ungrounded synthesis / moral /
+# abstract summary. This is a FLAG (warning) surfaced in the report; the actual
+# gate is Q_GROUNDED (Layer 2). Patterns are Python regexes (re.search).
+# ---------------------------------------------------------------------------
+leading_q:
+  patterns:
+    - "가장\\s*.{0,12}(순간|기억|경험|일|때|무엇)"   # "가장 ~던 순간/무엇"
+    - "무엇을\\s*깨달"                                 # "무엇을 깨달았"
+    - "어떤\\s*(교훈|의미|가르침|깨달음)"              # "어떤 교훈/의미"
+    - "삶의\\s*(의미|본질|지침|목표|가치|교훈)"        # over-abstract summary
+    - "인생.{0,4}(의미|본질|교훈|가르침)"
+    - "느꼈던\\s*가장"
+    - "어떤\\s*마음가짐"
+
+# ---------------------------------------------------------------------------
+# Layer 1 — FORMAT. Hard structural filters (empty / too-short / duplicate /
+# schema violation). These reject a pair before it reaches the judge.
+# ---------------------------------------------------------------------------
+format:
+  min_question_chars: 6
+  min_answer_chars: 4
+  drop_exact_duplicates: true   # identical (question, answer) already seen
+
+# ---------------------------------------------------------------------------
+# Layer 2 — LLM judge. One structured call per pair, temperature=0, independent
+# of the generator. The prompt asks for a strict JSON object with a boolean and
+# a one-line Korean reason per dimension.
+#
+# Placeholders {source} / {question} / {answer} are filled by the scorer.
+# ---------------------------------------------------------------------------
+judge:
+  dimensions:
+    - grounded          # 답변 내용이 전부 원문에 근거 (날조 없음)
+    - coherent          # 답변이 그 자체로 자연스럽고 의미가 통함 (비문/왜곡압축 아님)
+    - voice_preserved   # 원문의 옛 문어체 어미/표현/반복 유지 (철자 현대화는 허용)
+    - q_grounded        # 질문이 원문으로 답 가능 (근거 없는 종합 강요 아님)
+  prompt: |
+    You are a meticulous Korean-language data-quality judge. You are given a
+    SOURCE document (old-style Korean memoir prose), and one QUESTION-ANSWER
+    pair generated from it. Judge the pair STRICTLY against the SOURCE only.
+    Do not use outside knowledge and do not guess. If the answer states any
+    fact (name, date, number, event, feeling, lesson) that is not supported by
+    the SOURCE, it is NOT grounded.
+
+    Evaluate these four dimensions and answer true/false for each, with a short
+    (<= 12 words) Korean reason:
+
+    1. grounded — Is EVERY concrete claim in the ANSWER supported by the SOURCE?
+       Invented content / abstract lessons not in the source => false.
+    2. coherent — Is the ANSWER, on its own, natural and meaningful Korean?
+       Broken grammar, nonsense, or a distorted compression (e.g. "숯검정이
+       되었다" collapsed into "검정이 되었던 상황이었고") => false.
+    3. voice_preserved — Does the ANSWER keep the SOURCE's OLD literary plain
+       register — its sentence-final / connective / negation endings and its
+       repeated phrases & idioms — WITHOUT modernizing them? Modernizing an
+       ending or idiom (…지마는→…지만, 아니하였다→하지 않았다, …으나→…지만,
+       …고 하였다→…곤 했다, deleting a repetition like "남으로 남으로",
+       flattening "숯검정이 되다") => false. Pure SPELLING modernization
+       (엇→었, 잇→있, 갓치→같이) is ALLOWED and must NOT lower this score.
+    4. q_grounded — Can the QUESTION be answered from the SOURCE? A question
+       that forces an ungrounded synthesis / moral / abstract summary => false.
+
+    Return ONLY a JSON object, no prose, in exactly this shape:
+    ```json
+    {
+        "grounded": true,
+        "grounded_reason": "…",
+        "coherent": true,
+        "coherent_reason": "…",
+        "voice_preserved": true,
+        "voice_preserved_reason": "…",
+        "q_grounded": true,
+        "q_grounded_reason": "…"
+    }
+    ```
+
+    [SOURCE]
+    {source}
+
+    [QUESTION]
+    {question}
+
+    [ANSWER]
+    {answer}

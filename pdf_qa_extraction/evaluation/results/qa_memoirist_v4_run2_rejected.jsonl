@@ -1,0 +1,1 @@
+{"QUESTION": "이웃들이 양식을 나누어 준 고마움을 평생 잊지 않았다고 하셨는데, 그때 어떤 상황이었는지 말씀해 주실 수 있나요?", "ANSWER": "그때 나는 검정이 되었던 상황이었고, 이웃들이 번갈아 양식을 나누어 주었던 그 고마움을 평생 잊지 아니하였다.", "_reject_reasons": {"grounded": "검정이 되었던 상황은 SOURCE에 없음.", "coherent": "‘검정이 되었던 상황’은 어색하고 의미 불명확함.", "voice_preserved": "‘검정이 되었던 상황’은 SOURCE의 문체와 다름."}, "_failed_dims": ["grounded", "coherent", "voice_preserved"]}

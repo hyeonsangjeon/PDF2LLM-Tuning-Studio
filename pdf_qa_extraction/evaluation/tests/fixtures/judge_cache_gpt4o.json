@@ -1,0 +1,632 @@
+{
+  "e1ffde8f3c7d4659a49a9beebab6fc860d0401e3": {
+    "grounded": true,
+    "grounded_reason": "훈장님의 말씀은 출처에 명확히 기록되어 있음.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어조를 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "637cb584dc4f8e898f2fbc72b4dc0a46bca66f24": {
+    "grounded": true,
+    "grounded_reason": "출처에 심정이 명확히 기술되어 있음.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어조를 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있음."
+  },
+  "e5d08b7c2867472233b8bb388b3c1dc9935dd35e": {
+    "grounded": true,
+    "grounded_reason": "출처에서 안사람의 고마움을 뼈에 사무치게 알았다고 명시됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장입니다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어조를 유지하고 있음.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "285b2ba536d805a08bf58ac50114e0b4b6fe0d58": {
+    "grounded": true,
+    "grounded_reason": "출처에 벅찬 마음 생생함이 명시됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있음."
+  },
+  "4278cb103c0372347eea4e34f7d22080bf0bc9cb": {
+    "grounded": true,
+    "grounded_reason": "부모 섬기지 못한 후회와 눈물 언급이 출처에 있음.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어투를 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있음."
+  },
+  "d6be031073ce3f298fd9ee878f0f116d2a0b4190": {
+    "grounded": false,
+    "grounded_reason": "검정이 되었던 상황은 SOURCE에 없음.",
+    "coherent": false,
+    "coherent_reason": "‘검정이 되었던 상황’은 어색하고 의미 불명확.",
+    "voice_preserved": false,
+    "voice_preserved_reason": "‘검정이 되었던 상황’은 SOURCE의 문체와 다름.",
+    "q_grounded": true,
+    "q_grounded_reason": "SOURCE에서 질문에 대한 답변 가능."
+  },
+  "3c4ecce041f67d58a70e8d04370d8f22a1a6605e": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어조를 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "2309fa3fca795391a695e9e1efffa3099c80a189": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어투를 잘 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "7830c55a1453eff7083344ee89eb54a5a8aed3ee": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "5c40a79ddb4b8c813b0866d6bbde582ae503d814": {
+    "grounded": true,
+    "grounded_reason": "출처에 명시된 내용과 일치합니다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장입니다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지하였습니다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있습니다."
+  },
+  "672a486dff047207795a95590f571a7332be7b76": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 주장과 세부사항이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어투를 잘 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문에 대한 답변이 출처에서 충분히 도출 가능함."
+  },
+  "26ccfba4ff63119fe3b2c4e25a7ea64f53a1db05": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 서술됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "e71b9e44fad0bcc5746cec4eb9dc7c5e61a4abe1": {
+    "grounded": true,
+    "grounded_reason": "출처에 첫아이를 안고 남몰래 울었다는 내용이 있음.",
+    "coherent": true,
+    "coherent_reason": "문법적으로 자연스럽고 의미가 명확함.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "421e9bb1a24b8f8a48016ad18fec755f43221110": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 언급된 교훈이다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장이다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어조를 유지하였다.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 찾을 수 있다."
+  },
+  "75f614517fc7e01782354e7e4ac9e788ec583afe": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 서술됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답변이 명확히 가능함."
+  },
+  "b0411fb1170595ef564c3d59a68feff448c2b3eb": {
+    "grounded": false,
+    "grounded_reason": "검정이 되었던 상황은 SOURCE에 없음.",
+    "coherent": false,
+    "coherent_reason": "‘검정이 되었던 상황’은 어색하고 의미 불명확함.",
+    "voice_preserved": false,
+    "voice_preserved_reason": "‘검정이 되었던 상황’은 SOURCE의 문체와 다름.",
+    "q_grounded": true,
+    "q_grounded_reason": "SOURCE에서 질문에 대한 답변 가능."
+  },
+  "1861e24d39aa81e10f1f8b5c849d72ff75904157": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "8eb41dc046fd0772c52cbdee4639d26cf2fef341": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "4562f9c33e56d50bfd9ba8a10569316a34d8eaa4": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답변 가능함."
+  },
+  "0d43e93ed85b778a40e039753bcb2b8835c8b6c9": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 언급된 내용이다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장이다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지하였다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있다."
+  },
+  "fc149a92cd52aceeb5adc29a4cb9a5a0a855ad88": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "86eb2ae06a996c818eb2677cd0fc7629e27b3239": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "fe082510139903a64fb1a7eba38eab26a61c0dec": {
+    "grounded": true,
+    "grounded_reason": "출처에 첫아이를 안고 울었다는 내용이 명시됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "7c37f662fdc506b5938096e2e24e6e52b2b0c8e5": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "b0a7e79ba686dca350281b71e21ed1d47d74e1f8": {
+    "grounded": true,
+    "grounded_reason": "출처에서 동일한 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답변이 명확히 가능함."
+  },
+  "9f1d64ad67f89ab5fc1ca0beaa7477f6a27dccfb": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답변 가능함."
+  },
+  "922d948651fc0452a4c02bff5257c2a81a12bb2d": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 근거를 두고 있음.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 옛 문체와 표현을 잘 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문에 출처에서 직접 답할 수 있음."
+  },
+  "b9fc52dc7aa363740b66c8f0c1646c8976480866": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 서술됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "3b97162b8f25a9d2773f0058c06c64aa1c67a9a2": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답변 가능함."
+  },
+  "10e4ec20c5bb8a405aa21d5e41183d0a3d4aa7d3": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "1dca6580a74153b4637bb56d4f006e01ea35fd41": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 근거한 내용이다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장이다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지하였다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 답할 수 있다."
+  },
+  "81408b3343f3ea1cd4b39a355fda809ed1551a10": {
+    "grounded": true,
+    "grounded_reason": "출처에 고마움을 잊지 않았다고 명시됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 제공함."
+  },
+  "7b031d92f8b137d9b464aac510591fb89e42a618": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 근거한 내용입니다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장입니다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지하였습니다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있습니다."
+  },
+  "bcc110e655fd375a62f4b31e537112533fb64621": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "6bfd9a636913a32bbef3f6bb750752ab6254cc80": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 언급된 내용이다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장이다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지하였다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있다."
+  },
+  "ba53b0515f8c4b0f3da949ae19f4810d8c3a2a60": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 근거함.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "ebc7d45c699dfcfa08ce014da8113b4487fc5952": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 근거를 두고 있음.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "e82e9e3a2a3f5c0fb5f264da3f556c17bb931dca": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답변 가능함."
+  },
+  "782cd530a78dc03183bc6fbe47628dad38507456": {
+    "grounded": false,
+    "grounded_reason": "가장 힘들었던 점은 SOURCE에 명시되지 않음.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "문체와 문장 종결어미가 SOURCE와 일치함.",
+    "q_grounded": false,
+    "q_grounded_reason": "질문이 SOURCE에서 명확히 답할 수 없음."
+  },
+  "047c5b3d04a21a4c1b8b262955c9daf1144ff400": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 근거합니다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장입니다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지했습니다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있습니다."
+  },
+  "ae8e9530e07e98273aa89c3f94b975b173112b90": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "bbf92b51f62b2025c5ae824e46c703bd60cbdc9a": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 근거함.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "8c160b64226f1f921e13d0925445847e1b149352": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 근거한 내용이다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장이다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지하였다.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답변 가능하다."
+  },
+  "05f62f1dd035b7c0b93af25ca8f6113b9f0fdb00": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 근거를 두고 있음.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "32eb8e9ba554553e9bf0145a04731384d03e6e00": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 서술됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "6b7b8df4092b0c2a56801efc1c402d78f09844a6": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 서술된 내용이다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장이다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지하였다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있다."
+  },
+  "ff28ba81cbbb9ecd9dc4c84063416e71ab368c68": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 근거를 두고 있음.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "6cfd840dd6c8b49ca8ff5be6dd926963e4971637": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 근거한 내용이다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장이다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지하였다.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답변 가능하다."
+  },
+  "0fe8f7b87f48de8977ed11d4b0db49b830a76825": {
+    "grounded": true,
+    "grounded_reason": "출처에 고마움을 평생 잊지 않았다고 명시됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": false,
+    "voice_preserved_reason": "출처의 '잊지 아니하엿다'가 '잊지 아니하였다'로 현대화됨.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 제공함."
+  },
+  "dbecdb862856306147f64320d96d7d3841ecc24b": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "b7e61a5b039f6fc9578f8057eeaa0dcbf2cc9035": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 근거를 두고 있다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장이다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지하였다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있다."
+  },
+  "55d7d6e9e7839223658c1b48d99d70cd0cff0729": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "d472184fc57dd0bcac70cdd30fc45e10e8ca7c4c": {
+    "grounded": true,
+    "grounded_reason": "출처에서 모든 내용이 명확히 확인됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 명확히 답할 수 있음."
+  },
+  "294cd5a15cfe6dab50cea0b666d243b6738f1da6": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 서술되어 있음.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "2e6cc13eecde8187b6c7ee80b1abf3211962cd1d": {
+    "grounded": true,
+    "grounded_reason": "출처에 근거하여 모든 내용이 일치합니다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장입니다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지했습니다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있습니다."
+  },
+  "656d58a49092784b418fc96e01a0a6ae40204676": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 근거함.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 잘 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답변 가능함."
+  },
+  "6dd10cbc841ad60a21eed98b6d3f731c825ac642": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 언급된 내용입니다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장입니다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지했습니다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있습니다."
+  },
+  "ae6a413126b95abfd2ccbfeebf910fe004d69536": {
+    "grounded": true,
+    "grounded_reason": "출처에 벅찬 마음과 생생함이 명시됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있음."
+  },
+  "90893fac7b34a1577f5441f7d308352f0f906f7f": {
+    "grounded": false,
+    "grounded_reason": "검정이 되었던 시기라는 표현은 출처에 없음.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": false,
+    "voice_preserved_reason": "출처의 '숯검정이 되었다'를 현대적으로 압축함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있음."
+  },
+  "76a6725135817d0c2a522d2b9b63eea0d0d6b897": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "질문은 출처에서 답을 명확히 찾을 수 있음."
+  },
+  "5082bcc1270d175796d706c5acdd06cdcc1e3a37": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 근거한 내용입니다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 표현입니다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 잘 유지했습니다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있습니다."
+  },
+  "4a4133d84c6acdeba3671176127e1259ac7c90b9": {
+    "grounded": true,
+    "grounded_reason": "출처에 모든 내용이 명확히 언급됨.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장임.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 그대로 유지함.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 명확히 찾을 수 있음."
+  },
+  "1dcd777f958132c33f3b4e4a9a23dddf08134b33": {
+    "grounded": true,
+    "grounded_reason": "출처에 명확히 언급된 내용입니다.",
+    "coherent": true,
+    "coherent_reason": "자연스럽고 의미 있는 한국어 문장입니다.",
+    "voice_preserved": true,
+    "voice_preserved_reason": "출처의 문체와 어미를 유지했습니다.",
+    "q_grounded": true,
+    "q_grounded_reason": "출처에서 질문에 대한 답을 찾을 수 있습니다."
+  }
+}

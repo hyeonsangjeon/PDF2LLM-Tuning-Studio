@@ -1,0 +1,4 @@
+# Verbose per-dimension dump — regenerable via `run_eval` from the samples +
+# judge cache. The human-readable reports and the clean/rejected products are
+# kept as evidence.
+*_scored.jsonl
