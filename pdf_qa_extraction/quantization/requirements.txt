@@ -1,0 +1,21 @@
+# Quantization track — pinned stack (recorded from the executed run; see results/env_A.json).
+# Core (used by the executed CPU smoke AND the GPU production run):
+torch==2.13.0
+transformers==5.14.1
+trl==1.9.0
+peft==0.19.1
+datasets==5.0.0
+accelerate==1.14.0
+sentencepiece==0.2.2
+pyyaml
+
+# Notebook execution:
+nbformat
+nbconvert
+ipykernel
+
+# GPU-only (install on the Azure GPU VM; Ampere+ for BF16). Not used by the CPU smoke:
+#   unsloth        # FastLanguageModel — BF16 LoRA (train.backend=unsloth, compute.mode=gpu)
+#   torchao        # INT4 PTQ / QAT (Part 2, methods B/C)
+#   vllm           # INT4 serving benchmark (Part 2)
+#   bitsandbytes   # optional 4bit loading

@@ -1,0 +1,92 @@
+# quantization/config.yaml
+# Shared config for the 3-way quantization comparison (A: BF16 LoRA, B: INT4 PTQ,
+# C: INT4 QAT). Part 1 implements Method A; B/C (Part 2) reuse the SAME base model,
+# data slice and eval defined here, so the base is fixed once for all methods.
+
+base_model:
+  # Base used by A/B/C (identical). Final pick is confirmed by
+  # notebooks/00_base_select.ipynb on a GPU VM (KorQuAD dev zero-shot F1 over the
+  # 3 candidates below). The default is candidate #1 (ungated, single-GPU friendly).
+  selected: "Qwen/Qwen3-1.7B"
+  candidates:
+    - id: "Qwen/Qwen3-1.7B"                    # Apache-2.0, strong Korean, ultralight
+      family: qwen
+      gated: false
+    - id: "Qwen/Qwen3-4B"                      # Apache-2.0, higher quality, single-GPU
+      family: qwen
+      gated: false
+    - id: "meta-llama/Llama-3.2-3B-Instruct"   # different family (presentation diversity)
+      family: llama
+      gated: true                              # requires HF access approval + token
+  # Tiny ungated model used ONLY for the CPU smoke test when no GPU is available.
+  smoke: "Qwen/Qwen2.5-0.5B-Instruct"
+
+data:
+  dataset: "KorQuAD/squad_kor_v1"   # runtime download; NOT committed to the repo
+  seed: 42
+  eval_size: 500                    # held-out val slice, identical for A/B/C
+  train_subset: null                # null = full 60.4k train; set an int for fast iteration
+  max_seq_len: 1024
+  # Generative instruction template (target = answer text + EOS).
+  prompt_template: |
+    아래 문맥을 읽고 질문에 답하세요.
+
+    [문맥]
+    {context}
+
+    [질문] {question}
+    [답]
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.0
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+train:
+  # backend: unsloth = GPU-only (spec default, FastLanguageModel);
+  #          hf      = transformers + peft + trl (CPU-capable fallback for smoke).
+  backend: unsloth
+  precision: bf16          # Method A is the BF16 baseline (load_in_4bit=false)
+  load_in_4bit: false
+  epochs: 1
+  max_steps: null          # null = full run; small int for smoke
+  per_device_batch_size: 2
+  grad_accum: 4
+  learning_rate: 2.0e-4
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  logging_steps: 10
+  max_grad_norm: 1.0
+  save_merged: true        # merge LoRA -> BF16 model (input to Part 2 PTQ/QAT)
+
+eval:
+  max_new_tokens: 32
+  batch_size: 8
+  ppl_samples: 200         # held-out contexts for perplexity
+
+# compute.mode = gpu  -> production run (A100/H100, unsloth, BF16), uses top-level values.
+# compute.mode = cpu  -> smoke run (tiny model, hf backend, tiny subset) to exercise every
+#                        notebook block end-to-end and produce real (non-empty) outputs when
+#                        no GPU quota is available. Overrides below are applied by load_config.
+compute:
+  mode: gpu
+  smoke:
+    use_smoke_model: true
+    backend: hf
+    precision: fp32
+    train_subset: 200
+    eval_size: 20
+    max_steps: 12
+    max_seq_len: 384
+    per_device_batch_size: 1
+    grad_accum: 1
+    ppl_samples: 20
+
+paths:
+  artifacts_dir: "quantization/artifacts"
+  results_dir: "quantization/results"
+  method_a_dir: "quantization/artifacts/A_bf16"
+
+# Pinned versions are recorded at runtime into results/env_<method>.json by the
+# notebooks (reproducibility is the presentation's thesis). See notebooks/README.md.

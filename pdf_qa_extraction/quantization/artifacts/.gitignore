@@ -1,0 +1,10 @@
+# Model weights are large (GB) and fully regenerable — never commit them.
+# train_lora.py / notebook 01 produce:
+#   A_bf16/          merged BF16 model  (input to Part 2 PTQ/QAT)
+#   A_bf16_adapter/  LoRA adapter
+#   A_bf16_run/      trainer checkpoints
+# See README.md for the path contract.
+*
+!.gitkeep
+!.gitignore
+!README.md

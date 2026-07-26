@@ -1,0 +1,12 @@
+{
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "backend": "hf",
+  "precision": "fp32",
+  "mode": "cpu",
+  "n_train": 200,
+  "train_seconds": 115.69,
+  "train_loss": 2.6426029205322266,
+  "global_step": 12,
+  "adapter_dir": "quantization/artifacts/A_bf16_adapter",
+  "merged_dir": "quantization/artifacts/A_bf16"
+}
