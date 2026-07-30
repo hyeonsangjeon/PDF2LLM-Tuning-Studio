@@ -1,0 +1,28 @@
+{
+  "harness": {
+    "eval_size": 500,
+    "max_new_tokens": 32,
+    "method": "zeroshot",
+    "compute": "gpu"
+  },
+  "rows": [
+    {
+      "model": "Qwen/Qwen3-1.7B",
+      "em": 11.6,
+      "f1": 41.4,
+      "note": "zero-shot"
+    },
+    {
+      "model": "Qwen/Qwen3-4B",
+      "em": 2.0,
+      "f1": 3.546,
+      "note": "zero-shot"
+    },
+    {
+      "model": "meta-llama/Llama-3.2-3B-Instruct",
+      "f1": null,
+      "note": "gated: HF 승인+토큰 필요(VM에서 측정)"
+    }
+  ],
+  "selected": "Qwen/Qwen3-1.7B"
+}

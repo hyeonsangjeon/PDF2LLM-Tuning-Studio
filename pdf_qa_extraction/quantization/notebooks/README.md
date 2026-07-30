@@ -5,7 +5,7 @@
 
 | 노트북 | 내용 | 상태 |
 |---|---|---|
-| `00_base_select.ipynb` | 베이스 3종 zero-shot F1 → 선정 | 실행됨(CPU 스모크 프록시 1종 실측) |
+| `00_base_select.ipynb` | 베이스 3종 zero-shot F1 → 선정 | **A100 80GB 실측**(ungated 2종 F1; Llama-3.2-3B gated) |
 | `01_bf16_lora.ipynb` | **Method A** 설명+학습+데모+수치 | **A100 80GB 실측 실행(실 출력 커밋)** |
 | `02_int4_ptq.ipynb` | Method B (PTQ) | 템플릿 스텁(Part 2) |
 | `03_int4_qat.ipynb` | Method C (QAT) | 템플릿 스텁(Part 2) |

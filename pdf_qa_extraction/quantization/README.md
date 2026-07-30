@@ -60,7 +60,7 @@ unsloth BF16, KorQuAD `max_steps=2000`. 아래 §Method A 표는 이 실행의 �
 > 확보 실패(A100/A10만 열림). 필요 시 MS 지원티켓 경로만 남는다.
 
 ## 베이스 모델 선정 (스펙 §2)
-후보 3종과 선정 기준. 최종 확정은 `notebooks/00_base_select.ipynb`(GPU에서 3종 zero-shot F1).
+후보 3종과 선정 기준. 최종 확정: `notebooks/00_base_select.ipynb`(**A100 80GB에서 zero-shot F1 실측**).
 
 | 후보 | 파라미터 | 라이선스 | 게이팅 | 비고 |
 |---|---|---|---|---|
@@ -69,9 +69,12 @@ unsloth BF16, KorQuAD `max_steps=2000`. 아래 §Method A 표는 이 실행의 �
 | meta-llama/Llama-3.2-3B-Instruct | ~3B | Llama | **유(승인+토큰)** | 패밀리 다양성 |
 
 - **기준**: (a) KorQuAD dev zero-shot F1, (b) 단일 GPU 적합, (c) TorchAO INT4 + vLLM 서빙 호환.
-- **기본값 = Qwen3-1.7B**(Apache-2.0·무게이팅·경량). `config.yaml`의 `base_model.selected`에 고정 →
-  A/B/C 동일 베이스. CPU 스모크에선 3종 실측 불가(4B는 CPU 과도, Llama는 gated)라
-  00 노트북이 소형 프록시 1종으로 **하네스 동작만 실증**(zero-shot F1 측정 성공).
+- **A100 실측 zero-shot F1** (held-out 500, `max_new_tokens=32`, `00_base_select.ipynb`):
+  **Qwen3-1.7B EM 11.6 / F1 41.4**, Qwen3-4B EM 2.0 / F1 3.5, Llama-3.2-3B **gated**(승인+토큰 필요→제외).
+  세부 표는 `results/base_select_zeroshot.json`.
+- **선정 = Qwen3-1.7B**: ungated 후보 중 zero-shot 추출 F1 최고 + 단일 GPU 적합 + INT4/vLLM 호환.
+  `config.yaml`의 `base_model.selected`에 고정 → A/B/C 동일 베이스. (짧은 32-토큰 예산의
+  zero-shot은 거친 프록시이며, 최종 성능은 Method A 학습 후 **EM 81.0 / F1 89.9**로 확정.)
 
 ## Method A 결과 — 3-way 표 첫 행 (실측 · A100 80GB)
 `notebooks/01_bf16_lora.ipynb`를 **A100 80GB에서 실제 실행**한 수치(held-out 500):
