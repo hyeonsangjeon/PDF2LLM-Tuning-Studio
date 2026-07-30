@@ -39,26 +39,25 @@ python -m quantization.eval_qa --smoke --method A_bf16     # GPU: --smoke 제거
 python -m quantization.eval_qa --selftest                 # 지표만 자가검증(모델 불필요)
 ```
 
-## ⚙️ 컴퓨트 / GPU 쿼터 상태 (중요)
-스펙은 **Azure 단일 GPU VM** 실행을 요구한다. 확인 결과, 대상 구독
-`ME-MngEnvMCAP756842-hjeon-1`에는 **모던 GPU 패밀리 쿼터가 전부 0**이었다
-(H100/A100/A10/T4 모두 limit=0; 리테이어드 K80·M60만 non-zero라 BF16/unsloth 불가).
+## ⚙️ 컴퓨트 / GPU 실행 (Azure A100 실측)
+스펙대로 **Azure 단일 GPU VM에서 실제 실행**했다. 대상 구독
+`ME-MngEnvMCAP756842-hjeon-1`은 초기엔 모던 GPU 쿼터가 전부 0이었으나,
+**여러 리전에 분산 쿼터 신청**으로 확보했다:
 
-지시대로 **쿼터 증설을 요청**했으나 승인되지 않았다:
-
-| 패밀리 | 요청 vCPU | 요청 ID | 결과 |
+| 리전 | 패밀리 | 확보 쿼터 | 비고 |
 |---|---|---|---|
-| H100 `StandardNCadsH100v5Family` | 40 | `e9245f08` | **Failed** |
-| A10 `StandardNVADSA10v5Family` | 36 | `d9addbec` | **Failed** |
-| A100 `StandardNCADSA100v4Family` | 24 | `bd193591` | InProgress→Failed |
+| **japaneast** | `NCADSA100v4` | **96 vCPU = A100 80GB ×4** | 본 실행에 사용(1장) |
+| italynorth · switzerlandnorth · southeastasia | `NCADSA100v4` | 각 24 vCPU (A100 ×1) | 분산 여유분 |
+| spaincentral | `NVADSA10v5` | 36 vCPU (A10 ×1) | 대안 |
 
-과거 동일 패밀리 요청(H100→160, A100→96, T4→16)도 **모두 Failed**, `CORES`만 Succeeded
-→ 스폰서(MCAP) 구독의 **GPU 쿼터 잠금**으로 판단(코드/권한 문제 아님).
+배포 시 MCAPS 거버넌스 정책이 **온디맨드 GPU SKU를 Deny**하므로
+`Standard_NC24ads_A100_v4`를 **Spot 우선순위**로 프로비저닝해 우회했다
+(정책 조건이 `priority != Spot` AND이라 Spot이면 미적용). 실제 실행 환경 =
+**NVIDIA A100 80GB PCIe ×1 @ japaneast**, `compute.mode: gpu`, base=Qwen3-1.7B,
+unsloth BF16, KorQuAD `max_steps=2000`. 아래 §Method A 표는 이 실행의 실측치다.
 
-**따라서 "쿼터 중 있는 걸로 처리"** 지시에 맞춰, 파이프라인을 **동일 코드 경로**로
-로컬 **CPU 스모크**(소형 `Qwen/Qwen2.5-0.5B-Instruct` + 200 서브셋 + 12스텝)로 실제 실행하여
-모든 블록(데이터·지표·학습·머지·데모·수치)이 통과함을 **실 출력**으로 노트북에 커밋했다.
-GPU 쿼터가 열리면 `compute.mode: gpu`로 **동일 셀**을 돌려 스펙의 A100/H100 BF16 수치를 채우면 된다.
+> H100은 전 리전(63개)·전 크기(@40/@160)로 ~28회 시도했으나 SKU 단위 구독 잠금으로
+> 확보 실패(A100/A10만 열림). 필요 시 MS 지원티켓 경로만 남는다.
 
 ## 베이스 모델 선정 (스펙 §2)
 후보 3종과 선정 기준. 최종 확정은 `notebooks/00_base_select.ipynb`(GPU에서 3종 zero-shot F1).
@@ -74,20 +73,23 @@ GPU 쿼터가 열리면 `compute.mode: gpu`로 **동일 셀**을 돌려 스펙�
   A/B/C 동일 베이스. CPU 스모크에선 3종 실측 불가(4B는 CPU 과도, Llama는 gated)라
   00 노트북이 소형 프록시 1종으로 **하네스 동작만 실증**(zero-shot F1 측정 성공).
 
-## Method A 결과 — 3-way 표 첫 행
-> ⚠️ 아래는 **CPU 스모크**(0.5B·12스텝·fp32) 수치로 **파이프라인 정합성 증거**다.
-> 스펙 수치(Qwen3-1.7B·BF16·full·A100/H100)는 GPU에서 `mode=gpu` 재실행 시 채워진다.
+## Method A 결과 — 3-way 표 첫 행 (실측 · A100 80GB)
+`notebooks/01_bf16_lora.ipynb`를 **A100 80GB에서 실제 실행**한 수치(held-out 500):
 
-| method | base | EM | F1 | ppl | size(GB) | VRAM | tok/s | prec |
+| method | base | EM | F1 | ppl | size(GB) | peak VRAM | tok/s | prec |
 |---|---|---|---|---|---|---|---|---|
-| A_bf16 (smoke) | Qwen2.5-0.5B | 30.0 | 45.2 | 15.7 | 1.85 | n/a(CPU) | 5.6 | fp32 |
+| **A_bf16** | Qwen3-1.7B | **81.0** | **89.92** | 10.39 | 3.22 | 7.93 | 122.8 | bf16 |
 
-참고: 동일 모델 **zero-shot F1 18.0 → LoRA 후 45.2** (학습이 실제로 개선; 00 vs 01 노트북).
+- 학습: unsloth `FastLanguageModel`, BF16(load_in_4bit=false), LoRA r16/α32(attn+MLP),
+  effective batch 8, **2000 steps**(≈16k KorQuAD 예제, ~0.26 epoch), 1× A100 80GB **~33분**, mean loss 2.03.
+- 동작 데모(노트북 셀 실측): held-out 질문 *"2004년 이명박이 서울시장 재직시절 전면적으로 개선한 것은?"*
+  → 정답 `대중교통체계`, **모델 답 `대중교통체계`(정확)**.
+- B(INT4 PTQ)·C(INT4 QAT) 행은 Part 2에서 이 머지 BF16 모델을 입력으로 채운다.
 
 ## 재현성 (버전 고정)
-`results/env_A.json`에 실행 시 자동 기록: torch 2.13.0 · transformers 5.14.1 · trl 1.9.0 ·
-peft 0.19.1 · datasets 5.0.0 · python 3.10. GPU VM에선 CUDA/unsloth/torchao/vllm 버전을
-동일하게 기록한다.
+`results/env_A.json`에 실행 시 자동 기록. **본 A100 실행 환경**: torch **2.11.0+cu130** ·
+transformers **5.5.0** · trl **0.24.0** · peft **0.20.0** · datasets **4.3.0** · python 3.10 ·
+CUDA 13.0 · unsloth 2026.7.6 · **A100 80GB PCIe**. Part 2(INT4/vLLM) 실행 시 torchao/vllm 버전도 동일 기록한다.
 
 ## 가드레일
 - `quantization/` 안에서만. `pdf_qa` 코어·`evaluation/`·`personas.yaml`·웹앱 **무변경**.

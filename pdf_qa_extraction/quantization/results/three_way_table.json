@@ -1,20 +1,20 @@
 [
   {
     "method": "A_bf16",
-    "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
-    "exact_match": 30.0,
-    "f1": 45.177,
-    "n_eval": 20,
-    "perplexity": 15.685,
-    "size_gb": 1.8511,
-    "peak_vram_gb": null,
-    "tok_per_s": 5.63,
-    "precision": "fp32",
-    "notes": "mode=cpu backend=hf",
+    "base_model": "Qwen/Qwen3-1.7B",
+    "exact_match": 81.0,
+    "f1": 89.924,
+    "n_eval": 500,
+    "perplexity": 10.3928,
+    "size_gb": 3.2155,
+    "peak_vram_gb": 7.9251,
+    "tok_per_s": 122.75,
+    "precision": "bf16",
+    "notes": "mode=gpu backend=unsloth",
     "extra": {
-      "gen_seconds": 113.76,
+      "gen_seconds": 26.16,
       "sample_predictions": [
-        "2004년 서울시장 재직시절 대중교통체계를 전면적으로 개선하였다. 거리비례제를 도입",
+        "대중교통체계",
         "5·18 관련 특별법",
         "2009년"
       ]

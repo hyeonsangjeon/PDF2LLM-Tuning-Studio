@@ -6,7 +6,7 @@
 | 노트북 | 내용 | 상태 |
 |---|---|---|
 | `00_base_select.ipynb` | 베이스 3종 zero-shot F1 → 선정 | 실행됨(CPU 스모크 프록시 1종 실측) |
-| `01_bf16_lora.ipynb` | **Method A** 설명+학습+데모+수치 | **실행됨(실 출력 커밋)** |
+| `01_bf16_lora.ipynb` | **Method A** 설명+학습+데모+수치 | **A100 80GB 실측 실행(실 출력 커밋)** |
 | `02_int4_ptq.ipynb` | Method B (PTQ) | 템플릿 스텁(Part 2) |
 | `03_int4_qat.ipynb` | Method C (QAT) | 템플릿 스텁(Part 2) |
 
@@ -23,11 +23,12 @@ cd pdf_qa_extraction
 pip install nbconvert ipykernel
 python -m ipykernel install --user --name python3
 jupyter nbconvert --to notebook --execute --inplace \
-  --ExecutePreprocessor.timeout=1800 --ExecutePreprocessor.kernel_name=python3 \
+  --ExecutePreprocessor.timeout=5400 --ExecutePreprocessor.kernel_name=python3 \
   quantization/notebooks/01_bf16_lora.ipynb
 ```
 - 첫 코드 셀이 `quantization` 패키지를 import 경로에 넣고 repo 루트로 `chdir`하므로,
-  실행 위치에 관계없이 동작한다.
-- **GPU VM**: `load_config()`(= `compute.mode: gpu`, Qwen3-1.7B·unsloth·BF16·full).
-  **무 GPU**: 노트북은 `load_config(force_mode='cpu')` 스모크로 실행됨(소형 모델·서브셋).
-  상세는 각 노트북 상단 **실행 모드 배너** 및 `../README.md` 컴퓨트/쿼터 상태 참고.
+  실행 위치에 관계없이 동작한다. 학습 셀은 A100에서 ~33분이므로 셀 timeout은 넉넉히(≥3600s) 준다.
+- **GPU VM(커밋된 01의 실제 실행)**: `load_config()`(= `compute.mode: gpu`, Qwen3-1.7B·unsloth·BF16,
+  `max_steps=2000`) → **A100 80GB PCIe에서 실측**.
+  **무 GPU 대안**: `compute.mode: cpu`(또는 `--smoke`)로 소형 모델·서브셋 스모크 실행.
+  상세는 각 노트북 상단 **실행 모드 배너** 및 `../README.md` 컴퓨트/실행 상태 참고.

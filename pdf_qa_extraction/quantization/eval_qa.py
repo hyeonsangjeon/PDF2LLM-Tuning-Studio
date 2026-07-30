@@ -267,12 +267,37 @@ def _selftest() -> None:
 
 
 def load_model_for_eval(model_dir: str, precision: str = "fp32"):
-    """Load a merged/base model + tokenizer for evaluation (GPU if available, else CPU)."""
+    """Load a merged/base model + tokenizer for evaluation (GPU if available, else CPU).
+
+    If ``unsloth`` was imported earlier in this process (Method A trains with it), it
+    globally patches the transformer attention ``forward`` to call an injected
+    ``apply_qkv``; a plain ``transformers`` reload in the same kernel then raises
+    ``AttributeError: '...Attention' object has no attribute 'apply_qkv'``. In that
+    case we load through unsloth so the injected attributes are present. The plain
+    ``transformers`` path is kept for the CPU smoke and for Part 2 (INT4) where unsloth
+    is not imported.
+    """
+    import sys
+
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     dtype_map = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}
     dtype = dtype_map.get(precision, torch.float32)
+
+    if "unsloth" in sys.modules and torch.cuda.is_available():
+        try:
+            from unsloth import FastLanguageModel
+
+            model, tok = FastLanguageModel.from_pretrained(
+                model_name=model_dir, max_seq_length=2048, dtype=dtype, load_in_4bit=False)
+            FastLanguageModel.for_inference(model)
+            if tok.pad_token is None:
+                tok.pad_token = tok.eos_token
+            return model, tok
+        except Exception:
+            pass  # fall back to the plain transformers loader below
+
     tok = AutoTokenizer.from_pretrained(model_dir)
     device_map = "auto" if torch.cuda.is_available() else None
     try:

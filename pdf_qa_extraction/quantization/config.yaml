@@ -50,7 +50,11 @@ train:
   precision: bf16          # Method A is the BF16 baseline (load_in_4bit=false)
   load_in_4bit: false
   epochs: 1
-  max_steps: null          # null = full run; small int for smoke
+  max_steps: 2000          # bounded BF16 LoRA baseline (~2000 steps @ eff.batch 8 =
+                           # 16k KorQuAD examples, ~0.26 epoch). Measured ~1.1 it/s on
+                           # 1x A100 80GB -> ~30 min; a full 60.4k epoch (~7.5k steps) is
+                           # ~110 min and exceeds a practical notebook cell timeout.
+                           # null = full run; small int for smoke.
   per_device_batch_size: 2
   grad_accum: 4
   learning_rate: 2.0e-4
