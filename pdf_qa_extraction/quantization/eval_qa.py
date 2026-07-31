@@ -151,6 +151,23 @@ def perplexity(model, tokenizer, texts: List[str], max_len: int = 1024,
     return math.exp(nll_sum / tok_sum)
 
 
+def make_int4_weightonly_config(group_size: int = 128):
+    """TorchAO INT4 weight-only config that runs on A100 without extra kernel libs.
+
+    torchao 0.17's default ``version=2`` PLAIN (and PRESHUFFLED) int4 packing needs an
+    external ``mslk`` kernel, and PLAIN_INT32 has no CUDA path. TILE_PACKED_TO_4D uses
+    PyTorch's built-in tinygemm tensor-core INT4 kernel (bf16 compute), so Method B
+    (PTQ) and Method C (QAT) can share this exact same INT4 serving format.
+    """
+    from torchao.quantization import Int4WeightOnlyConfig
+    from torchao.quantization.quantize_.workflows.int4.int4_packing_format import (
+        Int4PackingFormat,
+    )
+
+    return Int4WeightOnlyConfig(
+        group_size=group_size, int4_packing_format=Int4PackingFormat.TILE_PACKED_TO_4D)
+
+
 def dir_size_gb(path: str) -> float:
     total = 0
     for root, _dirs, files in os.walk(path):

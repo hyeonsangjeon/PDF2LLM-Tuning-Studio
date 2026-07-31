@@ -1,14 +1,14 @@
-# quantization/ — 양자화 트랙 Part 1 (BF16 LoRA 베이스라인 A)
+# quantization/ — 양자화 트랙 (BF16 LoRA A → INT4 PTQ B → INT4 QAT C, **3-way 완성**)
 
-발표(Serve Track: **LoRA → INT4 PTQ/QAT → vLLM**)용 **3-way 양자화 비교**의 기반.
+발표(Serve Track: **LoRA → INT4 PTQ/QAT → vLLM**)용 **3-way 양자화 비교**.
 PDF 추출·페르소나·스코어러와 **무관한 독립 트랙**으로, 표준 데이터셋 **KorQuAD**(`KorQuAD/squad_kor_v1`,
 런타임 다운로드·미커밋)만 사용한다.
 
 | 방법 | 설명 | 노트북 | 상태 |
 |---|---|---|---|
-| **A. BF16 LoRA** | 풀정밀 베이스에 LoRA 학습 후 머지 (품질 기준선) | `01_bf16_lora.ipynb` | **이 Part 1 완성** |
-| B. INT4 PTQ | A 머지 모델을 사후 4bit 양자화 (TorchAO) | `02_int4_ptq.ipynb` | 템플릿 스텁 (Part 2) |
-| C. INT4 QAT | 4bit 인식 학습 | `03_int4_qat.ipynb` | 템플릿 스텁 (Part 2) |
+| **A. BF16 LoRA** | 풀정밀 베이스에 LoRA 학습 후 머지 (품질 기준선) | `01_bf16_lora.ipynb` | **실행 완료** |
+| **B. INT4 PTQ** | A 머지 모델을 사후 4bit 양자화 (TorchAO tile-packed) | `02_int4_ptq.ipynb` | **실행 완료** |
+| **C. INT4 QAT** | 4bit 인식 학습(full-param STE)으로 양자화 오차 보정 | `03_int4_qat.ipynb` | **실행 완료** |
 
 ## 구성
 ```
@@ -17,7 +17,7 @@ quantization/
   data_korquad.py      # KorQuAD 로드 + 생성 instruction 포맷 + 고정 seed 분리
   train_lora.py        # Method A: BF16 LoRA. backend=unsloth(GPU) | hf(CPU-capable)
   eval_qa.py           # A/B/C 공용 eval: KorQuAD 공식 EM/F1 + ppl + 크기/VRAM/tok·s
-  notebooks/           # 00 base-select, 01 BF16 LoRA(실행됨), 02/03 스텁, README(템플릿)
+  notebooks/           # 00 base-select, 01 BF16 LoRA, 02 INT4 PTQ, 03 INT4 QAT (모두 실행됨)
   artifacts/           # 산출물(미커밋·gitignore): A_bf16/(머지) = Part 2 입력
   results/             # metrics json + 3-way 표(커밋)
 ```
@@ -76,28 +76,61 @@ unsloth BF16, KorQuAD `max_steps=2000`. 아래 §Method A 표는 이 실행의 �
   `config.yaml`의 `base_model.selected`에 고정 → A/B/C 동일 베이스. (짧은 32-토큰 예산의
   zero-shot은 거친 프록시이며, 최종 성능은 Method A 학습 후 **EM 81.0 / F1 89.9**로 확정.)
 
-## Method A 결과 — 3-way 표 첫 행 (실측 · A100 80GB)
-`notebooks/01_bf16_lora.ipynb`를 **A100 80GB에서 실제 실행**한 수치(held-out 500):
+## 3-way 결과 (실측 · A100 80GB · held-out 500)
+`notebooks/01·02·03`을 **A100 80GB(japaneast, Spot)에서 실제 실행**한 수치(`results/three_way_table.json`):
 
 | method | base | EM | F1 | ppl | size(GB) | peak VRAM | tok/s | prec |
 |---|---|---|---|---|---|---|---|---|
-| **A_bf16** | Qwen3-1.7B | **81.0** | **89.92** | 10.39 | 3.22 | 7.93 | 122.8 | bf16 |
+| **A_bf16** (기준선) | Qwen3-1.7B | **81.0** | **89.92** | 10.39 | 3.22 | 7.93 | 122.8 | bf16 |
+| **B_int4_ptq** | Qwen3-1.7B | 65.2 | 80.69 | 15.90 | **1.29** | 4.58 | 37.4 | int4 |
+| **C_int4_qat** | Qwen3-1.7B | **71.8** | **83.52** | **12.97** | **1.29** | 7.80 | 37.0 | int4 |
 
-- 학습: unsloth `FastLanguageModel`, BF16(load_in_4bit=false), LoRA r16/α32(attn+MLP),
-  effective batch 8, **2000 steps**(≈16k KorQuAD 예제, ~0.26 epoch), 1× A100 80GB **~33분**, mean loss 2.03.
-- 동작 데모(노트북 셀 실측): held-out 질문 *"2004년 이명박이 서울시장 재직시절 전면적으로 개선한 것은?"*
-  → 정답 `대중교통체계`, **모델 답 `대중교통체계`(정확)**.
-- B(INT4 PTQ)·C(INT4 QAT) 행은 Part 2에서 이 머지 BF16 모델을 입력으로 채운다.
+**해석 — 스토리가 깔끔하게 성립한다.**
+- **A (BF16)**: 품질 상한. 3.22GB.
+- **B (PTQ)**: 학습 없이 A 머지를 사후 int4 양자화 → 크기 **2.5× 축소(3.22→1.29GB)**, 대신 품질 하락(F1 89.9→80.7, EM 81→65).
+- **C (QAT)**: **동일한 int4 포맷(1.29GB)** 이지만 양자화를 인식하며 재학습 → **B 대비 회복**(F1 **+2.8**, EM **+6.6**, ppl 15.9→**12.97**). 세 지표 모두 B와 A 사이에 위치.
+- **B vs C가 곧 *train-aware* 효과**: 서빙 포맷·크기가 동일하므로 차이는 순수하게 QAT 재학습에서 온다.
+
+세부:
+- **A 학습**: unsloth `FastLanguageModel`, BF16(load_in_4bit=false), LoRA r16/α32(attn+MLP), effective batch 8,
+  **2000 steps**(≈16k KorQuAD, ~0.26 epoch), ~33분, mean loss 2.03.
+- **B (PTQ)**: TorchAO `Int4WeightOnlyConfig(group_size=128, TILE_PACKED_TO_4D)`를 transformers `TorchAoConfig`
+  경로로 적용(임베딩·`lm_head` 제외 → tied-weight 안전). 재학습 없음.
+- **C (QAT)**: matched fake-quant(`Int4WeightOnlyConfig(g128)`에서 **추론** → tinygemm tile-packed 서빙과 **동일 스킴**)
+  삽입 → **양자화 대상 linear 가중치만** STE로 400 step 재학습(임베딩·`lm_head` 동결로 ppl 드리프트 억제) →
+  convert(adapted-bf16) → **B와 동일한** tile-packed int4로 export.
+- **동작 데모**(각 노트북 셀 실측): held-out 질문 *"2004년 이명박이 서울시장 재직시절 전면적으로 개선한 것은?"*
+  → 정답 `대중교통체계`, **A·B·C 모두 `대중교통체계`(정확)**.
+
+> **tok/s 주의**: A는 **unsloth** 추론(122.8), B·C는 **plain transformers int4** 추론(~37)이라 **동일 조건 비교가 아니다**.
+> 공정한 비교 축은 **EM·F1·size·ppl**. `peak VRAM`도 노트북 내 측정이라 A·C는 학습 직후 잔여 할당을 포함(같은
+> int4를 서빙하는 B의 **~4.6GB**가 순수 int4 서빙 풋프린트에 가장 근접). 크기(1.29GB, B=C 동일)가 풋프린트 동등성을 확증.
 
 ## 재현성 (버전 고정)
-`results/env_A.json`에 실행 시 자동 기록. **본 A100 실행 환경**: torch **2.11.0+cu130** ·
-transformers **5.5.0** · trl **0.24.0** · peft **0.20.0** · datasets **4.3.0** · python 3.10 ·
-CUDA 13.0 · unsloth 2026.7.6 · **A100 80GB PCIe**. Part 2(INT4/vLLM) 실행 시 torchao/vllm 버전도 동일 기록한다.
+`results/env_{A,B,C}.json`에 실행 시 자동 기록. **본 A100 실행 환경**: torch **2.11.0+cu130** ·
+transformers **5.5.0** · trl **0.24.0** · peft **0.20.0** · datasets **4.3.0** · **torchao 0.17.0** ·
+python 3.10 · CUDA 13.0 · unsloth 2026.7.6 · **A100 80GB PCIe(japaneast, Spot)**.
+
+> **torchao INT4 주의**: 기본 `Int4WeightOnlyConfig(g128)`(PLAIN 패킹)은 실양자화 시 `mslk >= 1.0.0`을 요구해
+> 실패한다. 본 트랙은 내장 tinygemm 경로인 `int4_packing_format=TILE_PACKED_TO_4D`를 사용(B·C 공통 서빙 포맷).
 
 ## 가드레일
 - `quantization/` 안에서만. `pdf_qa` 코어·`evaluation/`·`personas.yaml`·웹앱 **무변경**.
 - **데이터셋 미커밋**(런타임 다운로드). `.env`/키/토큰 미커밋 — 노트북 출력에도 미노출.
 - 베이스·하이퍼파라미터는 `config.yaml`(A/B/C 동일 베이스 고정).
 
-## 다음 (Part 2)
-`artifacts/A_bf16/` 머지 모델 → **INT4 PTQ(B)** / **INT4 QAT(C)** + 노트북 02·03 → 3-way 표 완성 → vLLM 서빙 벤치.
+## vLLM INT4 서빙 검증 (보너스)
+B·C가 공유하는 **TorchAO int4 tile-packed 아티팩트**를 **vLLM 0.26.0**으로 로드해 서빙 가능함을 실측 확인:
+```python
+from vllm import LLM, SamplingParams
+llm = LLM(model="quantization/artifacts/B_int4_ptq", quantization="torchao",
+          dtype="bfloat16", enforce_eager=True, max_model_len=2048)
+```
+- **로드 성공**: 엔진 로그 기준 GPU 가중치 풋프린트 **1.29GB**(디스크 크기와 일치), KV cache 45.6GB 확보.
+- **생성 정확**: *"훈민정음을 창제한 사람은?"* → **`세종대왕`**(정답). 즉 학습→PTQ/QAT→**vLLM 서빙**까지 end-to-end 동작.
+- 동일 포맷이라 C 아티팩트도 같은 방식으로 서빙된다(B로 대표 검증).
+
+## 상태
+- ✅ **3-way 완성**: A(BF16)·B(INT4 PTQ)·C(INT4 QAT) 모두 A100 실측, `results/three_way_table.json` 3행.
+- ✅ 노트북 01·02·03 실행 완료(실 출력 포함), 재현 환경 `env_{A,B,C}.json`.
+- ✅ vLLM int4 서빙 검증(보너스).

@@ -69,6 +69,22 @@ eval:
   batch_size: 8
   ppl_samples: 200         # held-out contexts for perplexity
 
+# Part 2 — INT4 quantization of the Method A merge (B: PTQ, C: QAT). Both target the
+# SAME TorchAO int4_weight_only format (group_size below) so B vs C isolates "train-aware".
+ptq:
+  group_size: 128          # TorchAO Int4WeightOnlyConfig group size (weight-only INT4)
+
+qat:                       # C = quantization-aware training (full-param STE) over the A merge
+  group_size: 128          # fake-quant scheme is inferred from Int4WeightOnlyConfig(g128)
+                           # so it MATCHES the tile-packed serving quant exactly.
+  max_steps: 400           # short QAT adaptation from the already-trained A merge
+  learning_rate: 1.0e-5    # conservative LR for full-param STE: adapts the quantized linear
+                           # weights to their own int4 scheme while embeddings/lm_head stay
+                           # frozen, so held-out ppl does not drift (the earlier failure was a
+                           # fake-quant scheme MISMATCH, not full-param itself).
+  per_device_batch_size: 2
+  grad_accum: 4
+
 # compute.mode = gpu  -> production run (A100/H100, unsloth, BF16), uses top-level values.
 # compute.mode = cpu  -> smoke run (tiny model, hf backend, tiny subset) to exercise every
 #                        notebook block end-to-end and produce real (non-empty) outputs when
@@ -91,6 +107,8 @@ paths:
   artifacts_dir: "quantization/artifacts"
   results_dir: "quantization/results"
   method_a_dir: "quantization/artifacts/A_bf16"
+  method_b_dir: "quantization/artifacts/B_int4_ptq"    # TorchAO INT4 PTQ of the A merge
+  method_c_dir: "quantization/artifacts/C_int4_qat"    # TorchAO INT4 QAT from the A merge
 
 # Pinned versions are recorded at runtime into results/env_<method>.json by the
 # notebooks (reproducibility is the presentation's thesis). See notebooks/README.md.
