@@ -1,0 +1,63 @@
+{
+  "benchmark": "vllm_matched_condition_throughput",
+  "purpose": "Apples-to-apples tok/s for the 3-way comparison. The committed three_way_table tok/s came from DIFFERENT stacks (A=unsloth 122.8, B/C=plain transformers ~37) and are NOT comparable. Here A(bf16) and B/C(int4) are re-measured under the SAME vLLM engine + identical knobs.",
+  "weight_independence_note": "Throughput depends only on architecture + numeric precision + serving format, NOT on trained weight VALUES. So we benchmark base Qwen3-1.7B in bf16 (= Method A architecture/precision) and the base quantized to the identical torchao int4 tile-packed format (= Method B AND C serving artifact). B and C share the identical int4 format, so their throughput is identical by construction (one 'bc_int4' row represents both).",
+  "engine": {
+    "name": "vllm",
+    "version": "0.26.0",
+    "torch": "2.11.0+cu130",
+    "torchao": "0.17.0",
+    "transformers": "5.14.1",
+    "gpu": "NVIDIA A100 80GB PCIe",
+    "region": "japaneast",
+    "priority": "Spot"
+  },
+  "matched_knobs": {
+    "dtype": "bfloat16",
+    "max_model_len": 2048,
+    "gpu_memory_utilization": 0.85,
+    "max_num_seqs": 256,
+    "enforce_eager": false,
+    "cuda_graphs": true,
+    "seed": 0,
+    "max_tokens": 128,
+    "min_tokens": 128,
+    "ignore_eos": true,
+    "single_stream_reps": 7,
+    "batched_prompts": 128,
+    "note": "ignore_eos + min_tokens=max_tokens forces EXACTLY 128 decode tokens per request for both configs (identical decode work). Both run with CUDA graphs (enforce_eager=false)."
+  },
+  "results": {
+    "A_bf16": {
+      "represents": "Method A (BF16 LoRA) architecture + precision",
+      "model": "Qwen/Qwen3-1.7B",
+      "quant": "none",
+      "weight_gib": 3.22,
+      "single_stream_tok_s": 263.1,
+      "single_stream_all": [263.0, 263.0, 263.0, 263.1, 263.1, 263.3, 263.5],
+      "batched_tok_s": 18476.2,
+      "batched_total_out_tok": 16384,
+      "batched_wall_s": 0.89,
+      "load_seconds": 48.4
+    },
+    "BC_int4": {
+      "represents": "Method B (INT4 PTQ) AND Method C (INT4 QAT) — identical torchao int4 tile-packed serving format",
+      "model": "base Qwen3-1.7B -> torchao Int4WeightOnlyConfig(group_size=128, TILE_PACKED_TO_4D)",
+      "quant": "torchao",
+      "weight_gib": 1.29,
+      "single_stream_tok_s": 407.2,
+      "single_stream_all": [406.7, 406.9, 407.0, 407.2, 407.2, 407.8, 408.1],
+      "batched_tok_s": 4927.7,
+      "batched_total_out_tok": 16384,
+      "batched_wall_s": 3.32,
+      "load_seconds": 159.4
+    }
+  },
+  "derived": {
+    "single_stream_int4_vs_bf16": 1.55,
+    "single_stream_winner": "int4 (memory-bandwidth-bound at batch=1; 4x smaller weights -> less to move)",
+    "batched_bf16_vs_int4": 3.75,
+    "batched_winner": "bf16 (compute-bound at batch=128; bf16 tensor-core GEMM outruns int4 dequant+gemm)",
+    "takeaway": "Weight-only int4 helps single-stream latency and memory footprint (2.5x smaller), but bf16 wins aggregate throughput under heavy batching on A100. Pick int4 for memory/latency-constrained single-stream serving, bf16 for max batched throughput."
+  }
+}

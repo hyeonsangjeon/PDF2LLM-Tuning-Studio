@@ -102,9 +102,38 @@ unsloth BF16, KorQuAD `max_steps=2000`. 아래 §Method A 표는 이 실행의 �
 - **동작 데모**(각 노트북 셀 실측): held-out 질문 *"2004년 이명박이 서울시장 재직시절 전면적으로 개선한 것은?"*
   → 정답 `대중교통체계`, **A·B·C 모두 `대중교통체계`(정확)**.
 
-> **tok/s 주의**: A는 **unsloth** 추론(122.8), B·C는 **plain transformers int4** 추론(~37)이라 **동일 조건 비교가 아니다**.
-> 공정한 비교 축은 **EM·F1·size·ppl**. `peak VRAM`도 노트북 내 측정이라 A·C는 학습 직후 잔여 할당을 포함(같은
+> **tok/s 주의**: 위 표의 tok/s는 **서로 다른 스택**(A=unsloth 122.8, B·C=plain transformers ~37)이라
+> **동일 조건 비교가 아니다** — 아래 **§vLLM 처리량 벤치마크**에서 동일 엔진·동일 노브로 재측정한 값이
+> 사과-대-사과 비교다. `peak VRAM`도 노트북 내 측정이라 A·C는 학습 직후 잔여 할당을 포함(같은
 > int4를 서빙하는 B의 **~4.6GB**가 순수 int4 서빙 풋프린트에 가장 근접). 크기(1.29GB, B=C 동일)가 풋프린트 동등성을 확증.
+
+## vLLM 처리량 벤치마크 (동일 조건 tok/s · 사과-대-사과)
+위 3-way 표의 tok/s 열은 스택이 달라(A=unsloth, B·C=transformers) 직접 비교가 불가했다. 이를 바로잡기 위해
+**동일한 vLLM 0.26.0 엔진 + 동일 노브**로 A(bf16)와 B·C(int4)를 재측정했다(A100 80GB @ japaneast, Spot;
+`results/vllm_throughput.json`).
+
+**측정 원리(가중치 독립성)**: 처리량은 **아키텍처 + 수치 정밀도 + 서빙 포맷**에만 의존하고 학습된 가중치 *값*엔
+무관하다. 따라서 base Qwen3-1.7B를 (1) bf16(= A의 정밀도)과 (2) **B·C와 동일한** torchao int4 tile-packed
+포맷으로 양자화해 측정하면 실제 A/B/C 서빙 처리량과 같다. **B와 C는 서빙 포맷이 완전히 동일하므로 tok/s가
+구조적으로 같다**(한 행으로 대표). 이는 처리량 벤치마크의 표준 관행이다.
+
+**동일 노브**: dtype=bf16, max_model_len=2048, gpu_util=0.85, max_num_seqs=256, **CUDA graphs on**(enforce_eager=false),
+seed=0, `max_tokens=min_tokens=128` + `ignore_eos`(요청당 정확히 128 디코드 토큰 = 동일 작업량). 단일 스트림은
+batch=1 7회 중앙값, 배치는 128 프롬프트 동시 제출.
+
+| 서빙 | 포맷 | 단일 스트림 tok/s (batch=1) | 배치 tok/s (batch=128) | 가중치 |
+|---|---|---|---|---|
+| **A** | bf16 | 263.1 | **18,476.2** | 3.22 GB |
+| **B ≡ C** | int4 (tile-packed) | **407.2** | 4,927.7 | 1.29 GB |
+| 비율 | — | **int4 1.55× 빠름** | **bf16 3.75× 빠름** | 2.5× 축소 |
+
+**해석 — 배치 구간에 따라 승자가 갈린다.**
+- **단일 스트림(batch=1, 메모리 대역폭 바운드)**: int4가 **1.55× 빠름**(407 vs 263). 가중치가 4× 작아 디코드마다
+  옮길 메모리가 적다 → 양자화의 전형적 지연 이득.
+- **배치(batch=128, 연산 바운드)**: bf16이 **3.75× 빠름**(18,476 vs 4,928). 큰 배치에선 연산 바운드가 되어
+  A100 bf16 텐서코어 GEMM이 int4 dequant+GEMM을 앞선다.
+- **결론**: int4는 **메모리/지연 제약 단일 스트림**에, bf16은 **최대 배치 처리량**에 유리. 품질(EM·F1·ppl)과 함께
+  보면 **C(QAT)는 int4의 크기·단일스트림 이득을 누리면서 B 대비 품질을 회복**하는 균형점이다.
 
 ## 재현성 (버전 고정)
 `results/env_{A,B,C}.json`에 실행 시 자동 기록. **본 A100 실행 환경**: torch **2.11.0+cu130** ·
@@ -134,3 +163,5 @@ llm = LLM(model="quantization/artifacts/B_int4_ptq", quantization="torchao",
 - ✅ **3-way 완성**: A(BF16)·B(INT4 PTQ)·C(INT4 QAT) 모두 A100 실측, `results/three_way_table.json` 3행.
 - ✅ 노트북 01·02·03 실행 완료(실 출력 포함), 재현 환경 `env_{A,B,C}.json`.
 - ✅ vLLM int4 서빙 검증(보너스).
+- ✅ **vLLM 동일 조건 처리량 벤치마크**: A(bf16) vs B·C(int4)를 동일 엔진·노브로 재측정(`results/vllm_throughput.json`) —
+  단일 스트림 int4 1.55× · 배치 bf16 3.75×.
