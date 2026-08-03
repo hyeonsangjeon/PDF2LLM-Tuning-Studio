@@ -1,0 +1,19 @@
+{
+  "method": "A_bf16",
+  "precision": "bf16",
+  "model_dir": "quantization/artifacts/A_bf16_seed42",
+  "out_tokens": 128,
+  "graph_mode": true,
+  "sweep": [],
+  "latency_single_stream": {
+    "n": 24,
+    "concurrency": 1,
+    "out_tokens": 128,
+    "ttft_p50_s": 0.0322,
+    "ttft_p99_s": 0.082,
+    "ttft_mean_s": 0.0353,
+    "e2e_p50_s": 1.4691,
+    "e2e_p99_s": 1.4816,
+    "e2e_mean_s": 1.4686
+  }
+}

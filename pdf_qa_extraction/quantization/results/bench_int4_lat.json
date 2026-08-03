@@ -1,0 +1,19 @@
+{
+  "method": "B_int4_ptq",
+  "precision": "int4",
+  "model_dir": "quantization/artifacts/B_int4_ptq_seed42",
+  "out_tokens": 128,
+  "graph_mode": true,
+  "sweep": [],
+  "latency_single_stream": {
+    "n": 24,
+    "concurrency": 1,
+    "out_tokens": 128,
+    "ttft_p50_s": 0.2964,
+    "ttft_p99_s": 0.7213,
+    "ttft_mean_s": 0.2788,
+    "e2e_p50_s": 0.775,
+    "e2e_p99_s": 0.7849,
+    "e2e_mean_s": 0.7733
+  }
+}

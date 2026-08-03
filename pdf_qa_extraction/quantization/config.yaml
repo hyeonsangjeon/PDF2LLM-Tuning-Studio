@@ -4,30 +4,44 @@
 # data slice and eval defined here, so the base is fixed once for all methods.
 
 base_model:
-  # Base used by A/B/C (identical). Final pick is confirmed by
-  # notebooks/00_base_select.ipynb on a GPU VM (KorQuAD dev zero-shot F1 over the
-  # 3 candidates below). The default is candidate #1 (ungated, single-GPU friendly).
-  selected: "Qwen/Qwen3-1.7B"
+  # v2 (A100-scale, 8B class). Base used by A/B/C (identical). Confirmed by
+  # notebooks/00_base_select.ipynb on the GPU VM (KorQuAD held-out F1 over the 3
+  # candidates below, proper chat-template harness). Default = Qwen3-8B.
+  selected: "Qwen/Qwen3-8B"
   candidates:
-    - id: "Qwen/Qwen3-1.7B"                    # Apache-2.0, strong Korean, ultralight
-      family: qwen
+    - id: "Qwen/Qwen3-8B"                       # Apache-2.0, strong Korean, single-A100 trainable
+      family: qwen3
       gated: false
-    - id: "Qwen/Qwen3-4B"                      # Apache-2.0, higher quality, single-GPU
-      family: qwen
+    - id: "Qwen/Qwen2.5-7B-Instruct"           # Apache-2.0, different generation, strong Korean
+      family: qwen2.5
       gated: false
-    - id: "meta-llama/Llama-3.2-3B-Instruct"   # different family (presentation diversity)
+    - id: "meta-llama/Llama-3.1-8B-Instruct"    # family diversity; needs HF token
       family: llama
-      gated: true                              # requires HF access approval + token
+      gated: true                               # -> ungated fallback below when no token
+      fallback: "01-ai/Yi-1.5-9B-Chat"          # Apache-2.0, ungated
   # Tiny ungated model used ONLY for the CPU smoke test when no GPU is available.
   smoke: "Qwen/Qwen2.5-0.5B-Instruct"
 
 data:
   dataset: "KorQuAD/squad_kor_v1"   # runtime download; NOT committed to the repo
-  seed: 42
-  eval_size: 500                    # held-out val slice, identical for A/B/C
-  train_subset: null                # null = full 60.4k train; set an int for fast iteration
+  seed: 42                          # eval held-out slice seed (FIXED across train seeds)
+  eval_size: 1000                   # large held-out val slice, identical for A/B/C (W5 fix);
+                                    # 2x v1's 500 -> tight CIs. (int4 eval is eager-slow: ~15min
+                                    # /1k; 2k would ~double cost for negligible CI gain.)
+  train_subset: 6000                # W2 fix = train to CONVERGENCE, not raw epoch count. LoRA on
+                                    # KorQuAD converges near-instantly (a 200-ex/12-step smoke
+                                    # already hit held-out F1 95.3), so 2 epochs over a 6k slice is
+                                    # fully converged. v1's flaw was a broken harness + 0.26 epoch,
+                                    # not slice size. (set null for the full 60.4k if desired.)
   max_seq_len: 1024
-  # Generative instruction template (target = answer text + EOS).
+  # v2 uses the base model's CHAT TEMPLATE (system + user -> assistant answer) for BOTH
+  # training and eval (train/eval must match). Fixes W1 (raw-template zero-shot artifact)
+  # and, with completion-only loss, W2 (v1 full-sequence loss put <5% of signal on answers).
+  chat:
+    system: |
+      당신은 한국어 독해 질의응답 어시스턴트입니다. 주어진 문맥에서 질문의 정답을 찾아 정답에 해당하는 어구만 간결하게 출력하세요. 부연 설명이나 문장 없이 정답만 쓰세요.
+    enable_thinking: false          # Qwen3: disable <think> mode for short extractive answers
+  # Legacy raw-text template (v1). Retained for the CPU smoke path / reference only.
   prompt_template: |
     아래 문맥을 읽고 질문에 답하세요.
 
@@ -37,6 +51,11 @@ data:
     [질문] {question}
     [답]
 
+# Multi-seed training (W5 variance). A + C are trained once per seed; B is deterministic
+# (PTQ of each A seed). Eval aggregates mean +/- std across seeds. The eval held-out slice
+# stays fixed (data.seed) so variance reflects the MODEL, not the eval set.
+seeds: [42, 43, 44]
+
 lora:
   r: 16
   alpha: 32
@@ -44,29 +63,30 @@ lora:
   target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
 
 train:
-  # backend: unsloth = GPU-only (spec default, FastLanguageModel);
-  #          hf      = transformers + peft + trl (CPU-capable fallback for smoke).
-  backend: unsloth
+  # v2 backend: hf = transformers + peft + trl. Chosen over unsloth for full control of
+  # COMPLETION-ONLY loss (mask the prompt; loss only on the answer tokens) and to avoid
+  # unsloth's global attention monkey-patch complicating INT4/QAT reloads. 8B LoRA fits
+  # easily on 1x A100 80GB. (unsloth remains installed and usable via backend: unsloth.)
+  backend: hf
   precision: bf16          # Method A is the BF16 baseline (load_in_4bit=false)
   load_in_4bit: false
-  epochs: 1
-  max_steps: 2000          # bounded BF16 LoRA baseline (~2000 steps @ eff.batch 8 =
-                           # 16k KorQuAD examples, ~0.26 epoch). Measured ~1.1 it/s on
-                           # 1x A100 80GB -> ~30 min; a full 60.4k epoch (~7.5k steps) is
-                           # ~110 min and exceeds a practical notebook cell timeout.
-                           # null = full run; small int for smoke.
-  per_device_batch_size: 2
-  grad_accum: 4
+  epochs: 2               # W2 fix: 2 epochs to CONVERGENCE over the 6k slice (v1 was ~0.26 epoch
+                          # AND a broken harness); loss plateaus well inside 2 epochs here.
+  max_steps: null          # null = full epochs; small int for smoke
+  per_device_batch_size: 8
+  grad_accum: 2            # effective batch 16
   learning_rate: 2.0e-4
   warmup_ratio: 0.03
   weight_decay: 0.01
-  logging_steps: 10
+  logging_steps: 20
+  save_steps: 150          # frequent checkpoint cadence (Spot-eviction resume; ~12min at 0.21 step/s)
   max_grad_norm: 1.0
+  gradient_checkpointing: true   # required: 8B fwd activations at bs8/seq1024 exceed 80GB otherwise
   save_merged: true        # merge LoRA -> BF16 model (input to Part 2 PTQ/QAT)
 
 eval:
-  max_new_tokens: 32
-  batch_size: 8
+  max_new_tokens: 48       # adequate budget for extractive answers (v1's 32 clipped some)
+  batch_size: 48           # A100 80GB
   ppl_samples: 200         # held-out contexts for perplexity
 
 # Part 2 — INT4 quantization of the Method A merge (B: PTQ, C: QAT). Both target the
@@ -75,15 +95,22 @@ ptq:
   group_size: 128          # TorchAO Int4WeightOnlyConfig group size (weight-only INT4)
 
 qat:                       # C = quantization-aware training (full-param STE) over the A merge
-  group_size: 128          # fake-quant scheme is inferred from Int4WeightOnlyConfig(g128)
-                           # so it MATCHES the tile-packed serving quant exactly.
-  max_steps: 400           # short QAT adaptation from the already-trained A merge
+  group_size: 128          # int4 fake-quant is inferred from Int4WeightOnlyConfig(g128); it is
+                           # the SAME asymmetric group-128 int4 FAMILY as the tile-packed serving
+                           # quant (torchao 0.17 exposes no tile-packed fake-quant, so it is not
+                           # bit-identical, but qat_scheme_selftest confirms same-family ratio).
+  max_steps: 600           # W2 fix: 1.5x the v1 400 -> real int4 recovery from the A merge.
+                           # (full-param STE QAT is eager-slow ~0.12 step/s; 2000 would add ~3h
+                           # /seed for marginal extra recovery once the loss plateaus.)
   learning_rate: 1.0e-5    # conservative LR for full-param STE: adapts the quantized linear
                            # weights to their own int4 scheme while embeddings/lm_head stay
                            # frozen, so held-out ppl does not drift (the earlier failure was a
                            # fake-quant scheme MISMATCH, not full-param itself).
-  per_device_batch_size: 2
-  grad_accum: 4
+  per_device_batch_size: 4
+  grad_accum: 4            # effective batch 16
+  save_steps: 150         # frequent checkpoint cadence for QAT resume on Spot eviction
+  optim: "adamw_8bit"      # 8-bit Adam (bitsandbytes) so full-param 8B QAT fits 1x A100 80GB
+  gradient_checkpointing: true
 
 # compute.mode = gpu  -> production run (A100/H100, unsloth, BF16), uses top-level values.
 # compute.mode = cpu  -> smoke run (tiny model, hf backend, tiny subset) to exercise every

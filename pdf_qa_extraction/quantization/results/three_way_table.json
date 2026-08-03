@@ -1,65 +1,277 @@
-[
-  {
-    "method": "A_bf16",
-    "base_model": "Qwen/Qwen3-1.7B",
-    "exact_match": 81.0,
-    "f1": 89.924,
-    "n_eval": 500,
-    "perplexity": 10.3928,
-    "size_gb": 3.2155,
-    "peak_vram_gb": 7.9251,
-    "tok_per_s": 122.75,
-    "precision": "bf16",
-    "notes": "mode=gpu backend=unsloth",
-    "extra": {
-      "gen_seconds": 26.16,
+{
+  "base_model": "Qwen/Qwen3-8B",
+  "eval_size": 1000,
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "per_seed": [
+    {
+      "method": "A_bf16",
+      "seed": 42,
+      "base_model": "Qwen/Qwen3-8B",
+      "exact_match": 88.3,
+      "f1": 95.034,
+      "n_eval": 1000,
+      "perplexity": 8.8665,
+      "size_gb": 15.2713,
+      "peak_vram_gb": 42.1688,
+      "tok_per_s": 31.23,
+      "precision": "bf16",
+      "gen_seconds": 187.4,
       "sample_predictions": [
         "대중교통체계",
         "5·18 관련 특별법",
         "2009년"
       ]
-    }
-  },
-  {
-    "method": "B_int4_ptq",
-    "base_model": "Qwen/Qwen3-1.7B",
-    "exact_match": 65.2,
-    "f1": 80.692,
-    "n_eval": 500,
-    "perplexity": 15.9039,
-    "size_gb": 1.2878,
-    "peak_vram_gb": 4.5849,
-    "tok_per_s": 37.39,
-    "precision": "int4",
-    "notes": "TorchAO int4 PTQ tile-packed g128 (no retrain)",
-    "extra": {
-      "gen_seconds": 98.25,
-      "sample_predictions": [
-        "대중교통체계",
-        "5·18 관련 특별법 제정",
-        "2009년"
-      ]
-    }
-  },
-  {
-    "method": "C_int4_qat",
-    "base_model": "Qwen/Qwen3-1.7B",
-    "exact_match": 71.8,
-    "f1": 83.521,
-    "n_eval": 500,
-    "perplexity": 12.9728,
-    "size_gb": 1.2878,
-    "peak_vram_gb": 7.7992,
-    "tok_per_s": 36.99,
-    "precision": "int4",
-    "notes": "TorchAO int4 QAT full-param g128 steps=400 (matched fake-quant, emb/head frozen)",
-    "extra": {
-      "gen_seconds": 89.07,
+    },
+    {
+      "method": "A_bf16",
+      "seed": 43,
+      "base_model": "Qwen/Qwen3-8B",
+      "exact_match": 88.0,
+      "f1": 94.874,
+      "n_eval": 1000,
+      "perplexity": 9.0957,
+      "size_gb": 15.2713,
+      "peak_vram_gb": 42.1688,
+      "tok_per_s": 31.74,
+      "precision": "bf16",
+      "gen_seconds": 183.6,
       "sample_predictions": [
         "대중교통체계",
         "5·18 관련 특별법",
         "2009년"
       ]
+    },
+    {
+      "method": "A_bf16",
+      "seed": 44,
+      "base_model": "Qwen/Qwen3-8B",
+      "exact_match": 87.1,
+      "f1": 94.583,
+      "n_eval": 1000,
+      "perplexity": 9.187,
+      "size_gb": 15.2713,
+      "peak_vram_gb": 42.1688,
+      "tok_per_s": 32.46,
+      "precision": "bf16",
+      "gen_seconds": 178.0,
+      "sample_predictions": [
+        "대중교통체계",
+        "5·18 관련 특별법",
+        "2009년"
+      ]
+    },
+    {
+      "method": "B_int4_ptq",
+      "seed": 42,
+      "base_model": "Qwen/Qwen3-8B",
+      "exact_match": 86.2,
+      "f1": 94.103,
+      "n_eval": 1000,
+      "perplexity": 9.9366,
+      "size_gb": 5.7705,
+      "peak_vram_gb": 61.6387,
+      "tok_per_s": 4.46,
+      "precision": "int4",
+      "gen_seconds": 1317.6,
+      "sample_predictions": [
+        "대중교통체계",
+        "5·18 관련 특별법",
+        "2009년"
+      ]
+    },
+    {
+      "method": "B_int4_ptq",
+      "seed": 43,
+      "base_model": "Qwen/Qwen3-8B",
+      "exact_match": 86.2,
+      "f1": 93.959,
+      "n_eval": 1000,
+      "perplexity": 10.1949,
+      "size_gb": 5.7705,
+      "peak_vram_gb": 61.6387,
+      "tok_per_s": 4.53,
+      "precision": "int4",
+      "gen_seconds": 1297.9,
+      "sample_predictions": [
+        "대중교통체계",
+        "특별법",
+        "2009년"
+      ]
+    },
+    {
+      "method": "B_int4_ptq",
+      "seed": 44,
+      "base_model": "Qwen/Qwen3-8B",
+      "exact_match": 86.8,
+      "f1": 94.508,
+      "n_eval": 1000,
+      "perplexity": 10.1498,
+      "size_gb": 5.7705,
+      "peak_vram_gb": 61.6387,
+      "tok_per_s": 4.46,
+      "precision": "int4",
+      "gen_seconds": 1303.1,
+      "sample_predictions": [
+        "대중교통체계",
+        "5·18 관련 특별법",
+        "2009년"
+      ]
+    },
+    {
+      "method": "C_int4_qat",
+      "seed": 42,
+      "base_model": "Qwen/Qwen3-8B",
+      "exact_match": 87.7,
+      "f1": 94.72,
+      "n_eval": 1000,
+      "perplexity": 10.4093,
+      "size_gb": 5.7705,
+      "peak_vram_gb": 61.6387,
+      "tok_per_s": 4.45,
+      "precision": "int4",
+      "gen_seconds": 1311.9,
+      "sample_predictions": [
+        "대중교통체계",
+        "5·18 관련 특별법",
+        "2009년"
+      ]
+    },
+    {
+      "method": "C_int4_qat",
+      "seed": 43,
+      "base_model": "Qwen/Qwen3-8B",
+      "exact_match": 87.1,
+      "f1": 94.768,
+      "n_eval": 1000,
+      "perplexity": 10.8246,
+      "size_gb": 5.7705,
+      "peak_vram_gb": 61.6387,
+      "tok_per_s": 4.48,
+      "precision": "int4",
+      "gen_seconds": 1299.3,
+      "sample_predictions": [
+        "대중교통체계",
+        "특별법",
+        "2009년"
+      ]
+    },
+    {
+      "method": "C_int4_qat",
+      "seed": 44,
+      "base_model": "Qwen/Qwen3-8B",
+      "exact_match": 87.9,
+      "f1": 94.969,
+      "n_eval": 1000,
+      "perplexity": 10.8288,
+      "size_gb": 5.7705,
+      "peak_vram_gb": 61.6387,
+      "tok_per_s": 4.45,
+      "precision": "int4",
+      "gen_seconds": 1300.6,
+      "sample_predictions": [
+        "대중교통체계",
+        "특별법",
+        "2009년"
+      ]
+    }
+  ],
+  "aggregate": {
+    "A_bf16": {
+      "base_model": "Qwen/Qwen3-8B",
+      "precision": "bf16",
+      "n_eval": 1000,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "exact_match": {
+        "mean": 87.8,
+        "std": 0.51,
+        "n": 3
+      },
+      "f1": {
+        "mean": 94.83,
+        "std": 0.187,
+        "n": 3
+      },
+      "perplexity": {
+        "mean": 9.05,
+        "std": 0.135,
+        "n": 3
+      },
+      "size_gb": 15.2713,
+      "tok_per_s": {
+        "mean": 31.81,
+        "std": 0.505,
+        "n": 3
+      }
+    },
+    "B_int4_ptq": {
+      "base_model": "Qwen/Qwen3-8B",
+      "precision": "int4",
+      "n_eval": 1000,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "exact_match": {
+        "mean": 86.4,
+        "std": 0.283,
+        "n": 3
+      },
+      "f1": {
+        "mean": 94.19,
+        "std": 0.232,
+        "n": 3
+      },
+      "perplexity": {
+        "mean": 10.094,
+        "std": 0.113,
+        "n": 3
+      },
+      "size_gb": 5.7705,
+      "tok_per_s": {
+        "mean": 4.483,
+        "std": 0.033,
+        "n": 3
+      }
+    },
+    "C_int4_qat": {
+      "base_model": "Qwen/Qwen3-8B",
+      "precision": "int4",
+      "n_eval": 1000,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "exact_match": {
+        "mean": 87.567,
+        "std": 0.34,
+        "n": 3
+      },
+      "f1": {
+        "mean": 94.819,
+        "std": 0.108,
+        "n": 3
+      },
+      "perplexity": {
+        "mean": 10.688,
+        "std": 0.197,
+        "n": 3
+      },
+      "size_gb": 5.7705,
+      "tok_per_s": {
+        "mean": 4.46,
+        "std": 0.014,
+        "n": 3
+      }
     }
   }
-]
+}

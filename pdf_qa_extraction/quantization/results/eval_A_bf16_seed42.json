@@ -1,0 +1,19 @@
+{
+  "method": "A_bf16",
+  "seed": 42,
+  "base_model": "Qwen/Qwen3-8B",
+  "exact_match": 88.3,
+  "f1": 95.034,
+  "n_eval": 1000,
+  "perplexity": 8.8665,
+  "size_gb": 15.2713,
+  "peak_vram_gb": 42.1688,
+  "tok_per_s": 31.23,
+  "precision": "bf16",
+  "gen_seconds": 187.4,
+  "sample_predictions": [
+    "대중교통체계",
+    "5·18 관련 특별법",
+    "2009년"
+  ]
+}

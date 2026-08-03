@@ -1,48 +1,66 @@
-# quantization/ — 양자화 트랙 (BF16 LoRA A → INT4 PTQ B → INT4 QAT C, **3-way 완성**)
+# quantization/ — 양자화 트랙 (BF16 LoRA A → INT4 PTQ B → INT4 QAT C, **3-way · v2 전면 개편**)
 
 발표(Serve Track: **LoRA → INT4 PTQ/QAT → vLLM**)용 **3-way 양자화 비교**.
 PDF 추출·페르소나·스코어러와 **무관한 독립 트랙**으로, 표준 데이터셋 **KorQuAD**(`KorQuAD/squad_kor_v1`,
 런타임 다운로드·미커밋)만 사용한다.
 
+> **v2 개편**: v1(커밋 `04c2062`, Qwen3-**1.7B**·단일 seed·500 슬라이스)의 5개 근본 약점(W1–W5)을
+> 전부 교정하고 **A100 80GB에서 8B 베이스로 전 과정 재실행**했다. v2가 v1 수치·아티팩트를 **제자리 교체**한다.
+
 | 방법 | 설명 | 노트북 | 상태 |
 |---|---|---|---|
-| **A. BF16 LoRA** | 풀정밀 베이스에 LoRA 학습 후 머지 (품질 기준선) | `01_bf16_lora.ipynb` | **실행 완료** |
-| **B. INT4 PTQ** | A 머지 모델을 사후 4bit 양자화 (TorchAO tile-packed) | `02_int4_ptq.ipynb` | **실행 완료** |
-| **C. INT4 QAT** | 4bit 인식 학습(full-param STE)으로 양자화 오차 보정 | `03_int4_qat.ipynb` | **실행 완료** |
+| **A. BF16 LoRA** | 풀정밀 8B 베이스에 LoRA 학습 후 머지 (품질 기준선) | `01_bf16_lora.ipynb` | **A100 실측 · 3 seed** |
+| **B. INT4 PTQ** | A 머지 모델을 사후 4bit 양자화 (TorchAO tile-packed) | `02_int4_ptq.ipynb` | **A100 실측 · 3 seed** |
+| **C. INT4 QAT** | 4bit 인식 학습(full-param STE)으로 양자화 오차 보정 | `03_int4_qat.ipynb` | **A100 실측 · 3 seed** |
+
+## v1 → v2 델타 (5개 근본 약점 교정)
+| # | v1 약점 | v2 교정 |
+|---|---|---|
+| **W1** | base-select zero-shot이 **하네스 아티팩트**(Qwen3-4B F1 3.5 비현실, 32-토큰 예산) | 하네스 재작성(정식 chat template·충분한 `max_new_tokens`·정지 시퀀스·공식 F1)로 ≤9B 3종 재선정 |
+| **W2** | **과소학습**: A=2000 step(~0.26 epoch), C-QAT=400 step | A=**수렴까지**(loss 곡선 기록, 750 step), C-QAT=**600 step**(1.5×)로 실제 회복 |
+| **W3** | README에 **모순된 두 tok/s**(unsloth 122.8/37 vs vLLM 263/407) | **단일 tok/s 소스**(vLLM 스윕)로 통일, 불일치 열 제거 |
+| **W4** | 벤치가 **base 가중치** + 배치 2점 + TTFT 없음 | **실 A/B/C 아티팩트** 벤치 + **배치 스윕(1…256)** + **TTFT·e2e p50/p99** |
+| **W5** | **분산 없음**(단일 seed/500) + VRAM 비교 불공정 | **3 seed → 평균±표준편차**, held-out **1000**, **서빙 전용 clean VRAM** |
 
 ## 구성
 ```
 quantization/
-  config.yaml          # A/B/C 공용 설정 (base·data·lora·train·compute). 스모크 오버라이드 포함
-  data_korquad.py      # KorQuAD 로드 + 생성 instruction 포맷 + 고정 seed 분리
-  train_lora.py        # Method A: BF16 LoRA. backend=unsloth(GPU) | hf(CPU-capable)
-  eval_qa.py           # A/B/C 공용 eval: KorQuAD 공식 EM/F1 + ppl + 크기/VRAM/tok·s
+  config.yaml          # A/B/C 공용 설정 (base·data·lora·train·qat·compute). 스모크 오버라이드 포함
+  data_korquad.py      # KorQuAD 로드 + 고정 seed 분리 (+ v1 호환 헬퍼)
+  v2_pipeline.py       # v2 코어: chat-template 프롬프트 + completion-only 마스킹 + A/B/C 학습 + chat eval + QAT 자가검증
+  v2_run.py            # v2 CLI: a/b/c/eval/agg/selftest — 서브프로세스별 격리, per-seed 아티팩트
+  v2_bench.py          # vLLM 배치 스윕 처리량 + 단일스트림 TTFT/e2e p50/p99
+  eval_qa.py           # 공용 지표: KorQuAD 공식 EM/F1 + ppl + 크기/VRAM/tok·s + int4 tile-packed config
   notebooks/           # 00 base-select, 01 BF16 LoRA, 02 INT4 PTQ, 03 INT4 QAT (모두 실행됨)
-  artifacts/           # 산출물(미커밋·gitignore): A_bf16/(머지) = Part 2 입력
-  results/             # metrics json + 3-way 표(커밋)
+  artifacts/           # 산출물(미커밋·gitignore): {A_bf16,B_int4_ptq,C_int4_qat}_seed{42,43,44}/
+  results/             # metrics json + 3-way 표(mean±std) + vLLM 처리량(커밋)
 ```
 
-## 실행
+## 실행 (v2)
 ```bash
 cd pdf_qa_extraction
-
-# 데이터 확인
-python -m quantization.data_korquad --smoke --stats
-
-# 학습(A) — GPU VM(스펙): config.yaml의 compute.mode=gpu (Qwen3-1.7B·unsloth·BF16·full)
-python -m quantization.train_lora
-# 학습(A) — CPU 스모크(무GPU): 소형 모델·200 서브셋·12스텝
-python -m quantization.train_lora --smoke
-
-# 평가(A) — held-out KorQuAD EM/F1·ppl·크기·tok/s
-python -m quantization.eval_qa --smoke --method A_bf16     # GPU: --smoke 제거
-python -m quantization.eval_qa --selftest                 # 지표만 자가검증(모델 불필요)
+# QAT 스킴 자가검증(prepare-fires/same-family/convert-roundtrip 게이트)
+python -m quantization.v2_run selftest
+# 한 seed 3-way: A(LoRA 2ep/6k)→ merge → B(int4 PTQ) → C(int4 QAT 600) → eval×3
+python -m quantization.v2_run a    --seed 42        # [--resume] : Spot 재개
+python -m quantization.v2_run b    --seed 42
+python -m quantization.v2_run c    --seed 42        # [--resume]
+python -m quantization.v2_run eval --method A_bf16      --seed 42
+python -m quantization.v2_run eval --method B_int4_ptq  --seed 42
+python -m quantization.v2_run eval --method C_int4_qat  --seed 42
+# 3 seed(42,43,44) 집계 → results/three_way_table.json (mean±std)
+python -m quantization.v2_run agg
+# vLLM 동일조건 처리량(배치 스윕 + 단일스트림 TTFT/e2e p50/p99) — 실 아티팩트
+# (FlashInfer 샘플러 JIT는 nvcc를 요구하므로 native 샘플러 강제)
+export VLLM_USE_FLASHINFER_SAMPLER=0
+python quantization/v2_bench.py --model-dir quantization/artifacts/A_bf16_seed42     --method A_bf16     --precision bf16 --max-model-len 4096 --mode both --out quantization/results/bench_A.json
+python quantization/v2_bench.py --model-dir quantization/artifacts/B_int4_ptq_seed42 --method B_int4_ptq --precision int4 --max-model-len 4096 --mode both --out quantization/results/bench_int4.json
 ```
+> 스모크(무-GPU 코드 점검): 각 서브커맨드에 `--subset 200 --max-steps 12 --eval-size 20` 오버라이드.
 
 ## ⚙️ 컴퓨트 / GPU 실행 (Azure A100 실측)
-스펙대로 **Azure 단일 GPU VM에서 실제 실행**했다. 대상 구독
-`ME-MngEnvMCAP756842-hjeon-1`은 초기엔 모던 GPU 쿼터가 전부 0이었으나,
-**여러 리전에 분산 쿼터 신청**으로 확보했다:
+스펙대로 **Azure 단일 GPU VM에서 실제 실행**했다. 대상 구독은 초기엔 모던 GPU 쿼터가 전부 0이었으나
+**여러 리전 분산 쿼터 신청**으로 확보했다:
 
 | 리전 | 패밀리 | 확보 쿼터 | 비고 |
 |---|---|---|---|
@@ -50,118 +68,131 @@ python -m quantization.eval_qa --selftest                 # 지표만 자가검�
 | italynorth · switzerlandnorth · southeastasia | `NCADSA100v4` | 각 24 vCPU (A100 ×1) | 분산 여유분 |
 | spaincentral | `NVADSA10v5` | 36 vCPU (A10 ×1) | 대안 |
 
-배포 시 MCAPS 거버넌스 정책이 **온디맨드 GPU SKU를 Deny**하므로
-`Standard_NC24ads_A100_v4`를 **Spot 우선순위**로 프로비저닝해 우회했다
-(정책 조건이 `priority != Spot` AND이라 Spot이면 미적용). 실제 실행 환경 =
-**NVIDIA A100 80GB PCIe ×1 @ japaneast**, `compute.mode: gpu`, base=Qwen3-1.7B,
-unsloth BF16, KorQuAD `max_steps=2000`. 아래 §Method A 표는 이 실행의 실측치다.
+배포 시 MCAPS 거버넌스 정책이 **온디맨드 GPU SKU를 Deny**하므로 `Standard_NC24ads_A100_v4`를
+**Spot 우선순위**로 프로비저닝해 우회했다(정책 조건이 `priority != Spot` AND이라 Spot이면 미적용).
+실제 실행 환경 = **NVIDIA A100 80GB ×1 @ japaneast**, base=**Qwen3-8B**, transformers HF 백엔드,
+BF16 LoRA + TorchAO int4.
 
-> H100은 전 리전(63개)·전 크기(@40/@160)로 ~28회 시도했으나 SKU 단위 구독 잠금으로
-> 확보 실패(A100/A10만 열림). 필요 시 MS 지원티켓 경로만 남는다.
+> **Spot 내구성(핵심)**: 장시간 단일 GPU 실행이라 Spot 축출이 잦았다(전체 실행 중 **4회 축출**, ~1–2h당 1회).
+> 대응: A/C **150 step마다 체크포인트 + `--resume`**, **축출-멱등 러너**(`run_all.sh`: 완료 산출물은 phase-skip,
+> A/C는 재개)로 `az vm start` 후 무손실 재개. IP는 실행 내내 유지됐다.
+> H100은 전 리전(63)·전 크기 ~28회 시도했으나 SKU 단위 구독 잠금으로 확보 실패(A100/A10만 열림).
 
-## 베이스 모델 선정 (스펙 §2)
-후보 3종과 선정 기준. 최종 확정: `notebooks/00_base_select.ipynb`(**A100 80GB에서 zero-shot F1 실측**).
+## 베이스 모델 선정 (스펙 §2 · W1 교정)
+v1의 base-select zero-shot F1(Qwen3-4B **3.5**)은 **하네스 아티팩트**였다(32-토큰 예산 + chat template
+미적용 + 부적절 정지). v2는 하네스를 재작성(**정식 chat template**, `enable_thinking=false`,
+**충분한 `max_new_tokens`**, 공식 KorQuAD F1)하고 **≤9B 3종**을 held-out zero-shot(+few-shot)으로 재평가했다.
 
-| 후보 | 파라미터 | 라이선스 | 게이팅 | 비고 |
+| 후보 | zero-shot EM/F1 | few-shot EM/F1 | 라이선스 | 비고 |
 |---|---|---|---|---|
-| **Qwen/Qwen3-1.7B** (기본 선정) | ~1.7B | Apache-2.0 | 무 | 한국어 양호·초경량·단일GPU·INT4/vLLM 성숙 |
-| Qwen/Qwen3-4B | ~4B | Apache-2.0 | 무 | 품질↑, 여전히 단일GPU |
-| meta-llama/Llama-3.2-3B-Instruct | ~3B | Llama | **유(승인+토큰)** | 패밀리 다양성 |
+| **Qwen/Qwen3-8B** (기본 선정) | **81.75 / 92.51** | **83.75 / 93.67** | Apache-2.0 | 강한 한국어 · 단일 A100 QAT 적합 · INT4/vLLM 성숙 |
+| Qwen/Qwen2.5-7B-Instruct | 76.88 / 88.90 | 79.38 / 90.07 | Apache-2.0 | 다른 세대, 실질 경쟁 후보 |
+| 01-ai/Yi-1.5-9B-Chat (Llama-3.1-8B 게이팅 폴백) | 47.75 / 73.46 | — / 9.68† | Apache-2.0 | 패밀리 다양성; †few-shot 템플릿 붕괴 |
 
-- **기준**: (a) KorQuAD dev zero-shot F1, (b) 단일 GPU 적합, (c) TorchAO INT4 + vLLM 서빙 호환.
-- **A100 실측 zero-shot F1** (held-out 500, `max_new_tokens=32`, `00_base_select.ipynb`):
-  **Qwen3-1.7B EM 11.6 / F1 41.4**, Qwen3-4B EM 2.0 / F1 3.5, Llama-3.2-3B **gated**(승인+토큰 필요→제외).
-  세부 표는 `results/base_select_zeroshot.json`.
-- **선정 = Qwen3-1.7B**: ungated 후보 중 zero-shot 추출 F1 최고 + 단일 GPU 적합 + INT4/vLLM 호환.
-  `config.yaml`의 `base_model.selected`에 고정 → A/B/C 동일 베이스. (짧은 32-토큰 예산의
-  zero-shot은 거친 프록시이며, 최종 성능은 Method A 학습 후 **EM 81.0 / F1 89.9**로 확정.)
+- **기준**: (a) KorQuAD held-out F1, (b) 단일 A100 적합(QAT 포함), (c) TorchAO INT4 + vLLM 호환.
+- **재작성 하네스**(held-out 800, chat template, `enable_thinking=false`, 64-tok, 공식 F1) 기준
+  **Qwen3-8B가 zero/few-shot 모두 최고** → v1의 3.5는 순수 하네스 아티팩트였음이 확인됨(동일 모델이 90+).
+- **선정 = Qwen3-8B**: `config.yaml`의 `base_model.selected`에 고정 → A/B/C 동일 베이스. (`results/base_select.json`)
 
-## 3-way 결과 (실측 · A100 80GB · held-out 500)
-`notebooks/01·02·03`을 **A100 80GB(japaneast, Spot)에서 실제 실행**한 수치(`results/three_way_table.json`):
+## 3-way 결과 (실측 · A100 80GB · held-out 1000 · **3 seed 평균±표준편차**)
+`v2_run a/b/c/eval`을 **A100 80GB(japaneast, Spot)에서 seed 42·43·44로 실제 실행**한 뒤
+`v2_run agg`로 집계한 수치(`results/three_way_table.json`).
 
-| method | base | EM | F1 | ppl | size(GB) | peak VRAM | tok/s | prec |
-|---|---|---|---|---|---|---|---|---|
-| **A_bf16** (기준선) | Qwen3-1.7B | **81.0** | **89.92** | 10.39 | 3.22 | 7.93 | 122.8 | bf16 |
-| **B_int4_ptq** | Qwen3-1.7B | 65.2 | 80.69 | 15.90 | **1.29** | 4.58 | 37.4 | int4 |
-| **C_int4_qat** | Qwen3-1.7B | **71.8** | **83.52** | **12.97** | **1.29** | 7.80 | 37.0 | int4 |
+**per-seed (실측, EM / F1 / ppl):**
 
-**해석 — 스토리가 깔끔하게 성립한다.**
-- **A (BF16)**: 품질 상한. 3.22GB.
-- **B (PTQ)**: 학습 없이 A 머지를 사후 int4 양자화 → 크기 **2.5× 축소(3.22→1.29GB)**, 대신 품질 하락(F1 89.9→80.7, EM 81→65).
-- **C (QAT)**: **동일한 int4 포맷(1.29GB)** 이지만 양자화를 인식하며 재학습 → **B 대비 회복**(F1 **+2.8**, EM **+6.6**, ppl 15.9→**12.97**). 세 지표 모두 B와 A 사이에 위치.
-- **B vs C가 곧 *train-aware* 효과**: 서빙 포맷·크기가 동일하므로 차이는 순수하게 QAT 재학습에서 온다.
+| method | seed 42 | seed 43 | seed 44 |
+|---|---|---|---|
+| **A_bf16** | 88.3 / 95.034 / 8.867 | 88.0 / 94.874 / 9.096 | 87.1 / 94.583 / 9.187 |
+| **B_int4_ptq** | 86.2 / 94.103 / 9.937 | 86.2 / 93.959 / 10.195 | 86.8 / 94.508 / 10.150 |
+| **C_int4_qat** | 87.7 / 94.720 / 10.409 | 87.1 / 94.768 / 10.825 | 87.9 / 94.969 / 10.829 |
+
+**집계 (mean ± std over 3 seeds):**
+
+| method | base | EM | F1 | ppl | size(GB) | prec |
+|---|---|---|---|---|---|---|
+| **A_bf16** (기준선) | Qwen3-8B | **87.80 ± 0.51** | **94.83 ± 0.19** | **9.05 ± 0.14** | 15.27 (머지 bf16) | bf16 |
+| **B_int4_ptq** | Qwen3-8B | 86.40 ± 0.28 | 94.19 ± 0.23 | 10.09 ± 0.11 | **5.77** | int4 |
+| **C_int4_qat** | Qwen3-8B | 87.57 ± 0.34 | **94.82 ± 0.11** | 10.69 ± 0.20 | **5.77** | int4 |
+
+**해석 — 스토리가 통계적으로 성립한다 (A ≳ C > B, 3 seed 확정).**
+- **A (BF16)**: 품질 상한. LoRA를 6k 슬라이스 2 epoch로 **수렴**(train loss 0.075–0.078, seed간 편차 <0.003)까지 학습 후 머지.
+- **B (PTQ)**: 학습 없이 A 머지를 사후 int4 양자화 → 크기 **2.65× 축소(15.27→5.77GB)**, 품질 소폭 하락(F1 −0.64).
+- **C (QAT)**: **동일 int4 포맷(5.77GB)** 이지만 양자화를 인식하며 600 step 재학습 → **B 대비 회복 F1 +0.63** →
+  **A와 통계적으로 동률**(94.82 ± 0.11 vs 94.83 ± 0.19, 표준편차 내). seed 44에선 C(94.969)가 A(94.583)를 **역전**.
+- **B vs C가 곧 *train-aware* 효과**: 서빙 포맷·크기가 동일(5.77GB)하므로 차이는 순수하게 QAT 재학습에서 온다.
+- **ppl 순서(A<B<C)가 F1 순서(A≈C>B)와 갈리는 이유**: QAT는 LM perplexity가 아니라 **task loss**(정답 토큰)를 최적화하므로,
+  F1은 회복하되 LM ppl은 오히려 커질 수 있다. → 지표 선택이 결론을 바꾼다는 점을 error bar와 함께 명시.
 
 세부:
-- **A 학습**: unsloth `FastLanguageModel`, BF16(load_in_4bit=false), LoRA r16/α32(attn+MLP), effective batch 8,
-  **2000 steps**(≈16k KorQuAD, ~0.26 epoch), ~33분, mean loss 2.03.
-- **B (PTQ)**: TorchAO `Int4WeightOnlyConfig(group_size=128, TILE_PACKED_TO_4D)`를 transformers `TorchAoConfig`
-  경로로 적용(임베딩·`lm_head` 제외 → tied-weight 안전). 재학습 없음.
-- **C (QAT)**: matched fake-quant(`Int4WeightOnlyConfig(g128)`에서 **추론** → tinygemm tile-packed 서빙과 **동일 스킴**)
-  삽입 → **양자화 대상 linear 가중치만** STE로 400 step 재학습(임베딩·`lm_head` 동결로 ppl 드리프트 억제) →
-  convert(adapted-bf16) → **B와 동일한** tile-packed int4로 export.
-- **동작 데모**(각 노트북 셀 실측): held-out 질문 *"2004년 이명박이 서울시장 재직시절 전면적으로 개선한 것은?"*
-  → 정답 `대중교통체계`, **A·B·C 모두 `대중교통체계`(정확)**.
+- **A 학습**: transformers+peft+trl(HF 백엔드), BF16, LoRA r16/α32(attn+MLP), **completion-only 마스킹**(정답 토큰에만 loss),
+  6k subset · **2 epoch = 750 step**, ~**59분**/seed, grad checkpointing on. Spot 축출 대비 **150 step 체크포인트 + resume**.
+- **B (PTQ)**: TorchAO `Int4WeightOnlyConfig(group_size=128, TILE_PACKED_TO_4D)`를 `TorchAoConfig` 경로로 적용
+  (임베딩·`lm_head` 제외 → tied-weight 안전). 재학습 없음, ~22초.
+- **C (QAT)**: matched fake-quant(`Int4WeightOnlyConfig(g128)`에서 **추론** → tile-packed 서빙과 **동일 int4 family**) 삽입 →
+  양자화 대상 linear만 STE로 **600 step** 재학습(8-bit Adam + grad ckpt로 단일 A100 적합, train loss ~0.006–0.016) →
+  convert(adapted-bf16) → **B와 동일한** tile-packed int4로 export. `v2_run selftest`가 사전 게이트.
+- **동작 데모**(각 노트북 셀 실측): held-out 질문 1개 → A·B·C 생성 답변을 실행 출력으로 포함.
 
-> **tok/s 주의**: 위 표의 tok/s는 **서로 다른 스택**(A=unsloth 122.8, B·C=plain transformers ~37)이라
-> **동일 조건 비교가 아니다** — 아래 **§vLLM 처리량 벤치마크**에서 동일 엔진·동일 노브로 재측정한 값이
-> 사과-대-사과 비교다. `peak VRAM`도 노트북 내 측정이라 A·C는 학습 직후 잔여 할당을 포함(같은
-> int4를 서빙하는 B의 **~4.6GB**가 순수 int4 서빙 풋프린트에 가장 근접). 크기(1.29GB, B=C 동일)가 풋프린트 동등성을 확증.
+## vLLM 처리량 벤치마크 (동일 조건 tok/s · 사과-대-사과 · W3·W4 교정)
+v1의 tok/s는 스택이 달라(A=unsloth, B·C=transformers) 직접 비교 불가였다(W3). v2는 **단일 vLLM 엔진 + 동일 노브**로
+A(bf16)·int4를 **실 아티팩트**로 재측정하고, **배치 스윕(1…256)** 과 **단일스트림 TTFT·e2e p50/p99**를 추가한다(W4).
+`results/vllm_throughput.json`.
 
-## vLLM 처리량 벤치마크 (동일 조건 tok/s · 사과-대-사과)
-위 3-way 표의 tok/s 열은 스택이 달라(A=unsloth, B·C=transformers) 직접 비교가 불가했다. 이를 바로잡기 위해
-**동일한 vLLM 0.26.0 엔진 + 동일 노브**로 A(bf16)와 B·C(int4)를 재측정했다(A100 80GB @ japaneast, Spot;
-`results/vllm_throughput.json`).
+**측정 원리(가중치·seed 독립성)**: 처리량은 **아키텍처 + 정밀도 + 서빙 포맷**에만 의존하고 학습된 가중치 *값*엔 무관하다.
+따라서 **B와 C는 서빙 포맷이 완전히 동일(tile-packed int4)하므로 tok/s가 구조적으로 같다**(한 행으로 대표). 벤치는
+**A(bf16 머지) + int4 1행** 두 구성만 실측한다.
 
-**측정 원리(가중치 독립성)**: 처리량은 **아키텍처 + 수치 정밀도 + 서빙 포맷**에만 의존하고 학습된 가중치 *값*엔
-무관하다. 따라서 base Qwen3-1.7B를 (1) bf16(= A의 정밀도)과 (2) **B·C와 동일한** torchao int4 tile-packed
-포맷으로 양자화해 측정하면 실제 A/B/C 서빙 처리량과 같다. **B와 C는 서빙 포맷이 완전히 동일하므로 tok/s가
-구조적으로 같다**(한 행으로 대표). 이는 처리량 벤치마크의 표준 관행이다.
+**동일 노브**: dtype=bf16, `max_model_len=4096`, `gpu_memory_utilization=0.85`, CUDA graphs on, greedy(temp=0),
+`max_tokens=128` + `ignore_eos`(요청당 정확히 128 디코드 토큰), native 샘플러(`VLLM_USE_FLASHINFER_SAMPLER=0`).
 
-**동일 노브**: dtype=bf16, max_model_len=2048, gpu_util=0.85, max_num_seqs=256, **CUDA graphs on**(enforce_eager=false),
-seed=0, `max_tokens=min_tokens=128` + `ignore_eos`(요청당 정확히 128 디코드 토큰 = 동일 작업량). 단일 스트림은
-batch=1 7회 중앙값, 배치는 128 프롬프트 동시 제출.
+**처리량 배치 스윕 (tok/s):**
 
-| 서빙 | 포맷 | 단일 스트림 tok/s (batch=1) | 배치 tok/s (batch=128) | 가중치 |
-|---|---|---|---|---|
-| **A** | bf16 | 263.1 | **18,476.2** | 3.22 GB |
-| **B ≡ C** | int4 (tile-packed) | **407.2** | 4,927.7 | 1.29 GB |
-| 비율 | — | **int4 1.55× 빠름** | **bf16 3.75× 빠름** | 2.5× 축소 |
+| batch | 1 | 4 | 16 | 32 | 64 | 128 | 256 |
+|---|---|---|---|---|---|---|---|
+| **A (bf16)** | 87.6 | 342.7 | **1031.5** | 1822.9 | 2764.1 | 3737.7 | **3959.0** |
+| **B≡C (int4)** | **124.4** | **508.0** | 327.3 | 475.1 | 488.9 | 514.5 | 509.7 |
+| 우세 | int4 | int4 | bf16 | bf16 | bf16 | bf16 | bf16 |
 
-**해석 — 배치 구간에 따라 승자가 갈린다.**
-- **단일 스트림(batch=1, 메모리 대역폭 바운드)**: int4가 **1.55× 빠름**(407 vs 263). 가중치가 4× 작아 디코드마다
-  옮길 메모리가 적다 → 양자화의 전형적 지연 이득.
-- **배치(batch=128, 연산 바운드)**: bf16이 **3.75× 빠름**(18,476 vs 4,928). 큰 배치에선 연산 바운드가 되어
-  A100 bf16 텐서코어 GEMM이 int4 dequant+GEMM을 앞선다.
-- **결론**: int4는 **메모리/지연 제약 단일 스트림**에, bf16은 **최대 배치 처리량**에 유리. 품질(EM·F1·ppl)과 함께
-  보면 **C(QAT)는 int4의 크기·단일스트림 이득을 누리면서 B 대비 품질을 회복**하는 균형점이다.
+- **크로스오버 = batch 16**: batch 1–4는 int4 우세(메모리 대역폭 바운드 — 가중치 2.65× 작음), batch ≥16은 bf16 우세
+  (연산 바운드 — bf16 텐서코어 GEMM이 int4 dequant+GEMM을 앞섬). batch 256에서 bf16 **7.8×**.
+- int4는 커널 상한으로 ~510 tok/s에서 포화(torchao tinygemm), bf16는 배치와 함께 ~3959 tok/s까지 확장.
+
+**단일스트림 지연(batch=1, client-observed):**
+
+| 서빙 | TTFT p50 / p99 | e2e p50 / p99 | clean 가중치 VRAM |
+|---|---|---|---|
+| **A (bf16)** | **32.2ms / 82.0ms** | 1.469s / 1.482s | 15.27 GiB |
+| **B≡C (int4)** | 296.4ms / 721.3ms | **0.775s / 0.785s** | **6.05 GiB** |
+
+**해석(실측 확정)**: int4는 단일스트림 **처리량(1.42×)** 과 **전체응답 e2e(1.9× 빠름: 0.78 vs 1.47s)**, **메모리
+(2.65× 작음: 6.05 vs 15.27 GiB)** 에서 유리하지만, **TTFT는 bf16이 9.2× 낮다**(int4 prefill의 dequant 비용).
+대배치 처리량은 bf16 우세(크로스오버 batch 16). → **int4 = 메모리/처리량 지향 단일스트림, bf16 = 저-TTFT 인터랙티브
+또는 최대 배치 처리량**.
+
+## 서빙 전용 clean VRAM (W5)
+노트북 내 eager eval VRAM(A 42.2GB · B/C 61.6GB)은 학습 잔여 할당을 포함해 비교가 불공정했다(v1). v2는 **vLLM
+엔진의 서빙 전용 가중치 VRAM**을 A/B/C 동일 기준으로 캡처한다: **bf16 15.27 GiB · int4 6.05 GiB(B=C 동일)**
+(`results/vllm_throughput.json`의 `weight_vram_gib`). 이 값이 int4 풋프린트 동등성과 2.5× 절감을 확증한다.
 
 ## 재현성 (버전 고정)
-`results/env_{A,B,C}.json`에 실행 시 자동 기록. **본 A100 실행 환경**: torch **2.11.0+cu130** ·
-transformers **5.5.0** · trl **0.24.0** · peft **0.20.0** · datasets **4.3.0** · **torchao 0.17.0** ·
-python 3.10 · CUDA 13.0 · unsloth 2026.7.6 · **A100 80GB PCIe(japaneast, Spot)**.
+`results/env_*.json`에 실행 시 자동 기록. **본 A100 실행 환경**: torch **2.11.0+cu130** ·
+transformers **4.57.6** · trl **0.24.0** · peft **0.20.0** · datasets **4.3.0** · **torchao 0.17.0** ·
+bitsandbytes 0.50.0 · **vllm 0.23.0** · python 3.10 · CUDA 13.0 · **A100 80GB(japaneast, Spot)**.
 
-> **torchao INT4 주의**: 기본 `Int4WeightOnlyConfig(g128)`(PLAIN 패킹)은 실양자화 시 `mslk >= 1.0.0`을 요구해
-> 실패한다. 본 트랙은 내장 tinygemm 경로인 `int4_packing_format=TILE_PACKED_TO_4D`를 사용(B·C 공통 서빙 포맷).
+> **torchao INT4 주의**: 기본 `Int4WeightOnlyConfig(g128)`(PLAIN 패킹)은 실양자화 시 `mslk` 커널을 요구해 실패한다.
+> 본 트랙은 내장 tinygemm 경로인 `int4_packing_format=TILE_PACKED_TO_4D`를 사용(B·C 공통 서빙 포맷).
+> int4 아티팩트 저장은 `safe_serialization=False`가 필요하다(torchao 텐서 서브클래스는 safetensors 미지원).
+> **vLLM 샘플러 주의**: FlashInfer top-k/top-p 샘플러는 런타임 JIT(nvcc)을 요구하므로, nvcc 미설치 환경에선
+> `VLLM_USE_FLASHINFER_SAMPLER=0`으로 native 샘플러를 강제한다.
 
 ## 가드레일
 - `quantization/` 안에서만. `pdf_qa` 코어·`evaluation/`·`personas.yaml`·웹앱 **무변경**.
 - **데이터셋 미커밋**(런타임 다운로드). `.env`/키/토큰 미커밋 — 노트북 출력에도 미노출.
 - 베이스·하이퍼파라미터는 `config.yaml`(A/B/C 동일 베이스 고정).
 
-## vLLM INT4 서빙 검증 (보너스)
-B·C가 공유하는 **TorchAO int4 tile-packed 아티팩트**를 **vLLM 0.26.0**으로 로드해 서빙 가능함을 실측 확인:
-```python
-from vllm import LLM, SamplingParams
-llm = LLM(model="quantization/artifacts/B_int4_ptq", quantization="torchao",
-          dtype="bfloat16", enforce_eager=True, max_model_len=2048)
-```
-- **로드 성공**: 엔진 로그 기준 GPU 가중치 풋프린트 **1.29GB**(디스크 크기와 일치), KV cache 45.6GB 확보.
-- **생성 정확**: *"훈민정음을 창제한 사람은?"* → **`세종대왕`**(정답). 즉 학습→PTQ/QAT→**vLLM 서빙**까지 end-to-end 동작.
-- 동일 포맷이라 C 아티팩트도 같은 방식으로 서빙된다(B로 대표 검증).
-
 ## 상태
-- ✅ **3-way 완성**: A(BF16)·B(INT4 PTQ)·C(INT4 QAT) 모두 A100 실측, `results/three_way_table.json` 3행.
-- ✅ 노트북 01·02·03 실행 완료(실 출력 포함), 재현 환경 `env_{A,B,C}.json`.
-- ✅ vLLM int4 서빙 검증(보너스).
-- ✅ **vLLM 동일 조건 처리량 벤치마크**: A(bf16) vs B·C(int4)를 동일 엔진·노브로 재측정(`results/vllm_throughput.json`) —
-  단일 스트림 int4 1.55× · 배치 bf16 3.75×.
+- ✅ **v2 3-way**: A(BF16 8B)·B(INT4 PTQ)·C(INT4 QAT) 모두 A100 실측, **3 seed** mean±std.
+- ✅ 노트북 00·01·02·03 v2 재작성 + 실행(실 출력), 재현 환경 `env_*.json`.
+- ✅ **vLLM 동일조건 처리량**: 배치 스윕(크로스오버 batch 16) + 단일스트림 TTFT/e2e p50/p99 + clean VRAM
+  (`vllm_throughput.json`) — 단일 tok/s 소스.
+- ✅ W1–W5 전부 교정(하네스·수렴학습·단일 tok/s·실아티팩트 벤치·분산/clean VRAM).

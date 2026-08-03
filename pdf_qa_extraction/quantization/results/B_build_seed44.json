@@ -1,0 +1,7 @@
+{
+  "method": "B_int4_ptq",
+  "src_A": "quantization/artifacts/A_bf16_seed44",
+  "int4_dir": "quantization/artifacts/B_int4_ptq_seed44",
+  "group_size": 128,
+  "size_gb": 5.7705
+}

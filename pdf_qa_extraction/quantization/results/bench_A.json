@@ -1,0 +1,79 @@
+{
+  "method": "A_bf16",
+  "precision": "bf16",
+  "model_dir": "quantization/artifacts/A_bf16_seed42",
+  "out_tokens": 128,
+  "graph_mode": true,
+  "sweep": [
+    {
+      "batch": 1,
+      "elapsed_s": 1.461,
+      "gen_tokens": 128,
+      "throughput_tok_s": 87.6,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 4,
+      "elapsed_s": 1.494,
+      "gen_tokens": 512,
+      "throughput_tok_s": 342.7,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 16,
+      "elapsed_s": 1.986,
+      "gen_tokens": 2048,
+      "throughput_tok_s": 1031.5,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 32,
+      "elapsed_s": 2.247,
+      "gen_tokens": 4096,
+      "throughput_tok_s": 1822.9,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 64,
+      "elapsed_s": 2.964,
+      "gen_tokens": 8192,
+      "throughput_tok_s": 2764.1,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 128,
+      "elapsed_s": 4.383,
+      "gen_tokens": 16384,
+      "throughput_tok_s": 3737.7,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 256,
+      "elapsed_s": 8.277,
+      "gen_tokens": 32768,
+      "throughput_tok_s": 3959.0,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    }
+  ]
+}

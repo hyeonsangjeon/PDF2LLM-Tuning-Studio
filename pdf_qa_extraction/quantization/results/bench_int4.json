@@ -1,0 +1,79 @@
+{
+  "method": "B_int4_ptq",
+  "precision": "int4",
+  "model_dir": "quantization/artifacts/B_int4_ptq_seed42",
+  "out_tokens": 128,
+  "graph_mode": true,
+  "sweep": [
+    {
+      "batch": 1,
+      "elapsed_s": 1.029,
+      "gen_tokens": 128,
+      "throughput_tok_s": 124.4,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 4,
+      "elapsed_s": 1.008,
+      "gen_tokens": 512,
+      "throughput_tok_s": 508.0,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 16,
+      "elapsed_s": 6.257,
+      "gen_tokens": 2048,
+      "throughput_tok_s": 327.3,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 32,
+      "elapsed_s": 8.622,
+      "gen_tokens": 4096,
+      "throughput_tok_s": 475.1,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 64,
+      "elapsed_s": 16.756,
+      "gen_tokens": 8192,
+      "throughput_tok_s": 488.9,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 128,
+      "elapsed_s": 31.843,
+      "gen_tokens": 16384,
+      "throughput_tok_s": 514.5,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    },
+    {
+      "batch": 256,
+      "elapsed_s": 64.293,
+      "gen_tokens": 32768,
+      "throughput_tok_s": 509.7,
+      "ttft_p50_s": null,
+      "ttft_p99_s": null,
+      "e2e_p50_s": null,
+      "e2e_p99_s": null
+    }
+  ]
+}

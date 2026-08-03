@@ -1,0 +1,19 @@
+{
+  "method": "B_int4_ptq",
+  "seed": 43,
+  "base_model": "Qwen/Qwen3-8B",
+  "exact_match": 86.2,
+  "f1": 93.959,
+  "n_eval": 1000,
+  "perplexity": 10.1949,
+  "size_gb": 5.7705,
+  "peak_vram_gb": 61.6387,
+  "tok_per_s": 4.53,
+  "precision": "int4",
+  "gen_seconds": 1297.9,
+  "sample_predictions": [
+    "대중교통체계",
+    "특별법",
+    "2009년"
+  ]
+}

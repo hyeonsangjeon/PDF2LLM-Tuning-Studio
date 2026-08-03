@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "prepare_fires": true,
+  "fake_quant_layers": 2,
+  "fake_err_vs_orig": 0.09473,
+  "serve_err_vs_orig": 0.13184,
+  "fake_to_serve_ratio": 0.719,
+  "same_int4_family": true,
+  "convert_roundtrip_ok": true,
+  "group_size": 128
+}
