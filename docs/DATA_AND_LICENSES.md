@@ -8,10 +8,18 @@ licensing; [`SECURITY.md`](../SECURITY.md) and
 > **Scope of the root [`LICENSE`](../LICENSE) (MIT).** MIT covers **this
 > repository's own source code only**. It does **not** relicense the external
 > datasets, model weights, or sample documents listed below, and it does **not**
-> automatically cover the fine‑tuned model artifacts committed under
+> automatically cover fine‑tuned model artifacts generated under
 > `pdf_qa_extraction/quantization/artifacts/` (those inherit their base model
 > and training‑data terms — see the tables). Do not assume MIT flows through to
 > any row here.
+
+> **Enforced coverage.** A machine‑checkable mirror of this ledger lives in
+> [`pdf_qa_extraction/docs/asset_ledger.yaml`](../pdf_qa_extraction/docs/asset_ledger.yaml).
+> Run from `pdf_qa_extraction/`, `python scripts/check_asset_ledger.py --check`
+> (a CI gate) fails if any committed bundled asset (PDF/font/image) lacks an
+> entry, and `--release` blocks publishing any asset still marked `unresolved`.
+> No SBOM, signature, or build attestation is produced yet — this repo does
+> **not** claim an attested release (that is future supply‑chain work).
 
 ## 1. Datasets (downloaded at runtime — never committed)
 
@@ -31,16 +39,19 @@ licensing; [`SECURITY.md`](../SECURITY.md) and
 Model weights are pulled from the Hugging Face Hub at run time. Pin a specific
 revision (commit SHA) rather than a mutable tag when you need reproducibility.
 
-## 3. Committed derived model artifacts
+## 3. Derived model artifacts (regenerable — **not committed**)
 
-Located in `pdf_qa_extraction/quantization/artifacts/` (`A_bf16`,
-`A_bf16_run`, `A_bf16_adapter`, …).
+`pdf_qa_extraction/quantization/artifacts/` is **gitignored**: only its
+`.gitkeep`, `.gitignore`, and `README.md` scaffolding are tracked. The model
+weights (`A_bf16`, `A_bf16_run`, `A_bf16_adapter`, …) are **never committed** —
+they are regenerated locally by the quantization pipeline. Licensing still
+applies to any artifacts **you** produce:
 
-| Artifact | Derived from | Weight terms | Data terms |
+| Artifact (local, regenerable) | Derived from | Weight terms | Data terms |
 |---|---|---|---|
 | BF16 LoRA adapter / merged + INT4 weights | **Qwen3‑8B** (Apache‑2.0) fine‑tuned on **KorQuAD 1.0** | Model weights follow the **Apache‑2.0** base | Trained on KorQuAD (**CC BY‑ND 2.0 KR**) → redistribution question is a **known‑unknown**, see §5 |
 
-The per‑artifact `README.md` files carry the Hugging Face model‑card metadata
+A generated artifact's `README.md` carries the Hugging Face model‑card metadata
 (`license: apache-2.0`) inherited from the base.
 
 ## 4. Bundled sample assets (committed)
@@ -64,9 +75,11 @@ These are **open items**, deliberately not resolved by assertion:
 2. **KorQuAD ND clause vs. fine‑tuned artifacts.** Whether weights trained on a
    NoDerivatives dataset may be redistributed is unsettled and depends on
    jurisdiction/interpretation. This repo does **not** claim it is settled.
-3. This ledger is **human‑maintained documentation**, not a machine‑verified
-   SBOM or an attested release. No signing/attestation/SBOM gate is implied here
-   (that is future supply‑chain work).
+3. A machine‑checkable coverage gate now exists
+   ([`docs/asset_ledger.yaml`](../pdf_qa_extraction/docs/asset_ledger.yaml) +
+   `scripts/check_asset_ledger.py`), but it is **not** an SBOM, a signature, or
+   a build attestation. No attested release is claimed — SBOM / signing /
+   provenance remain future supply‑chain work.
 
 Related: runtime data handling, egress, and retention are documented in
 [`docs/TRUST_AND_DATA.md`](TRUST_AND_DATA.md); vulnerability reporting in

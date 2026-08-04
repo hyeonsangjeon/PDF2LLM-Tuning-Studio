@@ -1,0 +1,94 @@
+# Machine-checkable asset license ledger (P2-3 supply-chain evidence).
+#
+# Every committed bundled binary asset (PDF, font, image) MUST have an entry
+# here, or `scripts/check_asset_ledger.py --check` fails (a release/CI gate).
+# Human-readable context + known-unknowns live in docs/DATA_AND_LICENSES.md;
+# this file is the enforced source of truth for coverage.
+#
+# Fields:
+#   id             short unique key
+#   path           repo-relative path or glob (matched against `git ls-files`)
+#   kind           sample_pdf | demo_fixture_pdf | doc_image | figure_image
+#                  | dataset | model
+#   license        SPDX id, a named license, or UNKNOWN
+#   source         where it came from (generator, hub id, or "unrecorded")
+#   redistribution ok | demo_only | unresolved
+#                    ok         -> freely redistributable under `license`
+#                    demo_only  -> ships as a local demo input; not a dataset
+#                    unresolved -> provenance/license unclear; `--release` blocks
+#   committed      true (default) = a tracked file must match `path`;
+#                  false = documentation-only (runtime download, not in git)
+#   note           free text
+version: 1
+
+assets:
+  # --- committed bundled PDFs -------------------------------------------------
+  - id: fsi_data_pdf
+    path: pdf_qa_extraction/data/fsi_data.pdf
+    kind: sample_pdf
+    license: UNKNOWN
+    source: unrecorded
+    redistribution: unresolved
+    note: >-
+      Imported in the initial commit with no recorded provenance. Local demo
+      input only. `--release` blocks bundling it until source/license is
+      established or it is replaced with a clearly-licensed/synthetic equivalent.
+
+  - id: memoir_samples
+    path: pdf_qa_extraction/data/samples/memoir_sample_ko*.pdf
+    kind: sample_pdf
+    license: UNKNOWN
+    source: unrecorded
+    redistribution: demo_only
+    note: >-
+      Short Korean memoir demo documents used as persona-demo inputs. Provenance
+      to confirm; treated as demo-only, not redistributed as a dataset.
+
+  - id: public_finance_demo_pdfs
+    path: pdf_qa_extraction/workflows/pdf_native_post_training/public_finance_demo/docs/finance_report_v*.pdf
+    kind: demo_fixture_pdf
+    license: MIT
+    source: public_finance_demo/build_fixture.py (reportlab, mechanically synthetic)
+    redistribution: ok
+    note: >-
+      Fully synthetic (fictional company, fake figures, reportlab built-in
+      Korean CID font — no external font). Reproducible from build_fixture.py.
+
+  # --- committed images -------------------------------------------------------
+  - id: repo_doc_images
+    path: assets/images/*.png
+    kind: doc_image
+    license: MIT
+    source: project-authored (README screenshots/diagrams)
+    redistribution: ok
+
+  - id: extracted_demo_figures
+    path: pdf_qa_extraction/figures/*.jpg
+    kind: figure_image
+    license: UNKNOWN
+    source: unrecorded (extracted demo figures)
+    redistribution: demo_only
+    note: Extracted demo figures shipped for documentation; provenance to confirm.
+
+  # --- runtime-only (documented, NOT committed) ------------------------------
+  - id: korquad_v1
+    path: "(runtime download: KorQuAD/squad_kor_v1)"
+    kind: dataset
+    license: CC BY-ND 2.0 KR
+    source: Hugging Face Hub (fetched at run time by quantization/data_korquad.py)
+    redistribution: demo_only
+    committed: false
+    note: >-
+      Never copied into the repo. NoDerivatives clause -> redistribution of
+      fine-tuned artifacts is a known-unknown (see docs/DATA_AND_LICENSES.md).
+
+  - id: base_models
+    path: "(runtime download: Qwen3-8B / Qwen2.5-7B / Yi-1.5-9B / Llama-3.1-8B)"
+    kind: model
+    license: Apache-2.0 (Qwen/Yi); Llama-3.1 Community (gated, optional)
+    source: Hugging Face Hub (fetched at run time)
+    redistribution: ok
+    committed: false
+    note: >-
+      Fine-tuned artifacts under quantization/artifacts/ are gitignored (weights
+      are regenerable and never committed).

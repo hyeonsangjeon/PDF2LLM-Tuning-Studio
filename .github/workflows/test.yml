@@ -52,6 +52,8 @@ jobs:
         run: python scripts/build_evidence_index.py --check
       - name: Benchmark tables reproduce from raw JSON
         run: python -m quantization.v2_report --check-historical
+      - name: Asset license ledger — every committed asset is covered
+        run: python scripts/check_asset_ledger.py --check
 
   packaging:
     name: wheel install + packaged demo
