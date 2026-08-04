@@ -49,9 +49,12 @@ PATTERNS = {
     "email": re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
     # Korean mobile / landline: 010-1234-5678, 02-123-4567 ...
     "phone_kr": re.compile(r"\b0\d{1,2}-\d{3,4}-\d{4}\b"),
-    # API-key-ish long tokens
-    "api_key": re.compile(r"\b(sk|xox[baprs]|ghp|gho|AKIA)[-_A-Za-z0-9]{16,}\b"),
-    "aws_secret": re.compile(r"\baws_secret_access_key\b", re.I),
+    # API-key-ish long tokens — real vendor prefixes only (delimiter-anchored so
+    # ordinary identifiers like ``skip_special_tokens`` are not matched).
+    "api_key": re.compile(r"\b(sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b"),
+    # A committed AWS *secret value* (>=40-char base64), not a mere variable name /
+    # ``os.getenv(...)`` reference / documented placeholder.
+    "aws_secret": re.compile(r"aws_secret_access_key\s*[:=]\s*[\"']?[A-Za-z0-9/+]{40,}", re.I),
     # absolute local user paths that leak a machine layout
     "local_user_path": re.compile(r"/(home|Users)/[A-Za-z0-9._-]+/"),
     # private / corporate-internal hosts (localhost & 127.0.0.1 are legitimate in

@@ -1,0 +1,16 @@
+Creative Commons Attribution 4.0 International (CC-BY-4.0)
+
+Copyright (c) 2024 PDF2LLM-Tuning-Studio contributors
+
+The synthetic data files in this directory (PDF documents, gold Q&A, recorded
+generations, and canary ledger) are released under the Creative Commons
+Attribution 4.0 International License.
+
+All content is mechanically synthetic. It does not describe, reference, or
+reproduce any real company, person, address, financial figure, account, or
+third-party copyrighted material. The embedded identifier-shaped strings are
+non-routable canaries (Luhn-invalid card number, reserved example.com email,
+reserved 555-01xx phone block).
+
+To view a copy of this license, visit:
+https://creativecommons.org/licenses/by/4.0/

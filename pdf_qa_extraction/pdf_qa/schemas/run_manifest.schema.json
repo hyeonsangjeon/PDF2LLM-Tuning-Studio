@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdf2llm/schemas/run_manifest.schema.json",
+  "title": "PDF2LLM shared run manifest",
+  "description": "One manifest per run instance. Shared by pdf_qa, the pdf_native_post_training workflow and the quantization stages. Secrets, cloud account IDs, endpoints and absolute local paths MUST NOT appear here.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "reproducibility_fingerprint",
+    "artifact_set_hash",
+    "created_at_utc",
+    "command",
+    "code",
+    "environment",
+    "stages",
+    "inputs",
+    "outputs"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": { "const": "run_manifest/v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "reproducibility_fingerprint": {
+      "type": "string",
+      "description": "Stable over timestamp, output path, run_id and absolute local paths. Equal inputs+code+config+model => equal value.",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "artifact_set_hash": {
+      "type": "string",
+      "description": "Canonical hash of {relative artifact path -> sha256}.",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "created_at_utc": { "type": "string" },
+    "elapsed_seconds": { "type": ["number", "null"] },
+    "command": { "type": "string" },
+    "generation_mode": {
+      "type": "string",
+      "enum": ["recorded_replay", "live", "smoke_train", "recorded_hardware_run", "not_recorded"]
+    },
+    "code": {
+      "type": "object",
+      "required": ["git_sha", "git_dirty"],
+      "properties": {
+        "git_sha": { "type": "string" },
+        "git_dirty": { "type": "boolean" },
+        "config_sha256": { "type": ["string", "null"] },
+        "prompt_sha256": { "type": ["string", "null"] },
+        "rubric_sha256": { "type": ["string", "null"] }
+      }
+    },
+    "model": {
+      "type": "object",
+      "properties": {
+        "id": { "type": ["string", "null"] },
+        "revision": { "type": ["string", "null"] },
+        "tokenizer_id": { "type": ["string", "null"] },
+        "tokenizer_revision": { "type": ["string", "null"] }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "properties": {
+        "id": { "type": ["string", "null"] },
+        "revision": { "type": ["string", "null"] },
+        "split": { "type": ["string", "null"] },
+        "example_id_hash": { "type": ["string", "null"] }
+      }
+    },
+    "container": {
+      "type": "object",
+      "properties": { "image_digest": { "type": ["string", "null"] } }
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "python": { "type": ["string", "null"] },
+        "packages": { "type": "object" },
+        "cuda": { "type": ["string", "null"] },
+        "driver": { "type": ["string", "null"] },
+        "gpu": { "type": ["string", "null"] }
+      }
+    },
+    "seeds": { "type": "array", "items": { "type": "integer" } },
+    "provider_usage": {
+      "type": "array",
+      "description": "Per-call usage. Public exports strip/hashe provider request IDs.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "provider": { "type": "string" },
+          "calls": { "type": "integer" },
+          "input_tokens": { "type": ["integer", "null"] },
+          "output_tokens": { "type": ["integer", "null"] },
+          "rate_card_ref": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "status"],
+        "properties": {
+          "name": { "type": "string" },
+          "status": { "type": "string", "enum": ["completed", "failed", "skipped", "pending", "running"] },
+          "started_at_utc": { "type": ["string", "null"] },
+          "ended_at_utc": { "type": ["string", "null"] },
+          "input_sha256": { "type": ["string", "null"] },
+          "output_sha256": { "type": ["string", "null"] },
+          "error": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string" },
+          "role": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string" }
+        }
+      }
+    }
+  }
+}

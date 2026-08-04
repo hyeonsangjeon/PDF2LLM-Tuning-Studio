@@ -1,0 +1,13 @@
+{
+  "note": "All identifiers below are mechanically non-routable synthetic canaries.",
+  "canaries": {
+    "email": "canary@example.com",
+    "phone": "010-555-0123",
+    "card": "4111-1111-1111-1112"
+  },
+  "validation": {
+    "email": "reserved example.com domain",
+    "phone": "reserved 555-01xx block",
+    "card": "Luhn-invalid"
+  }
+}

@@ -1,0 +1,10 @@
+# Public data policy: synthetic, shareable, but still local-only providers by
+# default (the demo never needs cloud egress). Cloud egress requires BOTH an
+# explicit allow-list entry AND raw_content_egress: allowed.
+classification: public
+license: CC-BY-4.0
+allowed_providers:
+  - recorded-replay
+  - ollama
+raw_content_egress: denied
+retention: keep

@@ -1,0 +1,20 @@
+# CPU smoke of the SFT training stage on a tiny pinned model (few steps).
+# Proves the export -> train -> evaluate handoff works end to end without a GPU.
+name: smoke-train
+mode: recorded_replay
+provider: recorded-replay
+policy: public
+doc_version: v1
+
+docs:
+  - public_finance_demo/docs/finance_report_v1.pdf
+recorded_generations: public_finance_demo/recorded_generations.jsonl
+gold_qa: public_finance_demo/gold_qa.jsonl
+
+seeds: [0]
+train:
+  enabled: true
+  model: sshleifer/tiny-gpt2   # tiny pinned model, CPU-only smoke
+  max_steps: 3
+  max_seq_len: 128
+  learning_rate: 0.0005

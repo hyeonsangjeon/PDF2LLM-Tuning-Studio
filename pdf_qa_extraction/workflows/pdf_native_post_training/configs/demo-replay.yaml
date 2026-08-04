@@ -1,0 +1,17 @@
+# Credential-free golden path: recorded replay of the synthetic finance demo.
+# Runs ingest -> generate(replay) -> verify_evidence -> policy_gate -> curate
+# -> export -> eval -> report. No network, no GPU, deterministic.
+name: demo-replay
+mode: recorded_replay
+provider: recorded-replay
+policy: public
+doc_version: v1
+
+docs:
+  - public_finance_demo/docs/finance_report_v1.pdf
+recorded_generations: public_finance_demo/recorded_generations.jsonl
+gold_qa: public_finance_demo/gold_qa.jsonl
+
+seeds: [0]
+train:
+  enabled: false

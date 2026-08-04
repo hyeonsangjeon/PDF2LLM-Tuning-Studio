@@ -6,6 +6,46 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
 
 - 금융보안원 AI 개발 강의, 2025
 
+## 🎯 두 개의 공개 진입점 (Public entry points)
+
+이 저장소에는 **서로 섞이지 않는 두 개의 재현 가능한 트랙**이 있습니다. 각 수치는 커밋된 JSON으로 역추적됩니다.
+
+### ① Quantization & Serving Experiment — *recorded hardware run (1× A100 80GB, 3 seeds)*
+
+KorQuAD 기반 **BF16 LoRA(A) / INT4 PTQ(B) / INT4 QAT(C)** 3-way 비교 + vLLM 서빙 벤치(배치 스윕 + 단일스트림
+지연). PyTorch 발표 코어. 관측 순서 **A ≳ C > B**(동등성 검정은 미수행 — [자세히](pdf_qa_extraction/quantization/README.md)).
+
+- 코드: [`quantization/config.yaml`](pdf_qa_extraction/quantization/config.yaml) ·
+  [`v2_pipeline.py`](pdf_qa_extraction/quantization/v2_pipeline.py) ·
+  [`v2_run.py`](pdf_qa_extraction/quantization/v2_run.py) ·
+  [`v2_bench.py`](pdf_qa_extraction/quantization/v2_bench.py)
+- 실행 노트북: [`notebooks/`](pdf_qa_extraction/quantization/notebooks/) (00 base-select · 01 BF16 · 02 INT4 PTQ · 03 INT4 QAT)
+- 결과(수치 원본): [`results/three_way_table.json`](pdf_qa_extraction/quantization/results/three_way_table.json)
+  (EM/F1/ppl mean±std) · [`results/vllm_throughput.json`](pdf_qa_extraction/quantization/results/vllm_throughput.json)
+  (배치 스윕 + TTFT/e2e p50·p99 + clean VRAM)
+- 핵심 수치(→ JSON 재추적): A_bf16 F1 **94.83 ± 0.19** · C_int4_qat F1 **94.82 ± 0.11** · B_int4_ptq F1
+  **94.19 ± 0.23**; clean 가중치 VRAM bf16 **15.27 GiB** vs int4 **6.05 GiB**(2.65× 절감). TTFT는 오프라인
+  `max_tokens=1` 벽시계 **proxy**(온라인 streaming TTFT 아님).
+
+### ② PDF-native Post-training Workflow — *offline-reproducible (deterministic); CI 게이트 추가됨*
+
+원본 PDF → **근거 주소가 검증된** Q&A 데이터셋 → 정책/PII 게이트 → SFT → 평가로 이어지는 신규 독립 워크플로.
+**자격 증명·GPU·네트워크 없이** 합성 한국어 금융 PDF로 전체 파이프라인을 결정적으로 재현합니다.
+
+```bash
+make install-workflow && make verify-demo      # 60초 오프라인 증명 → [verify-demo] PASS
+```
+
+- 워크플로 가이드: [`workflows/pdf_native_post_training/README.md`](pdf_qa_extraction/workflows/pdf_native_post_training/README.md)
+  (60초 proof · Good/Not-a-good fit · replay/live/smoke · 기대 출력 · 요구사항 · troubleshooting · cleanup)
+- 실행: `make demo-replay`(오프라인) · `make demo-live-ollama`(로컬 Ollama) · `make demo-train-smoke`(CPU SFT 스모크)
+- 기대 기준값(합성 코퍼스): evidence_address_integrity **1.0** · policy_quarantined **0** · train_rows **26** ·
+  replay EM/F1 **1.0** · 실행마다 동일한 재현 지문.
+- 신뢰 게이트: [`.github/workflows/test.yml`](.github/workflows/test.yml)(pytest + `verify-demo` + secret 스캔 +
+  wheel 설치). 로컬에서 전 항목 green이며, GitHub Actions에서의 첫 실행 전까지 "CI green" 배지는 주장하지 않습니다.
+
+> 두 트랙은 **다른 데이터셋·다른 벤치마크**입니다(KorQuAD vs 합성 PDF 코퍼스). 수치를 서로 비교하지 마세요.
+
 ## 📚 주요 기능
 
 - **경량 PDF 추출**: Unstructured 라이브러리로 텍스트/표/이미지 추출 (CPU 슬림 이미지 `:latest` ~2GB, 레이아웃+표를 GPU로 가속하는 `:latest-gpu` ~8GB는 선택)

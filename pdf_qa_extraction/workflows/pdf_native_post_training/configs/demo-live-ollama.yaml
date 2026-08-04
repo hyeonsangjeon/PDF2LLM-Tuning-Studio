@@ -1,0 +1,17 @@
+# Optional local live path using an Ollama daemon (no raw-content egress).
+# Requires: `ollama serve` running locally with the named model pulled.
+# NOT exercised by CI; provided so a cloner can try a real local model.
+name: demo-live-ollama
+mode: live_ollama
+provider: ollama
+model: qwen2.5:0.5b
+policy: restricted_local_only
+doc_version: v1
+
+docs:
+  - public_finance_demo/docs/finance_report_v1.pdf
+gold_qa: public_finance_demo/gold_qa.jsonl
+
+seeds: [0]
+train:
+  enabled: false

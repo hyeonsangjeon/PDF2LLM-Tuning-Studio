@@ -193,3 +193,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# workflow run bundles (regenerated)
+runs/
+pdf_qa_extraction/runs/

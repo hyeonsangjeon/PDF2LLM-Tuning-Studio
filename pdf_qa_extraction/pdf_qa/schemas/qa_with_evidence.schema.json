@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdf2llm/schemas/qa_with_evidence.schema.json",
+  "title": "Q&A with mechanical evidence provenance",
+  "description": "Every accepted training/eval example must trace back to the exact source document, page, parser-assigned element id and verbatim quote. Evidence element ids are immutable ids the parser assigned; models may not invent them.",
+  "type": "object",
+  "required": ["qa_id", "question", "answer", "evidence", "generation", "review_status"],
+  "additionalProperties": true,
+  "properties": {
+    "qa_id": { "type": "string", "minLength": 1 },
+    "question": { "type": "string", "minLength": 1 },
+    "answer": { "type": "string" },
+    "answerable": { "type": "boolean" },
+    "fact_volatility": { "type": "string", "enum": ["stable", "mutable", "unknown"] },
+    "effective_from": { "type": ["string", "null"] },
+    "effective_until": { "type": ["string", "null"] },
+    "document_version": { "type": ["string", "null"] },
+    "source_status": { "type": "string", "enum": ["active", "stale", "revoked", "unknown"] },
+    "category": {
+      "type": "string",
+      "enum": [
+        "single_fact", "table_lookup", "numeric_exact", "calculation",
+        "cross_page", "version_effective_date", "unanswerable", "ocr_noise",
+        "prompt_injection", "conflicting_evidence"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["document_sha256", "page", "element_id", "quote", "quote_sha256", "modality"],
+        "properties": {
+          "document_sha256": { "type": "string" },
+          "document_version": { "type": ["string", "null"] },
+          "page": { "type": "integer", "minimum": 1 },
+          "element_id": { "type": "string", "minLength": 1 },
+          "bbox": {
+            "type": ["array", "null"],
+            "items": { "type": "number" },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "quote": { "type": "string" },
+          "quote_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "modality": { "type": "string", "enum": ["text", "table", "figure"] },
+          "section_path": { "type": ["string", "null"] },
+          "chunk_id": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "required": ["provider", "model"],
+      "properties": {
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "model_revision": { "type": ["string", "null"] },
+        "prompt_sha256": { "type": ["string", "null"] },
+        "generation_mode": {
+          "type": "string",
+          "enum": ["recorded_replay", "live", "smoke_train", "not_recorded"]
+        }
+      }
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["owner_review_pending", "human_reviewed", "approved", "rejected", "edited"]
+    },
+    "reject_reason": { "type": ["string", "null"] }
+  }
+}

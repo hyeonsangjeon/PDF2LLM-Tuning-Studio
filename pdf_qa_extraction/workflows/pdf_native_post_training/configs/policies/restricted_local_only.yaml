@@ -1,0 +1,11 @@
+# Restricted data policy: raw content must never leave the machine. Only local
+# providers are permitted; any cloud provider is blocked BEFORE construction by
+# pdf_qa.policy.guard_provider_call. Missing/unknown classification also lands
+# here (fail-closed).
+classification: restricted
+license: unknown
+allowed_providers:
+  - recorded-replay
+  - ollama
+raw_content_egress: denied
+retention: delete_after_run

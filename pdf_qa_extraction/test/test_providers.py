@@ -1,5 +1,7 @@
 """Provider-factory + auth wiring tests (no heavy SDKs required).
 
+scan-secrets: allow-file (uses a fake ``*.internal`` host to test URL parsing).
+
 These exercise the parts that must work without ``langchain_ollama`` /
 ``azure-identity`` / ``langchain-openai`` installed: the provider registry,
 aliases, and the Azure Foundry Entra ID token-scope helper. Concrete provider

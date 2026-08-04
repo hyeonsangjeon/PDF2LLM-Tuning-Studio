@@ -47,6 +47,28 @@ def test_scanner_catches_email_but_allows_example_domain(tmp_path):
     assert not any(p.endswith("synthetic.txt") for p, _ in kinds)
 
 
+def test_scanner_catches_real_keys_not_identifiers(tmp_path):
+    """Tightened api_key/aws_secret: real leaked *values* trip, identifiers don't."""
+    (tmp_path / "leak.py").write_text(
+        'OPENAI = "sk-abcdefghijklmnopqrstuvwxyz012345"\n'
+        'AWS = "AKIAIOSFODNN7EXAMPLE"\n'
+        'aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"\n',
+        encoding="utf-8",
+    )
+    kinds = {f.kind for f in scan_secrets.scan([str(tmp_path)])}
+    assert "api_key" in kinds and "aws_secret" in kinds
+
+    # Ordinary identifiers / var-names / placeholders / os.getenv are NOT secrets.
+    (tmp_path / "clean.py").write_text(
+        "tok = tokenizer.decode(x, skip_special_tokens=True)\n"
+        'key = os.getenv("AWS_SECRET_ACCESS_KEY")\n'
+        "AWS_SECRET_ACCESS_KEY=your_secret_key_here\n",
+        encoding="utf-8",
+    )
+    clean = [f for f in scan_secrets.scan([str(tmp_path / "clean.py")])]
+    assert clean == [], [f"{f.line}:{f.kind}:{f.snippet}" for f in clean]
+
+
 def test_training_export_contains_only_clean_rows():
     """The committed train_data.jsonl must have no PII-shaped content."""
     jl = os.path.join(REPO, "fine_tuning", "data", "train_data.jsonl")

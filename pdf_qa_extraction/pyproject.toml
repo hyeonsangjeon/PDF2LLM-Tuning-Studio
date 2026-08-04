@@ -48,6 +48,19 @@ openai = [
 ollama = [
     "langchain-ollama>=0.2",
 ]
+# PDF-native post-training workflow (fixture build + run bundle + evidence)
+workflow = [
+    "reportlab>=4.0",
+    "PyMuPDF>=1.23",
+    "jsonschema>=4.0",
+    "pyyaml>=6",
+]
+# CPU-smoke SFT training for the workflow's train stage
+train = [
+    "torch>=2.1",
+    "transformers>=4.40",
+    "datasets>=2.18",
+]
 # Single-node local demo web app (thin UI over the in-process pipeline)
 webapp = [
     "fastapi>=0.110",
@@ -55,13 +68,21 @@ webapp = [
     "python-multipart>=0.0.9",
 ]
 
+[project.scripts]
+pdf2llm = "pdf_qa.cli:main"
+
 [tool.setuptools]
 py-modules = []
 
 [tool.setuptools.package-data]
-# Ship the persona ledger inside the wheel / container image.
-pdf_qa = ["personas.yaml", "settings.yaml"]
+# Ship the persona ledger, JSON schemas and the synthetic demo fixture in the wheel.
+pdf_qa = ["personas.yaml", "settings.yaml", "schemas/*.json"]
+"workflows.pdf_native_post_training" = ["configs/*.yaml", "configs/policies/*.yaml"]
+"workflows.pdf_native_post_training.public_finance_demo" = [
+    "docs/*.pdf", "*.jsonl", "*.json", "*.sha256", "*.md", "LICENSE",
+]
 
 [tool.setuptools.packages.find]
-include = ["pdf_qa*"]
+include = ["pdf_qa*", "evaluation*", "quantization*", "workflows*"]
+exclude = ["*.tests", "*.tests.*", "tests", "tests.*"]
 namespaces = false
