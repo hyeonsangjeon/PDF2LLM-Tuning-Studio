@@ -165,6 +165,12 @@ model = FastLanguageModel.get_peft_model(
 
 ## 5. 추론 및 평가
 
+> ⚠️ **평가 데이터 분리 (누수 방지)**: 학습에 쓴 예제로 평가하면 성능이 부풀려집니다. `03_train_unsloth_model.ipynb`는
+> 동일 데이터를 train/eval에 함께 넣지 않고 `train_test_split(test_size=0.2, seed=42)`로 **held-out**을 분리해
+> 그 위에서만 평가합니다. 이 노트북은 파인튜닝 **입문용 튜토리얼**입니다 — 통계적으로 엄밀한 비교(3 seed 평균±표준편차,
+> 원시 JSON에서 재생성되는 집계)는 [`../pdf_qa_extraction/quantization/`](../pdf_qa_extraction/quantization/) 트랙을
+> 참조하세요. 표준편차가 겹친다는 이유만으로 "동등"이라 주장하지 않으며, 모든 수치는 **관측값**으로만 서술합니다.
+
 ### 모델 추론 최적화
 
 Unsloth는 추론 속도도 최적화합니다:
