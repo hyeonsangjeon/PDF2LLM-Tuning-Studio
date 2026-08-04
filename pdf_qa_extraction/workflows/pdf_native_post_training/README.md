@@ -151,6 +151,36 @@ mutable fact의 *현재 값*은 retrieval/source selection이 담당하고, SFT�
 - 공개/합성 fixture: `public_finance_demo/versioned_facts.jsonl` (구·신 버전, 충돌, revoked,
   effective window 케이스). 테스트: `tests/test_source_selection.py`.
 
+## 🧑‍⚖️ Local review workflow (근거 중심 승인 큐)
+
+생성된 Q&A를 **검토 없이 학습에 넣지 않습니다.** 작은 로컬/단일 사용자 리뷰어이므로 의도적으로
+**local review workflow**로 부릅니다 — 인증·권한·감사 보존이 없으며 enterprise review system이
+아닙니다. 로직: [`review.py`](review.py), 이벤트 스키마: [`schemas/review_event.schema.json`](schemas/review_event.schema.json).
+
+핵심 보증:
+
+- **승인 상태는 append-only 이벤트 로그의 projection** 입니다. JSONL 행의 `review_status` 필드를
+  임의로 고쳐도 무시되고, **accept 이벤트가 없으면 unreviewed**로 취급되어 학습에 들어가지 않습니다.
+- **기본 학습 export는 `approved`(및 `edited`)만** 포함합니다. reject는 quarantine, 미검토는 held.
+  P1-6 source-selection과 **합성**되어 stale/revoked/superseded·충돌 행도 함께 제외됩니다.
+- **edit 행은 원본 생성값과 diff를 보존**합니다(`_review_original`/`_review_edits`).
+- **모든 approved 행은** reviewer 이벤트 + source evidence로 **역추적**됩니다(`trace`).
+- **원문 접근 권한이 없는 report에서는 source snippet을 redact**합니다(`redact_for_report`).
+
+```bash
+# 로컬 리뷰 CLI (append-only 이벤트 로그)
+python -m workflows.pdf_native_post_training.review --log review.jsonl \
+    accept --records gen.jsonl --qa-id q000 --reviewer alice
+python -m workflows.pdf_native_post_training.review --log review.jsonl \
+    reject --records gen.jsonl --qa-id q003 --reviewer alice --reason ungrounded
+python -m workflows.pdf_native_post_training.review --log review.jsonl list --records gen.jsonl
+python -m workflows.pdf_native_post_training.review --log review.jsonl \
+    export --records gen.jsonl --out review_out/   # train_approved / quarantine / pending
+python -m workflows.pdf_native_post_training.review --log review.jsonl verify  # 체인·해시 무결성
+```
+
+테스트: `tests/test_review.py`.
+
 ## 🧹 Cleanup
 
 - **로컬 실행물**: `runs/`는 `.gitignore`에 포함되어 커밋되지 않습니다. 삭제는 `rm -rf pdf_qa_extraction/runs`.

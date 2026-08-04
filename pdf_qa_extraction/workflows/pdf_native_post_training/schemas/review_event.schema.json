@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://pdf2llm/schemas/review_event.schema.json",
+  "title": "Local review event (append-only)",
+  "description": "One immutable event in the local review workflow. Approval state is a projection over these events, never an in-place edit of a Q&A row.",
+  "type": "object",
+  "required": ["event_id", "qa_id", "action", "reviewer", "timestamp", "event_sha256"],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "minLength": 8 },
+    "qa_id": { "type": "string", "minLength": 1 },
+    "action": { "type": "string", "enum": ["accept", "edit", "reject", "reopen"] },
+    "reviewer": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "minLength": 1 },
+    "reject_reason": {
+      "type": ["string", "null"],
+      "enum": [null, "ungrounded", "wrong_value", "wrong_version", "numeric_unit_error",
+               "pii_exposure", "schema_violation", "policy_violation", "ocr_error",
+               "hallucinated_citation", "duplicate", "other"]
+    },
+    "edits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field", "old", "new"],
+        "additionalProperties": false,
+        "properties": {
+          "field": { "type": "string" },
+          "old": {},
+          "new": {}
+        }
+      }
+    },
+    "evidence_anchor": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "properties": {
+        "document_sha256": { "type": ["string", "null"] },
+        "quote_sha256": { "type": ["string", "null"] }
+      }
+    },
+    "prev_event_id": { "type": ["string", "null"] },
+    "note": { "type": ["string", "null"] },
+    "event_sha256": { "type": "string", "minLength": 16 }
+  }
+}
