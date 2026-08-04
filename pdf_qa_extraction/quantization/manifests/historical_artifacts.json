@@ -1,0 +1,190 @@
+{
+  "schema": "historical_artifacts/v1",
+  "purpose": "Immutable checksums of the KorQuAD BF16/PTQ/QAT quantization results and executed notebooks as they existed at the base commit. New runs must NOT overwrite these; they write under runs/<run_id>/ with their own artifact manifest.",
+  "base_commit": "3f8963cbb4dee580b8cc5ccfbee0f0c3c012b284",
+  "frozen_at_utc": "2026-08-04T14:46:34Z",
+  "path_root": "pdf_qa_extraction/",
+  "artifact_count": 36,
+  "artifacts": [
+    {
+      "path": "quantization/notebooks/00_base_select.ipynb",
+      "sha256": "a00b7bfe936de2b32ddbe839aff35f2b71defa76a5a303290aae7fad95ceaca6",
+      "size_bytes": 10231
+    },
+    {
+      "path": "quantization/notebooks/01_bf16_lora.ipynb",
+      "sha256": "f6edc5205a0b8a14eb2a97f6cea745dc483526ed956d66b34ea490a3e4ab1971",
+      "size_bytes": 13680
+    },
+    {
+      "path": "quantization/notebooks/02_int4_ptq.ipynb",
+      "sha256": "d810560689d5c89e9dfd501df890395252ce5241b218e9260176ee38f218a890",
+      "size_bytes": 13190
+    },
+    {
+      "path": "quantization/notebooks/03_int4_qat.ipynb",
+      "sha256": "b533df546229f7b84cae1f0e0fa30159b070f7858f077536d16efc9693cabc8f",
+      "size_bytes": 15655
+    },
+    {
+      "path": "quantization/notebooks/README.md",
+      "sha256": "1c35df339fc0d374590a15c4946d61dbcebb9848dcf127413bf4349eabb0a2c7",
+      "size_bytes": 2895
+    },
+    {
+      "path": "quantization/results/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "path": "quantization/results/A_train_seed42.json",
+      "sha256": "93aeb8c98ce068a052cf982081f0c57d876240764533867d26e26d0c5e9ede40",
+      "size_bytes": 1665
+    },
+    {
+      "path": "quantization/results/A_train_seed43.json",
+      "sha256": "8b4c5555437f55eb7f18c4b174c6c890887f74e877cbf8e2091cd5b91b8de96f",
+      "size_bytes": 1665
+    },
+    {
+      "path": "quantization/results/A_train_seed44.json",
+      "sha256": "3ba867fe648115b650f9c2bc57a51691e3ac25b85654e10cc6140ba7af67d000",
+      "size_bytes": 1667
+    },
+    {
+      "path": "quantization/results/B_build_seed42.json",
+      "sha256": "d64acd604c93cfde40080a9d62bffde3a473c3774a7d07f09069d873791b07fb",
+      "size_bytes": 179
+    },
+    {
+      "path": "quantization/results/B_build_seed43.json",
+      "sha256": "a80783d6fb06081d85d74800779872f692505ca2b1e274d22270b342bf47eba3",
+      "size_bytes": 179
+    },
+    {
+      "path": "quantization/results/B_build_seed44.json",
+      "sha256": "a5efbfcc7983d19e27427f83598944937433ccb536884846601c9ac1997d1d93",
+      "size_bytes": 179
+    },
+    {
+      "path": "quantization/results/C_train_seed42.json",
+      "sha256": "1d64aca4449cf07536b5cbc2ba7ebc29e2cfc33f2efc52750e45c5d63d389b13",
+      "size_bytes": 1471
+    },
+    {
+      "path": "quantization/results/C_train_seed43.json",
+      "sha256": "c6ca754c90aa448f55246a2c30ad78fa02fe16c158fadfd410f8c6842806afba",
+      "size_bytes": 1471
+    },
+    {
+      "path": "quantization/results/C_train_seed44.json",
+      "sha256": "18cc99a61ad807ea223ca4a0c5bfd42b5d221f17727c06ff97eaf040c6209600",
+      "size_bytes": 1469
+    },
+    {
+      "path": "quantization/results/base_select.json",
+      "sha256": "f03c9aaa677e83ea77e19ccb167dc9cc9cfcced2fa17a4b3359ab79dd1986945",
+      "size_bytes": 4885
+    },
+    {
+      "path": "quantization/results/bench_A.json",
+      "sha256": "fbe560316ef4db47e56605989ef649aedc207504fc130ef724732d787ea7c829",
+      "size_bytes": 1692
+    },
+    {
+      "path": "quantization/results/bench_A_lat.json",
+      "sha256": "87a53599f86b356e1435b8911937a7a3e6f8af841cc65efaaf07eb771752668f",
+      "size_bytes": 405
+    },
+    {
+      "path": "quantization/results/bench_int4.json",
+      "sha256": "2510ba60332eb92d91a54cbb184ad1e91844acfc04f6684d0b7e76a1d4ea5f37",
+      "size_bytes": 1699
+    },
+    {
+      "path": "quantization/results/bench_int4_lat.json",
+      "sha256": "379f2cfe85c87f2805ce1e6c7eba659350c5aefdb124c403b84df288b036c440",
+      "size_bytes": 413
+    },
+    {
+      "path": "quantization/results/env_A.json",
+      "sha256": "807888cc970c9be39b7964c6be8ac7b8ead8cd3f402df4ccf966bd53eead4758",
+      "size_bytes": 158
+    },
+    {
+      "path": "quantization/results/env_B.json",
+      "sha256": "807888cc970c9be39b7964c6be8ac7b8ead8cd3f402df4ccf966bd53eead4758",
+      "size_bytes": 158
+    },
+    {
+      "path": "quantization/results/env_C.json",
+      "sha256": "807888cc970c9be39b7964c6be8ac7b8ead8cd3f402df4ccf966bd53eead4758",
+      "size_bytes": 158
+    },
+    {
+      "path": "quantization/results/env_baseselect.json",
+      "sha256": "807888cc970c9be39b7964c6be8ac7b8ead8cd3f402df4ccf966bd53eead4758",
+      "size_bytes": 158
+    },
+    {
+      "path": "quantization/results/eval_A_bf16_seed42.json",
+      "sha256": "ec3f1aee1c682d42d520be67d1ca0b4da933a0da9b91d53dfd3aaac961935947",
+      "size_bytes": 371
+    },
+    {
+      "path": "quantization/results/eval_A_bf16_seed43.json",
+      "sha256": "9bd614006b32efab12bbfbe14e3667b9e6dfb2a24633a2bd0455e4e91fa83bea",
+      "size_bytes": 371
+    },
+    {
+      "path": "quantization/results/eval_A_bf16_seed44.json",
+      "sha256": "aa79db34f2dae0c8ef3ed419a2a1b30988e3942279c6528273875c9a8c99a16a",
+      "size_bytes": 370
+    },
+    {
+      "path": "quantization/results/eval_B_int4_ptq_seed42.json",
+      "sha256": "b812a6544ba0c667cb2909e07844415b564f76d2c7c38b1050df065e34b8d116",
+      "size_bytes": 374
+    },
+    {
+      "path": "quantization/results/eval_B_int4_ptq_seed43.json",
+      "sha256": "92c199ccf7d4c8d3fa0ad5434307fd4acfaf07af46aa0973ad05f92d62109f5c",
+      "size_bytes": 362
+    },
+    {
+      "path": "quantization/results/eval_B_int4_ptq_seed44.json",
+      "sha256": "e26fe3641003f20b218f5dbe12c8319b3baebb81093766b9a73e082ddac09cce",
+      "size_bytes": 375
+    },
+    {
+      "path": "quantization/results/eval_C_int4_qat_seed42.json",
+      "sha256": "c9de4bedecb2d3d27f67431e06e036fd9d86eec2983f45b19c7a9af58e7d67f4",
+      "size_bytes": 374
+    },
+    {
+      "path": "quantization/results/eval_C_int4_qat_seed43.json",
+      "sha256": "2a8b93699e13b1a5b0f08cdf1b82fd3c0c992641e768adbf86452fa6c71c4fd0",
+      "size_bytes": 362
+    },
+    {
+      "path": "quantization/results/eval_C_int4_qat_seed44.json",
+      "sha256": "a3f35770bca9f40bdf4b75058f317de20da7430dc66cabc30cc9843b33e47385",
+      "size_bytes": 362
+    },
+    {
+      "path": "quantization/results/qat_selftest.json",
+      "sha256": "fad7609cbe94d333d6a7f2dd747b7f2bac4e7230982e03fe43f54de1e847fafd",
+      "size_bytes": 243
+    },
+    {
+      "path": "quantization/results/three_way_table.json",
+      "sha256": "eaad8e8fa2848059c1437f6f04d55889b913ec97d4df31b10f55182ec63f1685",
+      "size_bytes": 5818
+    },
+    {
+      "path": "quantization/results/vllm_throughput.json",
+      "sha256": "a94e2843cf8b36f64fe30511732b0dd3abd189a42ec622c5477483fff8c66254",
+      "size_bytes": 5261
+    }
+  ]
+}

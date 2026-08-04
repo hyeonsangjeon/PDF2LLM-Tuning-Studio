@@ -1,0 +1,37 @@
+{
+  "schema": "historical_environment/v1",
+  "purpose": "Environment actually observed during the KorQuAD BF16/PTQ/QAT A100 runs recorded at the base commit. This is a best-effort record, NOT a reproducible lock: the original venv was not captured as a hash-pinned lockfile, so unknown fields are marked not_recorded rather than guessed. A hash-pinned lock is only produced from a newly reproduced environment (see requirements.txt notes).",
+  "base_commit": "3f8963cbb4dee580b8cc5ccfbee0f0c3c012b284",
+  "reproduced": false,
+  "hardware": {
+    "provider": "azure",
+    "vm_size": "Standard_NC24ads_A100_v4",
+    "region": "japaneast",
+    "gpu": "NVIDIA A100 80GB PCIe",
+    "gpu_count": 1,
+    "billing": "spot",
+    "spot_evictions_observed": 4
+  },
+  "software": {
+    "python": "3.10.12",
+    "torch": "2.11.0+cu130",
+    "cuda_build_tag": "cu130",
+    "transformers": "4.57.6",
+    "trl": "0.24.0",
+    "peft": "0.20.0",
+    "torchao": "0.17.0",
+    "bitsandbytes": "0.50.0",
+    "vllm": "0.23.0",
+    "datasets": "4.3.0",
+    "nbconvert": "7.17.1",
+    "cuda_runtime": "not_recorded",
+    "nvidia_driver": "not_recorded",
+    "os_image": "not_recorded"
+  },
+  "not_recorded_fields": [
+    "software.cuda_runtime",
+    "software.nvidia_driver",
+    "software.os_image",
+    "per_package_hash_lock"
+  ]
+}
