@@ -134,6 +134,7 @@ def build_provenance(cfg: Dict[str, Any], *, mode: str, fewshot_k: int,
         "base_selected_in_config": cfg["base_model"].get("selected"),
         "data_seed": int(cfg["data"].get("seed", 42)),
         "eval_size": cfg["data"].get("eval_size"),
+        "split": "selection_dev",   # P1-1: selection never touches final_holdout
         "fewshot_k": int(fewshot_k),
         "max_new_tokens": int(cfg["eval"].get("max_new_tokens", 48)),
         "enable_thinking": bool((cfg["data"].get("chat", {}) or {}).get("enable_thinking", False)),
@@ -232,7 +233,8 @@ def run_selection(cfg: Dict[str, Any], *, fewshot_k: int) -> List[Dict[str, Any]
     from . import v2_pipeline as V
 
     plans = resolve_candidates(cfg)
-    slices = V.load_slices(cfg, n_fewshot=fewshot_k)
+    # P1-1: base-model selection uses selection_dev ONLY — never the frozen final_holdout.
+    slices = V.load_slices(cfg, n_fewshot=fewshot_k, split="selection_dev")
     entries: List[Dict[str, Any]] = []
     for plan in plans:
         print(f"[base-select] evaluating {plan['model_id']} "

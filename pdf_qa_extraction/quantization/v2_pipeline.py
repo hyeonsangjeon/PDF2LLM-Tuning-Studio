@@ -81,18 +81,25 @@ def extract_answer(text: str) -> str:
 # Data slices (multi-seed): eval held-out FIXED (data.seed); train shuffled by train_seed
 # --------------------------------------------------------------------------- #
 def load_slices(cfg: Dict[str, Any], train_seed: Optional[int] = None,
-                n_fewshot: int = 0) -> Dict[str, Any]:
+                n_fewshot: int = 0, split: str = "final_holdout") -> Dict[str, Any]:
     from datasets import load_dataset
+    from . import splits as S
 
     dcfg = cfg["data"]
+    S.assert_config_splits_disjoint(cfg)   # P1-1: fail fast if selection/holdout overlap
     eval_seed = int(dcfg.get("seed", 42))
     tseed = int(train_seed if train_seed is not None else eval_seed)
     ds = load_dataset(dcfg["dataset"])
 
+    # P1-1: eval draws from the named DISJOINT slice of the fixed shuffle ordering
+    # (final_holdout = [800:1800] by default; selection_dev = [0:800] for tuning).
     val = ds["validation"].shuffle(seed=eval_seed)
-    eval_size = dcfg.get("eval_size")
+    start, end = S.split_bounds(cfg, split)
+    size = end - start
+    eval_size = dcfg.get("eval_size")          # smoke override shrinks this -> tiny slice
     if eval_size:
-        val = val.select(range(min(int(eval_size), len(val))))
+        size = min(size, int(eval_size))
+    val = val.select(range(start, min(start + size, len(val))))
 
     train = ds["train"].shuffle(seed=tseed)
     subset = dcfg.get("train_subset")
@@ -109,7 +116,7 @@ def load_slices(cfg: Dict[str, Any], train_seed: Optional[int] = None,
     fewshot = [(train[i]["context"], train[i]["question"], train[i]["answers"]["text"][0])
                for i in range(n_fewshot)] if n_fewshot else []
     return {"train": train_ex, "eval": eval_ex, "fewshot": fewshot,
-            "train_seed": tseed, "eval_seed": eval_seed}
+            "train_seed": tseed, "eval_seed": eval_seed, "split": split}
 
 
 # --------------------------------------------------------------------------- #
@@ -351,7 +358,7 @@ def train_method_c(cfg: Dict[str, Any], a_dir: str, c_dir: str, seed: int,
 # --------------------------------------------------------------------------- #
 def eval_model_chat(cfg: Dict[str, Any], model, tok, eval_ex: List[QAExample], *,
                     method: str, seed: int, model_dir: Optional[str] = None,
-                    precision: str = "") -> Dict[str, Any]:
+                    precision: str = "", split: str = "final_holdout") -> Dict[str, Any]:
     import torch
 
     sys_p = system_prompt(cfg)
@@ -388,7 +395,7 @@ def eval_model_chat(cfg: Dict[str, Any], model, tok, eval_ex: List[QAExample], *
             "size_gb": round(E.dir_size_gb(model_dir), 4) if model_dir and os.path.isdir(model_dir) else None,
             "peak_vram_gb": round(E.peak_vram_gb(), 4) if E.peak_vram_gb() is not None else None,
             "tok_per_s": round(ntok / dt, 2) if dt > 0 else 0.0, "precision": precision,
-            "gen_seconds": round(dt, 1), "sample_predictions": preds[:3]}
+            "gen_seconds": round(dt, 1), "split": split, "sample_predictions": preds[:3]}
 
 
 def qat_scheme_selftest(device: str = "cuda", d: int = 512, gs: int = 128) -> Dict[str, Any]:

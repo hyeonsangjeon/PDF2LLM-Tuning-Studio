@@ -98,9 +98,35 @@ v1의 base-select zero-shot F1(Qwen3-4B **3.5**)은 **하네스 아티팩트**�
   **Qwen3-8B가 zero/few-shot 모두 최고** → v1의 3.5는 순수 하네스 아티팩트였음이 확인됨(동일 모델이 90+).
 - **선정 = Qwen3-8B**: `config.yaml`의 `base_model.selected`에 고정 → A/B/C 동일 베이스. (`results/base_select.json`)
 
-## 3-way 결과 (실측 · A100 80GB · held-out 1000 · **3 seed 평균±표준편차**)
+## 🔒 선택용 dev vs 최종 holdout 분리 (frozen policy holdout · P1-1)
+
+모델·프롬프트·하이퍼파라미터 **선택**과 **최종 비교**가 같은 슬라이스를 쓰면 선택이 최종 수치로 샌다.
+그래서 seed-shuffle된 **하나의** validation 순서를 **서로소** 두 구간으로 고정한다
+(`config.yaml`의 `data.splits`, 로직·매니페스트: [`splits.py`](splits.py)).
+
+| split | 구간 | 용도 |
+|---|---|---|
+| `selection_dev` | `[0:800]` | base-model·프롬프트·하이퍼파라미터 튜닝 **전용** |
+| `final_holdout` | `[800:1800]` | **frozen policy holdout** — 평가 명령·릴리스 게이트 **전용** |
+
+- **서로소 보장**: 같은 shuffle의 겹치지 않는 인덱스 구간이라 ID 교집합은 **0**이다.
+  [`results/split_manifest.json`](results/split_manifest.json)이 각 split의 구간·개수·ID-리스트 SHA-256과
+  `intersection_size` **0**을 기록하고, `python -m quantization.splits --check`로 KorQuAD에서 재현 검증한다.
+- **누수 게이트(CI 실패)**: `final_holdout` ID가 training/selection/export 입력에 들어가면
+  `splits.assert_no_holdout_leakage`가 `HoldoutLeakageError`를 던진다(`tests/test_splits.py`가
+  planted-final-ID로 강제). 코드 경로상 base-select는 `selection_dev`만, `v2_run eval`은 `final_holdout`만 읽는다.
+- **보안 경계가 아님**: KorQuAD 라벨은 이미 공개다. 이 분리는 **코드 경로 allowlist(`frozen policy holdout`)**일
+  뿐 저장소 밖 사람 열람을 막는 보안 경계가 아니며, 그래서 `sealed`/`unseen final`이라 부르지 않는다.
+
+## 3-way 결과 (실측 · A100 80GB · **`historical_not_reproduced`** · **3 seed 평균±표준편차**)
 `v2_run a/b/c/eval`을 **A100 80GB(japaneast, Spot)에서 seed 42·43·44로 실제 실행**한 뒤
 `v2_run agg`로 집계한 수치(`results/three_way_table.json`).
+
+> ⚠️ **`historical_not_reproduced` (P1-1)** — 아래 held-out 1000 슬라이스는 base-select에 쓴
+> `selection_dev`와 **같은 shuffle 앞부분에서 겹친다**(선택이 최종 수치로 샐 수 있음). 따라서 이 표는
+> **엔지니어링 평가**로 표기하며, KorQuAD 라벨이 공개이므로 `sealed`/`unseen`이라 부르지 않는다. 분리된
+> frozen `final_holdout`(`[800:1800]`, `selection_dev`와 서로소)로의 재실행은 위 P1-1 메커니즘으로 준비돼
+> 있고, **재실행 전까지 새 "최종" 수치는 게시하지 않는다.**
 
 **per-seed (실측, EM / F1 / ppl):**
 

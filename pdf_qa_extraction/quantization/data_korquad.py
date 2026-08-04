@@ -77,26 +77,32 @@ def _to_example(row: Dict[str, Any], template: str) -> QAExample:
     )
 
 
-def load_korquad(cfg: Dict[str, Any]) -> Dict[str, List[QAExample]]:
+def load_korquad(cfg: Dict[str, Any], split: str = "final_holdout") -> Dict[str, List[QAExample]]:
     """Return {'train': [...], 'eval': [...]} of QAExample.
 
-    - eval = a *fixed* seed-shuffled slice of the official validation split
-      (size = data.eval_size), identical across A/B/C.
+    - eval = a *fixed* seed-shuffled DISJOINT slice of the official validation
+      split (P1-1): ``final_holdout`` ([800:1800]) for the final comparison, or
+      ``selection_dev`` ([0:800]) for tuning. Identical across A/B/C.
     - train = the official train split, optionally truncated to data.train_subset.
     """
     from datasets import load_dataset
+    from . import splits as S
 
     dcfg = cfg["data"]
     template = dcfg["prompt_template"]
     seed = int(dcfg.get("seed", 42))
+    S.assert_config_splits_disjoint(cfg)
 
     ds = load_dataset(dcfg["dataset"])
     train_split = ds["train"].shuffle(seed=seed)
     val_split = ds["validation"].shuffle(seed=seed)
 
+    start, end = S.split_bounds(cfg, split)
+    size = end - start
     eval_size = dcfg.get("eval_size")
     if eval_size:
-        val_split = val_split.select(range(min(int(eval_size), len(val_split))))
+        size = min(size, int(eval_size))
+    val_split = val_split.select(range(start, min(start + size, len(val_split))))
 
     subset = dcfg.get("train_subset")
     if subset:

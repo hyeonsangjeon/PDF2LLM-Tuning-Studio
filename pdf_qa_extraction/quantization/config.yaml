@@ -25,9 +25,19 @@ base_model:
 data:
   dataset: "KorQuAD/squad_kor_v1"   # runtime download; NOT committed to the repo
   seed: 42                          # eval held-out slice seed (FIXED across train seeds)
-  eval_size: 1000                   # large held-out val slice, identical for A/B/C (W5 fix);
-                                    # 2x v1's 500 -> tight CIs. (int4 eval is eager-slow: ~15min
-                                    # /1k; 2k would ~double cost for negligible CI gain.)
+  eval_size: 1000                   # final_holdout size (see data.splits). identical for A/B/C
+                                    # (W5). int4 eval is eager-slow (~15min/1k). set null for full.
+  # P1-1: frozen selection_dev vs final_holdout separation over the ONE seed-shuffled
+  # validation ordering (shuffle(data.seed)). DISJOINT index ranges, so a selection
+  # decision cannot leak into the headline holdout numbers.
+  #   selection_dev = [0:800]     -> base-model / prompt / hyperparameter tuning ONLY
+  #   final_holdout = [800:1800]  -> frozen policy holdout; eval command + release gate ONLY
+  # KorQuAD labels are public, so this is a code-path allowlist (`frozen policy holdout`),
+  # NOT a `sealed`/`unseen` test nor a security boundary. Manifest + guard: quantization/splits.py
+  # (results/split_manifest.json records each split's slice bounds, count and ID-list SHA-256).
+  splits:
+    selection_dev: {start: 0,   size: 800}
+    final_holdout: {start: 800, size: 1000}
   train_subset: 6000                # W2 fix = train to CONVERGENCE, not raw epoch count. LoRA on
                                     # KorQuAD converges near-instantly (a 200-ex/12-step smoke
                                     # already hit held-out F1 95.3), so 2 epochs over a 6k slice is

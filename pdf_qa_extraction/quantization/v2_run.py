@@ -105,10 +105,11 @@ def cmd_eval(cfg, args):
     prec = {"A_bf16": "bf16", "B_int4_ptq": "int4", "C_int4_qat": "int4"}[args.method]
     mdir = artifact_dir(cfg, args.method, args.seed)
     assert os.path.isdir(mdir), f"missing artifact: {mdir}"
-    data = V.load_slices(cfg)
+    data = V.load_slices(cfg, split="final_holdout")   # P1-1: frozen holdout, eval-only
     model, tok = _load_for_eval(mdir, prec)
     res = V.eval_model_chat(cfg, model, tok, data["eval"], method=args.method,
-                            seed=args.seed, model_dir=mdir, precision=prec)
+                            seed=args.seed, model_dir=mdir, precision=prec,
+                            split="final_holdout")
     _write(cfg, f"eval_{args.method}_seed{args.seed}.json", res)
     print(f"[eval] {args.method} seed={args.seed}: EM={res['exact_match']} F1={res['f1']} "
           f"ppl={res['perplexity']} vram={res['peak_vram_gb']}GB tok/s={res['tok_per_s']}")

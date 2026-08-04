@@ -1,0 +1,29 @@
+{
+  "policy": "frozen_policy_holdout",
+  "note": "KorQuAD labels are public; this is a code-path allowlist, not a security boundary against human reading of labels.",
+  "dataset": "KorQuAD/squad_kor_v1",
+  "seed": 42,
+  "n_validation": 5774,
+  "datasets_version": "5.0.0",
+  "generated_by": "quantization.splits",
+  "splits": {
+    "selection_dev": {
+      "slice": [
+        0,
+        800
+      ],
+      "n": 800,
+      "id_sha256": "fe8c14c9ac01bd292ac4a034dbe2682179db9ee99707ba2ed0296d43f6e11f91"
+    },
+    "final_holdout": {
+      "slice": [
+        800,
+        1800
+      ],
+      "n": 1000,
+      "id_sha256": "66713ea359fa356bbfe8b05a395f06d4ff0b8594fc588d37138f79835d33d2c4"
+    }
+  },
+  "intersection_size": 0,
+  "disjoint": true
+}

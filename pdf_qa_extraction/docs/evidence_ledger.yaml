@@ -39,6 +39,16 @@ claims:
       results/*.json and hash-compared to the committed files. CI fails on any
       mismatch, so a human can never hand-edit a derived number (spec P1-2).
 
+  # ---- Frozen dev/holdout separation (P1-1) --------------------------------
+  - id: split_disjoint
+    capability: "selection_dev vs final_holdout are disjoint (no selection leakage)"
+    status: ci_verified
+    command: "python -m quantization.splits --check"
+    source: quantization/results/split_manifest.json
+    pointer: /intersection_size
+    expected: "0"
+    readme: quantization/README.md
+
   # ---- KorQuAD 3-seed A/B/C (recorded A100 run) ----------------------------
   - id: a_bf16_f1
     capability: "A (BF16 LoRA) held-out F1, 3-seed mean"
