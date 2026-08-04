@@ -67,6 +67,12 @@ webapp = [
     "uvicorn>=0.29",
     "python-multipart>=0.0.9",
 ]
+# Test / CI gate: the workflow runtime plus the test runner. This is the
+# single source of truth for what CI installs to run pytest + golden path.
+test = [
+    "pdf-qa[workflow]",
+    "pytest>=7",
+]
 
 [project.scripts]
 pdf2llm = "pdf_qa.cli:main"
