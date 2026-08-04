@@ -14,6 +14,29 @@
 | `02_int4_ptq.ipynb` | **Method B** INT4 PTQ (TorchAO tile-packed) | **A100 실측(실 출력)** |
 | `03_int4_qat.ipynb` | **Method C** INT4 QAT (full-param STE) | **A100 실측(실 출력)** |
 
+## 베이스 선정 harness — `bench_baseselect.py` (재현 가능 CLI)
+
+`00_base_select.ipynb`가 참조하는 선정 스크립트를 실행 가능한 CLI로 복원했다(정식 chat template ·
+`enable_thinking=false` · 적정 `max_new_tokens` · 공식 KorQuAD char-level EM/F1 — v1의 W1 harness 아티팩트
+수정). 후보·템플릿·token budget·few-shot·seed·eval slice는 모두 `config.yaml`에서 읽는다.
+
+```bash
+cd pdf_qa_extraction
+# (1) 후보 해석 계획만 출력(모델 미로드): gated Llama → ungated Yi 폴백 표시
+python -m quantization.bench_baseselect --list-candidates
+# (2) 커밋된 결과(results/base_select.json) 읽기 전용 점검: SHA·정렬·winner (파일 미변경)
+python -m quantization.bench_baseselect --check-historical
+# (3) CPU smoke — 작은 ungated 모델로 전 경로 실행(GPU 불필요). 출력은 runs/ 아래
+python -m quantization.bench_baseselect --smoke --run-id demo
+# (4) 실제 GPU 선정 재실행(A100): 결과는 runs/<run_id>/quantization/base_select.json
+python -m quantization.bench_baseselect --fewshot 2
+```
+
+- 커밋된 `quantization/results/base_select.json`은 **A100 VM 실측 historical 아티팩트**이며, CLI는 이를
+  **읽기 전용**으로 다루고 fresh run은 `runs/` 아래에만 쓴다(historical SHA-256 불변 보장). `--check-historical`은
+  이 파일을 새 코드가 생성한 것처럼 소급 주장하지 않고 `status=historical_not_reproduced`로 표시한다.
+- 스키마·후보 정렬·seed 고정·읽기전용 계약은 `quantization/tests/test_base_select.py`로 검증된다.
+
 ## 공통 5-파트 템플릿
 1. **설명(markdown)** — 이 방법이 무엇/왜/어떻게 다른가 (A=BF16 기준선, B=PTQ 사후, C=QAT 인식학습).
 2. **부트스트랩+설정** — `pdf_qa_extraction`를 import 경로에 넣고 repo 루트로 `chdir`(실행 위치 무관), `config.yaml` 로드.

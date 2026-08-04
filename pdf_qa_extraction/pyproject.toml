@@ -83,6 +83,9 @@ py-modules = []
 [tool.setuptools.package-data]
 # Ship the persona ledger, JSON schemas and the synthetic demo fixture in the wheel.
 pdf_qa = ["personas.yaml", "settings.yaml", "schemas/*.json"]
+# Ship the quantization track's config so its CLIs (e.g. bench_baseselect) resolve
+# their default config.yaml when run from an installed wheel, not just from source.
+quantization = ["config.yaml", "requirements.txt"]
 "workflows.pdf_native_post_training" = ["configs/*.yaml", "configs/policies/*.yaml"]
 "workflows.pdf_native_post_training.public_finance_demo" = [
     "docs/*.pdf", "*.jsonl", "*.json", "*.sha256", "*.md", "LICENSE",
