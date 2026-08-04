@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://pdf2llm/schemas/metrics.schema.json",
+  "title": "PDF2LLM unified pipeline / quality / serving / decision metrics",
+  "description": "One schema for the public demo AND a GPU run. Any value that a given run cannot measure is the string 'not_measured' (or 'not_applicable'); it never masquerades as 0.",
+  "type": "object",
+  "required": ["schema_version", "kind", "generated_at", "sources"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {"const": "pdf2llm-metrics/1"},
+    "kind": {"enum": ["pipeline", "quality", "serving", "decision"]},
+    "run_id": {"type": ["string", "null"]},
+    "generated_at": {"type": "string"},
+    "sources": {
+      "type": "array",
+      "description": "Raw input files this document was derived from, with SHA-256.",
+      "items": {"$ref": "#/$defs/source"}
+    },
+    "pipeline": {"$ref": "#/$defs/pipeline"},
+    "quality": {"type": "object"},
+    "serving": {"type": "object"},
+    "cost": {"$ref": "#/$defs/cost"},
+    "decision": {"$ref": "#/$defs/decision"}
+  },
+  "$defs": {
+    "measure": {
+      "description": "A measured number, or an explicit non-value marker.",
+      "anyOf": [
+        {"type": "number"},
+        {"enum": ["not_measured", "not_applicable"]}
+      ]
+    },
+    "source": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "additionalProperties": true,
+      "properties": {
+        "path": {"type": "string"},
+        "sha256": {"type": ["string", "null"]},
+        "role": {"type": "string"}
+      }
+    },
+    "pipeline": {
+      "type": "object",
+      "required": [
+        "document_elapsed_sec", "pages_per_sec", "elements", "qa",
+        "evidence_pass_rate", "peak_ram_mb", "peak_vram_mb"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "n_documents": {"type": "integer"},
+        "n_pages": {"type": "integer"},
+        "document_elapsed_sec": {"$ref": "#/$defs/measure"},
+        "pages_per_sec": {"$ref": "#/$defs/measure"},
+        "elements": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "text": {"type": "integer"},
+            "table": {"type": "integer"},
+            "figure": {"type": "integer"},
+            "total": {"type": "integer"}
+          }
+        },
+        "element_throughput_per_sec": {"$ref": "#/$defs/measure"},
+        "qa": {
+          "type": "object",
+          "required": ["raw", "accepted", "rejected", "yield"],
+          "additionalProperties": true,
+          "properties": {
+            "raw": {"type": "integer"},
+            "accepted": {"type": "integer"},
+            "rejected": {"type": "integer"},
+            "yield": {"$ref": "#/$defs/measure"}
+          }
+        },
+        "reject_reasons": {"type": "object"},
+        "chunks": {"type": "object"},
+        "provider_usage": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "calls": {"type": "integer"},
+            "input_tokens": {"$ref": "#/$defs/measure"},
+            "output_tokens": {"$ref": "#/$defs/measure"}
+          }
+        },
+        "accepted_qa_per_min": {"$ref": "#/$defs/measure"},
+        "peak_ram_mb": {"$ref": "#/$defs/measure"},
+        "peak_vram_mb": {"$ref": "#/$defs/measure"},
+        "artifact_bytes": {"type": ["integer", "null"]},
+        "figure_caption_linkage_rate": {"$ref": "#/$defs/measure"},
+        "evidence_pass_rate": {"$ref": "#/$defs/measure"},
+        "manual_review_minutes": {"$ref": "#/$defs/measure"}
+      }
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "rate_card": {
+          "type": ["object", "null"],
+          "description": "Price table with its own provenance; costs are computed, never hard-coded as eternal facts.",
+          "properties": {
+            "source": {"type": "string"},
+            "as_of": {"type": "string"}
+          }
+        },
+        "usd": {"$ref": "#/$defs/measure"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["constraints", "recommendation"],
+      "additionalProperties": true,
+      "properties": {
+        "candidates": {"type": "array", "items": {"type": "object"}},
+        "constraints": {"type": "object"},
+        "pareto_frontier": {"type": "array", "items": {"type": "string"}},
+        "feasible": {"type": "array", "items": {"type": "string"}},
+        "recommendation": {
+          "type": ["string", "null"],
+          "description": "Winning candidate id, or 'no_feasible_candidate'."
+        }
+      }
+    }
+  }
+}

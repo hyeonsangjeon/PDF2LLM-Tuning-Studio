@@ -1,0 +1,94 @@
+# P1-9 decision-report inputs — example / canonical profile.
+#
+# Candidate metrics below are the REAL numbers from the recorded A100 v2
+# quantization run already committed under quantization/results/ (three_way_table.json
+# aggregate + vllm_throughput.json single-stream latency). They are copied here as a
+# self-contained decision input so `report.py` produces a reproducible recommendation
+# without importing the quantization track. See `sources` for provenance.
+#
+# This models a MEMORY-BOUND single-stream serving budget (the use case that motivates
+# INT4 quantization): fit the weights in <= 8 GiB while losing <= 1.0 F1 vs the BF16
+# baseline. Under this profile the recommendation is deterministic; a test asserts
+# report.py reproduces it and that the README cites the same string.
+
+status: historical            # recorded A100 run, not re-executed by this report
+primary_objective: f1
+
+sources:
+  - path: quantization/results/three_way_table.json
+    role: quality_aggregate
+    note: "F1/EM/size from the 3-seed (42,43,44) mean on 1000 held-out KorQuAD."
+  - path: quantization/results/vllm_throughput.json
+    role: serving
+    note: "Clean serving-only weight VRAM + single-stream TTFT/e2e (batch=1). int4 row represents both B(PTQ) and C(QAT) — identical torchao tile-packed format."
+
+# Objectives for the Pareto frontier (measured fields only; not_measured is skipped).
+objectives:
+  - {field: f1,               direction: max}
+  - {field: size_gb,          direction: min}
+  - {field: peak_vram_gb,     direction: min}
+  - {field: throughput_tok_s, direction: max}   # single-stream (batch=1)
+  - {field: ttft_p50_ms,      direction: min}
+
+# Feasibility constraints for THIS serving profile.
+constraints:
+  peak_vram_gb: {max: 8}                          # must fit an 8 GiB budget
+  f1: {min: 90, drop_max: 1.0, drop_baseline: A_bf16}   # <= 1.0 F1 drop vs BF16
+
+# Optional dated rate card. Self-hosted single-stream serving records no per-token
+# vendor usage, so cost resolves to not_measured (never a fabricated price).
+rate_card:
+  source: "example placeholder — no managed-endpoint pricing applies to self-hosted vLLM"
+  as_of: "2025-01-01"
+  input_per_1k_usd: 0.0
+  output_per_1k_usd: 0.0
+
+acceptance:
+  vram_budget_gib: 8
+  max_f1_drop_vs_bf16: 1.0
+
+limitations:
+  - "Serving latency/throughput are single-stream (batch=1); batched goodput + error_rate not measured here."
+  - "int4 rows (B, C) serialize to the identical torchao tile-packed format → identical serving metrics by construction."
+  - "Cost is not_measured (self-hosted; no per-token vendor rate applies)."
+
+candidates:
+  - id: A_bf16
+    label: "BF16 LoRA (Method A)"
+    f1: 94.83
+    em: 87.8
+    size_gb: 15.2713
+    peak_vram_gb: 15.27
+    throughput_tok_s: 87.6
+    ttft_p50_ms: 32.2
+    ttft_p99_ms: 82.0
+    tpot_ms: 11.314
+    goodput: not_measured
+    error_rate: not_measured
+    cost_usd: not_measured
+  - id: B_int4_ptq
+    label: "INT4 PTQ (Method B)"
+    f1: 94.19
+    em: 86.4
+    size_gb: 5.7705
+    peak_vram_gb: 6.05
+    throughput_tok_s: 124.4
+    ttft_p50_ms: 296.4
+    ttft_p99_ms: 721.3
+    tpot_ms: 3.769
+    goodput: not_measured
+    error_rate: not_measured
+    cost_usd: not_measured
+  - id: C_int4_qat
+    label: "INT4 QAT (Method C)"
+    f1: 94.819
+    em: 87.567
+    size_gb: 5.7705
+    peak_vram_gb: 6.05
+    throughput_tok_s: 124.4
+    ttft_p50_ms: 296.4
+    ttft_p99_ms: 721.3
+    tpot_ms: 3.769
+    goodput: not_measured
+    error_rate: not_measured
+    cost_usd: not_measured

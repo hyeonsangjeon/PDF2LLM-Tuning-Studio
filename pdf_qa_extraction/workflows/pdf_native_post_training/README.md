@@ -211,6 +211,45 @@ dev prediction → error taxonomy → source/evidence review
 
 테스트: `tests/test_failure_to_data.py` (카테고리 분류·leakage 차단·lineage·dev-reuse·단일 채점).
 
+## 📊 파이프라인 벤치마크 · 자동 결정 리포트 (raw metrics → decision)
+
+토큰/초만으로는 이 워크플로의 값어치(=**학습 데이터 생산 과정**)를 못 봅니다. 두 도구가 이를 정직하게
+측정·의사결정합니다. 벤치마크: [`benchmark_pipeline.py`](benchmark_pipeline.py), 리포트:
+[`report.py`](report.py), 통합 스키마: [`schemas/metrics.schema.json`](schemas/metrics.schema.json).
+
+```bash
+# 1) 파이프라인을 실제로 돌려 raw metrics 측정 (public demo = CPU, network-free)
+python -m workflows.pdf_native_post_training.benchmark_pipeline \
+  --config workflows/pdf_native_post_training/configs/demo-replay.yaml \
+  --run-dir runs/bench --out runs/bench/pipeline_metrics.json
+# 2) 품질·서빙·크기·비용 후보를 제약과 결합해 Pareto frontier + 추천 산출
+python -m workflows.pdf_native_post_training.report \
+  --decision-config workflows/pdf_native_post_training/configs/decision_constraints.yaml \
+  --pipeline-metrics runs/bench/pipeline_metrics.json \
+  --out-dir runs/bench/report
+```
+
+핵심 보증:
+
+- **동일 스키마**(`pdf2llm-metrics/1`)를 public demo와 GPU run이 공유합니다. 측정 못 한 값은 **`not_measured`**
+  (예: CPU의 `peak_vram_mb`), 없는 대상은 `not_applicable`(그림 0개일 때 caption linkage) — **0으로 위장하지
+  않습니다.** 각 문서는 파생 원본의 **SHA-256**을 `sources`에 기록합니다.
+- **파이프라인 metrics**: pages/sec, element(text/table/figure) throughput, raw→accepted→rejected yield +
+  reject 사유, provider 호출·토큰, peak RAM/VRAM, artifact bytes, **evidence pass rate** 등 원자료를 그대로.
+  데모 실측: 3 pages / 35 elements / 26→26 accepted(yield 1.0) / evidence_pass 1.0.
+- **결정 리포트**: quality·size·VRAM·TTFT/TPOT·throughput·goodput·error-rate·cost를 한 표로 묶고, config의
+  제약(예: `peak_vram_gb<=8`, `f1_drop<=1.0`)으로 **feasible 후보 + Pareto frontier**를 계산합니다. 어떤
+  후보도 제약을 못 맞추면 **`no_feasible_candidate`** 를 반환합니다(추천을 지어내지 않음).
+- **파생값은 전부 코드 산출**이며 사람이 손으로 적지 않습니다. **비용은 출처·시점(`source`/`as_of`)이 있는
+  rate card** 로 계산하고, 자기호스팅처럼 per-token 요율이 없으면 `not_measured`.
+- **재현 가능한 추천**: 커밋된 예시([`configs/decision_constraints.yaml`](configs/decision_constraints.yaml),
+  기록된 A100 v2 실측 3-way 수치)에서 메모리 바운드 서빙 프로파일(≤8 GiB, F1 drop ≤1.0)의
+  **decision-report recommendation: `C_int4_qat`** 입니다 — BF16은 VRAM(15.27 GiB)로 탈락, int4 중
+  QAT가 PTQ보다 F1이 높아 추천됩니다. `report.py`가 이 문자열을 재계산하며 테스트가 README와 일치를 강제합니다.
+
+테스트: `tests/test_benchmark_pipeline.py`(스키마·데모 카운트·`not_measured` 전파),
+`tests/test_report.py`(Pareto·feasibility·`no_feasible_candidate`·rate-card 비용·10-section·README 일치).
+
 ## 🧹 Cleanup
 
 - **로컬 실행물**: `runs/`는 `.gitignore`에 포함되어 커밋되지 않습니다. 삭제는 `rm -rf pdf_qa_extraction/runs`.
