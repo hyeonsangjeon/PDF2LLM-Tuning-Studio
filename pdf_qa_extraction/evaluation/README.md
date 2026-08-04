@@ -65,7 +65,19 @@ judge를 신뢰하기 전에 **사람이 라벨한 골든 케이스로 캘리브
   - v4 30쌍 strict ≈ 22/30(= 30 − 존댓말 5 − 검정왜곡 3) — 스펙 목표(20~22) 적중
 
 ```bash
-python -m pytest evaluation/tests/ -q      # 21 passed, 자격증명 불필요
+python -m pytest evaluation/tests/ -q      # 자격증명 불필요
+```
+
+## Programmatic-verifier reward interface (RL은 `planned`)
+
+`rewards.py`는 향후 가능한 RL 단계를 위해 **결정적(deterministic) reward 함수 +
+RewardCard**를 *먼저* 정의합니다 — evidence 무결성·수치 정합·schema 준수·규칙 기반
+계산·abstention·PII 비노출·최신 버전 선택 + 길이/reward-hacking 가드. RL은 **실행되지
+않았고**(`RL_STATUS="planned"`), GRPO/PPO는 타당성 게이트 통과 전까지 추가하지 않습니다.
+설계·게이트·완료조건은 [`docs/RL_EXPERIMENT_PLAN.md`](../../docs/RL_EXPERIMENT_PLAN.md).
+
+```bash
+python -m pytest evaluation/tests/test_rewards.py -q   # reward 단위 테스트(공개/합성만)
 ```
 
 ## judge 캘리브레이션 노트
