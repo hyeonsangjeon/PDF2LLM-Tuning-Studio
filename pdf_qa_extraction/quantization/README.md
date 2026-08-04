@@ -108,6 +108,9 @@ v1의 base-select zero-shot F1(Qwen3-4B **3.5**)은 **하네스 아티팩트**�
 
 **집계 (mean ± std over 3 seeds):**
 
+> 📑 아래 표의 모든 숫자는 [`docs/EVIDENCE.md`](../docs/EVIDENCE.md)에 raw JSON 포인터로 등록되어
+> `scripts/build_evidence_index.py --check`(CI 게이트)가 자동 검증한다 — README와 JSON이 어긋나면 CI 실패.
+
 | method | base | EM | F1 | ppl | size(GB) | prec |
 |---|---|---|---|---|---|---|
 | **A_bf16** (기준선) | Qwen3-8B | **87.80 ± 0.51** | **94.83 ± 0.19** | **9.05 ± 0.14** | 15.27 (머지 bf16) | bf16 |

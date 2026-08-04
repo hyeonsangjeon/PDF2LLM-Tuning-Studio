@@ -1,0 +1,168 @@
+# Claim ledger (P0-11) — every strong quantitative/support claim in the READMEs,
+# linked to the exact command + raw artifact that proves it. `build_evidence_index.py
+# --check` fails CI if a number here diverges from its source JSON, if the value is
+# missing from the referenced README, or if a `planned` feature carries a measured
+# number. `--emit` regenerates docs/EVIDENCE.md from this file.
+#
+# status ∈ {ci_verified, recorded_hardware_run, historical_not_reproduced, planned}
+# Paths are relative to pdf_qa_extraction/ (repo README is ../README.md).
+# `expected` is written exactly as it appears in the README; the checker parses it as
+# a float for the JSON comparison (rounded to the README's decimal places) AND asserts
+# the literal string is present in `readme`. String `expected` uses substring matching.
+
+meta:
+  repo: hyeonsangjeon/PDF2LLM-Tuning-Studio
+  note: >-
+    Numbers below are auto-verified against committed raw JSON under
+    quantization/results/. Hardware runs are a single recorded A100 (japaneast,
+    Spot) run — reproducible from config.yaml, not yet re-executed in CI.
+
+claims:
+  # ---- Golden path (credential-free, CI-verified) --------------------------
+  - id: demo_golden_path
+    capability: "PDF→auditable Q&A offline demo (evidence integrity + EM/F1)"
+    status: ci_verified
+    command: "pdf2llm verify-demo"
+    source: workflows/pdf_native_post_training/public_finance_demo/gold_qa.jsonl
+    note: >-
+      Deterministic replay: recomputes EM/F1 against the shipped gold fixture and
+      verifies run-bundle evidence integrity. Asserted green by the CI test gate.
+
+  # ---- KorQuAD 3-seed A/B/C (recorded A100 run) ----------------------------
+  - id: a_bf16_f1
+    capability: "A (BF16 LoRA) held-out F1, 3-seed mean"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_run agg"
+    source: quantization/results/three_way_table.json
+    pointer: /aggregate/A_bf16/f1/mean
+    expected: "94.83"
+    readme: quantization/README.md
+
+  - id: a_bf16_em
+    capability: "A (BF16 LoRA) held-out EM, 3-seed mean"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_run agg"
+    source: quantization/results/three_way_table.json
+    pointer: /aggregate/A_bf16/exact_match/mean
+    expected: "87.80"
+    readme: quantization/README.md
+
+  - id: a_bf16_ppl
+    capability: "A (BF16 LoRA) perplexity, 3-seed mean"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_run agg"
+    source: quantization/results/three_way_table.json
+    pointer: /aggregate/A_bf16/perplexity/mean
+    expected: "9.05"
+    readme: quantization/README.md
+
+  - id: a_bf16_size_gb
+    capability: "A (BF16 merged) on-disk size (GB)"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_run eval --method A_bf16 --seed 42"
+    source: quantization/results/three_way_table.json
+    pointer: /aggregate/A_bf16/size_gb
+    expected: "15.27"
+    readme: quantization/README.md
+
+  - id: b_int4_ptq_f1
+    capability: "B (INT4 PTQ) held-out F1, 3-seed mean"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_run agg"
+    source: quantization/results/three_way_table.json
+    pointer: /aggregate/B_int4_ptq/f1/mean
+    expected: "94.19"
+    readme: quantization/README.md
+
+  - id: b_int4_ptq_size_gb
+    capability: "B/C (INT4 tile-packed) on-disk size (GB)"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_run b --seed 42"
+    source: quantization/results/three_way_table.json
+    pointer: /aggregate/B_int4_ptq/size_gb
+    expected: "5.77"
+    readme: quantization/README.md
+
+  - id: c_int4_qat_f1
+    capability: "C (INT4 QAT) held-out F1, 3-seed mean"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_run agg"
+    source: quantization/results/three_way_table.json
+    pointer: /aggregate/C_int4_qat/f1/mean
+    expected: "94.82"
+    readme: quantization/README.md
+
+  - id: c_int4_qat_em
+    capability: "C (INT4 QAT) held-out EM, 3-seed mean"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_run agg"
+    source: quantization/results/three_way_table.json
+    pointer: /aggregate/C_int4_qat/exact_match/mean
+    expected: "87.57"
+    readme: quantization/README.md
+
+  # ---- vLLM serving benchmark (recorded A100 run) --------------------------
+  - id: vram_bf16
+    capability: "Serving-only clean weight VRAM — bf16 (GiB)"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_bench --mode sweep"
+    source: quantization/results/vllm_throughput.json
+    pointer: /results/A_bf16/weight_vram_gib
+    expected: "15.27"
+    readme: quantization/README.md
+
+  - id: vram_int4
+    capability: "Serving-only clean weight VRAM — int4 B≡C (GiB)"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_bench --mode sweep"
+    source: quantization/results/vllm_throughput.json
+    pointer: /results/BC_int4/weight_vram_gib
+    expected: "6.05"
+    readme: quantization/README.md
+
+  - id: throughput_bf16_batch256
+    capability: "bf16 peak throughput @ batch 256 (tok/s)"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_bench --mode sweep"
+    source: quantization/results/vllm_throughput.json
+    pointer: /results/A_bf16/sweep/6/throughput_tok_s
+    expected: "3959.0"
+    readme: quantization/README.md
+
+  - id: throughput_int4_batch1
+    capability: "int4 single-stream throughput @ batch 1 (tok/s)"
+    status: recorded_hardware_run
+    command: "python -m quantization.v2_bench --mode sweep"
+    source: quantization/results/vllm_throughput.json
+    pointer: /results/BC_int4/sweep/0/throughput_tok_s
+    expected: "124.4"
+    readme: quantization/README.md
+
+  # ---- Base selection (historical; reproducible, not re-run in CI) ---------
+  - id: base_select_winner
+    capability: "Base-model selection winner (≤9B, zero-shot F1)"
+    status: historical_not_reproduced
+    command: "python -m quantization.bench_baseselect --check-historical"
+    source: quantization/results/base_select.json
+    pointer: /0/candidate
+    expected: "Qwen3-8B"
+    readme: quantization/README.md
+
+  # ---- Planned (NOT yet executed — must never carry a measured number) -----
+  - id: pdf_native_sft_rag_benchmark
+    capability: "PDF-native Base/SFT/PTQ/QAT (+RAG) result card"
+    status: planned
+    note: >-
+      P1-5. The PDF-native workflow's end-to-end training→quant→RAG comparison
+      is implemented as a runnable pipeline but has NO recorded hardware result
+      yet; no numbers are claimed until a real A100 run is captured.
+
+  - id: online_vllm_serving
+    capability: "Online vLLM HTTP serving benchmark"
+    status: planned
+    note: "P1-3. No real HTTP raw result recorded yet."
+
+  - id: grpo_rl
+    capability: "GRPO / RL preference optimization"
+    status: planned
+    note: "P2-2. No real comparison result recorded yet."

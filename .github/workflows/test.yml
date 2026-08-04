@@ -48,6 +48,8 @@ jobs:
         run: pdf2llm verify-demo
       - name: Secret / PII scan
         run: pdf2llm scan-secrets
+      - name: Evidence index — README numbers vs raw JSON
+        run: python scripts/build_evidence_index.py --check
 
   packaging:
     name: wheel install + packaged demo

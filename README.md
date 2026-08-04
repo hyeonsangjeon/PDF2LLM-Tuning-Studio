@@ -10,6 +10,10 @@ PDF 문서에서 지식을 추출하고 대규모 언어 모델(LLM)을 효율�
 
 이 저장소에는 **서로 섞이지 않는 두 개의 재현 가능한 트랙**이 있습니다. 각 수치는 커밋된 JSON으로 역추적됩니다.
 
+> 📑 **증거 색인**: 모든 강한 수치·지원 주장은 [`docs/EVIDENCE.md`](pdf_qa_extraction/docs/EVIDENCE.md)에
+> 명령·raw artifact와 함께 등록되어 있고, `python scripts/build_evidence_index.py --check`(CI 게이트)가
+> README 숫자와 원본 JSON의 불일치를 실패시킵니다. 실행 전 기능은 `planned`로만 표기됩니다.
+
 ### ① Quantization & Serving Experiment — *recorded hardware run (1× A100 80GB, 3 seeds)*
 
 KorQuAD 기반 **BF16 LoRA(A) / INT4 PTQ(B) / INT4 QAT(C)** 3-way 비교 + vLLM 서빙 벤치(배치 스윕 + 단일스트림
