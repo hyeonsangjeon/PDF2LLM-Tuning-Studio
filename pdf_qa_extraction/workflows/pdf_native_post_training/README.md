@@ -181,6 +181,36 @@ python -m workflows.pdf_native_post_training.review --log review.jsonl verify  #
 
 테스트: `tests/test_review.py`.
 
+## 🔁 Leakage-safe failure-to-data loop (실패 → 데이터)
+
+실패 사례를 데이터로 되돌리는 loop **자체가 harness 증거**입니다. 단, **final test 실패를 학습에
+넣고 같은 final test로 개선을 주장하지 않습니다.** 오류 분류: [`evaluation/error_taxonomy.py`](../../evaluation/error_taxonomy.py),
+loop 로직: [`failure_to_data.py`](failure_to_data.py).
+
+```text
+dev prediction → error taxonomy → source/evidence review
+               → approved correction/curriculum row
+               → new dataset version → train → dev gate
+               → one-time protected current-final evaluation
+```
+
+핵심 보증:
+
+- **error taxonomy**는 grounding·wrong-version·numeric/unit·abstention·OCR·citation·schema·policy-violation을
+  포함합니다(`classify_error`, reward 컴포넌트 재사용). 리포트는 `summarize`로 집계합니다.
+- **failure mining은 dev set만** 사용합니다. non-dev는 `ValueError`, **final ID가 섞이면
+  `FinalLeakageError`** 입니다(`mine_failures`).
+- **final ID가 correction/export/train에 들어가면 실패**합니다 — `assert_no_final_leakage`가 행의
+  `qa_id`와 `derived_from.dev_qa_id`를 모두 검사하고, `build_correction`/`assemble_dataset_version`에
+  내장되어 **CI가 깨집니다**(planted-final-ID 테스트가 이를 강제).
+- **각 새 training row는** 어떤 dev failure·오류 카테고리·source evidence에서 왔는지 `derived_from`으로
+  **역추적**되고, **사람 승인**(review.py 이벤트)을 거칩니다(`build_correction`).
+- **동일 dev 반복 최적화 정도**를 `DevReuseLedger`가 라운드별로 기록합니다(overfitting 가시화).
+- **final score는 모든 설계 결정 후 한 번** 산출되고 **접근 기록**이 남습니다
+  (`FinalAccessLedger.access`/`assert_single_scoring` — 2회 채점 시 예외).
+
+테스트: `tests/test_failure_to_data.py` (카테고리 분류·leakage 차단·lineage·dev-reuse·단일 채점).
+
 ## 🧹 Cleanup
 
 - **로컬 실행물**: `runs/`는 `.gitignore`에 포함되어 커밋되지 않습니다. 삭제는 `rm -rf pdf_qa_extraction/runs`.
