@@ -154,14 +154,17 @@ def _curate_run(ctx: StageContext):
 
 def _export_sig(ctx: StageContext):
     return {"stage": "export", "curate": sha256_canonical(ctx.outputs["curate"]["approved"]),
-            "format": "sft_chat/v1"}
+            "format": "sft_chat/v1", "partition": "source_selection/v1"}
 
 
 def _export_run(ctx: StageContext):
     from .prompts import SYSTEM
+    from .source_selection import partition_for_export
+
+    part = partition_for_export(ctx.outputs["curate"]["approved"])
 
     rows = []
-    for rec in ctx.outputs["curate"]["approved"]:
+    for rec in part.active_export:
         if not rec.get("answerable", True):
             user = rec["question"]
         else:
@@ -180,8 +183,21 @@ def _export_run(ctx: StageContext):
     os.makedirs(art_dir, exist_ok=True)
     path = os.path.join(art_dir, "train_sft.jsonl")
     atomic_write_text(path, "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n")
-    return {"path": os.path.relpath(path, ctx.run_dir), "n_rows": len(rows),
-            "sha256": sha256_file(path)}
+    result = {"path": os.path.relpath(path, ctx.run_dir), "n_rows": len(rows),
+              "sha256": sha256_file(path), "source_partition": part.counts()}
+    # Stale/revoked/superseded rows are kept OUT of the active training export and
+    # routed to a versioned archive; unresolved conflicts are held for review.
+    if part.versioned_archive:
+        ap = os.path.join(art_dir, "versioned_archive.jsonl")
+        atomic_write_text(ap, "\n".join(json.dumps(r, ensure_ascii=False)
+                                        for r in part.versioned_archive) + "\n")
+        result["archive_path"] = os.path.relpath(ap, ctx.run_dir)
+    if part.held_for_review:
+        hp = os.path.join(art_dir, "held_for_review.jsonl")
+        atomic_write_text(hp, "\n".join(json.dumps(r, ensure_ascii=False)
+                                        for r in part.held_for_review) + "\n")
+        result["held_path"] = os.path.relpath(hp, ctx.run_dir)
+    return result
 
 
 def _eval_sig(ctx: StageContext):
@@ -230,6 +246,7 @@ def _report_run(ctx: StageContext):
         "policy_passed": pg["n_passed"],
         "policy_quarantined": pg["n_quarantined"],
         "train_rows_exported": ex["n_rows"],
+        "source_partition": ex.get("source_partition", {}),
         "eval": ev,
     }
     md = _render_md(summary)
@@ -256,6 +273,9 @@ def _render_md(s: Dict[str, Any]) -> str:
         "",
         "## Export",
         f"- SFT training rows: {s['train_rows_exported']}",
+        (f"- source partition — active: {s['source_partition'].get('active_export', s['train_rows_exported'])}"
+         f"  ·  versioned archive (stale/revoked/superseded): {s['source_partition'].get('versioned_archive', 0)}"
+         f"  ·  held for review (conflict): {s['source_partition'].get('held_for_review', 0)}"),
         "",
         "## Answer quality vs gold (KorQuAD-style)",
         f"- overall: EM **{ev['overall']['em']}** · F1 **{ev['overall']['f1']}** (n={ev['overall']['n']})",

@@ -130,6 +130,27 @@ runs/<run_id>/
 
 ---
 
+## 🧭 Stable fact vs mutable fact 분리 (source selection)
+
+금리·한도·수수료·약관·기준일처럼 **바뀌는 값(mutable fact)** 을 model weight에 외우게 하지 않습니다.
+mutable fact의 *현재 값*은 retrieval/source selection이 담당하고, SFT는 **인용 형식·근거 없는 답변
+거부·계산 절차·답변 구조** 같은 **안정적 behavior(stable)** 학습에 집중합니다.
+
+- 스키마 필드: `fact_volatility(stable|mutable|unknown)`, `document_version`, `supersedes`,
+  `source_status(active|stale|revoked|unknown)`, `effective_from/until`,
+  `evidence[].document_version` (`pdf_qa/schemas/qa_with_evidence.schema.json`).
+- 로직: [`source_selection.py`](source_selection.py) — 순수 파이썬·결정적.
+  - `select_source(...)` — 같은 fact의 여러 source 중 **최신 유효본**을 고르거나, 정렬 불가한 충돌·
+    revoked-only·**stale mutable** 이면 **abstain**(오래된 값을 자신 있게 답하지 않음).
+  - `partition_for_export(...)` — **stale/revoked/superseded 행을 활성 학습 export에서 제외**하고
+    versioned archive로 보냅니다(충돌은 review로 held). 파이프라인 export가 이를 강제해
+    `report.json`의 `source_partition`(active/versioned_archive/held_for_review)으로 보고합니다.
+  - `affected_by_version_change(...)` — 문서 버전 변경 시 영향받는 Q&A와 새 `dataset_version` 추적.
+  - `mutable_fact_report(...)` — recency·citation·abstention을 **별도 category**로 집계
+    (P1-5의 Base+retrieval vs SFT+retrieval 비교에서 최신성/근거/거부를 분리 보고).
+- 공개/합성 fixture: `public_finance_demo/versioned_facts.jsonl` (구·신 버전, 충돌, revoked,
+  effective window 케이스). 테스트: `tests/test_source_selection.py`.
+
 ## 🧹 Cleanup
 
 - **로컬 실행물**: `runs/`는 `.gitignore`에 포함되어 커밋되지 않습니다. 삭제는 `rm -rf pdf_qa_extraction/runs`.

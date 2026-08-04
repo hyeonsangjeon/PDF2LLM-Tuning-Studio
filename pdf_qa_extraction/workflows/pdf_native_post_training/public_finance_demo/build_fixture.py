@@ -215,6 +215,59 @@ def _build_recorded(v1_pdf: str, gold_records: list) -> list:
     return recorded
 
 
+def _build_versioned_facts() -> list:
+    """Synthetic stable/mutable-fact records for source-selection tests (P1-6).
+
+    Fully synthetic (fictional 데모금융), byte-deterministic. Exercises: latest
+    active over superseded, revoked-only, unresolved conflict, stable-from-stale,
+    effective-window selection, and abstention behaviour.
+    """
+    def _dsha(s: str) -> str:
+        return hashlib.sha256(("doc:" + s).encode()).hexdigest()
+
+    def _qsha(s: str) -> str:
+        return hashlib.sha256(s.encode()).hexdigest()
+
+    gen = {"provider": "synthetic", "model": "fixture", "model_revision": None,
+           "prompt_sha256": None, "generation_mode": "not_recorded"}
+
+    def _ev(fact, ver, page, quote):
+        return [{"document_sha256": _dsha(f"{fact}-{ver}"), "document_id": fact,
+                 "document_version": ver, "page": page, "element_id": f"p{page}-b1",
+                 "quote": quote, "quote_sha256": _qsha(quote), "modality": "text"}]
+
+    def _rec(qa_id, q, a, ans, cat, vol, ver, st, ef, eu, sup, fact, quote, page=1):
+        return {"qa_id": qa_id, "question": q, "answer": a, "answerable": ans,
+                "category": cat, "fact_volatility": vol, "document_version": ver,
+                "source_status": st, "effective_from": ef, "effective_until": eu,
+                "supersedes": sup, "fact_key": fact,
+                "evidence": _ev(fact, ver, page, quote) if ans else [],
+                "generation": dict(gen), "review_status": "approved"}
+
+    return [
+        _rec("vf001", "데모금융 기준금리는 얼마입니까?", "연 3.50% 입니다.", True, "numeric_exact",
+             "mutable", "v1", "stale", "2023-01-01", "2023-12-31", None, "policy_rate", "2023년 기준금리 연 3.50%"),
+        _rec("vf002", "데모금융 기준금리는 얼마입니까?", "연 3.00% 입니다.", True, "numeric_exact",
+             "mutable", "v2", "active", "2024-01-01", None, "v1", "policy_rate", "2024년 기준금리 연 3.00%"),
+        _rec("vf003", "데모금융 카드 연회비는 얼마입니까?", "5,000원 입니다.", True, "numeric_exact",
+             "mutable", "v1", "revoked", "2022-01-01", "2022-12-31", None, "annual_fee", "연회비 5,000원(폐지)"),
+        _rec("vf004", "데모금융 신용대출 한도는 얼마입니까?", "최대 5천만 원 입니다.", True, "numeric_exact",
+             "mutable", None, "active", None, None, None, "credit_limit", "A부서 안내: 한도 5천만 원"),
+        _rec("vf005", "데모금융 신용대출 한도는 얼마입니까?", "최대 3천만 원 입니다.", True, "numeric_exact",
+             "mutable", None, "active", None, None, None, "credit_limit", "B부서 안내: 한도 3천만 원"),
+        _rec("vf006", "데모금융의 설립 연도는 언제입니까?", "2010년 입니다.", True, "single_fact",
+             "stable", "v1", "active", "2010-01-01", None, None, "founded_year", "데모금융은 2010년에 설립되었다"),
+        _rec("vf007", "데모금융 본사는 어디에 있습니까?", "서울에 있습니다.", True, "single_fact",
+             "stable", "v1", "stale", "2015-01-01", "2020-12-31", None, "headquarters", "본사는 서울에 소재"),
+        _rec("vf008", "데모금융의 2030년 예상 순이익은 얼마입니까?", "문서에서 확인할 수 없습니다.", False, "unanswerable",
+             "unknown", None, "active", None, None, None, "future_profit_2030", ""),
+        _rec("vf009", "데모금융 ATM 수수료는 얼마입니까?", "1,000원 입니다.", True, "numeric_exact",
+             "mutable", "v1", "active", "2023-01-01", "2023-12-31", None, "atm_fee", "2023년 ATM 수수료 1,000원"),
+        _rec("vf010", "데모금융 ATM 수수료는 얼마입니까?", "1,200원 입니다.", True, "numeric_exact",
+             "mutable", "v2", "active", "2024-01-01", None, "v1", "atm_fee", "2024년 ATM 수수료 1,200원"),
+    ]
+
+
 def main() -> None:
     os.makedirs(DOCS, exist_ok=True)
     pdfmetrics.registerFont(UnicodeCIDFont(FONT))
@@ -225,6 +278,7 @@ def main() -> None:
 
     records, ledger = _build_gold(v1)
     recorded = _build_recorded(v1, records)
+    versioned = _build_versioned_facts()
 
     with open(os.path.join(HERE, "gold_qa.jsonl"), "w", encoding="utf-8") as fh:
         for r in records:
@@ -232,18 +286,23 @@ def main() -> None:
     with open(os.path.join(HERE, "recorded_generations.jsonl"), "w", encoding="utf-8") as fh:
         for r in recorded:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    with open(os.path.join(HERE, "versioned_facts.jsonl"), "w", encoding="utf-8") as fh:
+        for r in versioned:
+            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
     with open(os.path.join(HERE, "canary_ledger.json"), "w", encoding="utf-8") as fh:
         json.dump(ledger, fh, ensure_ascii=False, indent=2)
 
     # checksums for the shippable data files
     files = ["docs/finance_report_v1.pdf", "docs/finance_report_v2.pdf",
-             "gold_qa.jsonl", "recorded_generations.jsonl", "canary_ledger.json"]
+             "gold_qa.jsonl", "recorded_generations.jsonl", "versioned_facts.jsonl",
+             "canary_ledger.json"]
     with open(os.path.join(HERE, "checksums.sha256"), "w", encoding="utf-8") as fh:
         for rel in files:
             fh.write(f"{_sha256_file(os.path.join(HERE, rel))}  {rel}\n")
 
     print(f"built {len(records)} gold Q&A; categories:",
           {c: sum(1 for r in records if r['category'] == c) for c in sorted({r['category'] for r in records})})
+    print(f"built {len(versioned)} versioned-fact records (P1-6).")
 
 
 if __name__ == "__main__":

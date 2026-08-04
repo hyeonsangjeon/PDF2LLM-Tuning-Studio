@@ -13,6 +13,7 @@ ingest → generate → verify → curate → export → eval → report pipelin
 | `docs/finance_report_v1.pdf` | Synthetic 3-page report (v1). |
 | `docs/finance_report_v2.pdf` | Versioned variant (one restated figure) for version/fingerprint tests. |
 | `gold_qa.jsonl` | 26 human-reference Q&A, each with a **real parser-resolved** evidence address. |
+| `versioned_facts.jsonl` | 10 **synthetic** stable/mutable-fact records (old vs new versions, revoked, conflicts, effective windows) for source-selection tests (P1-6). |
 | `recorded_generations.jsonl` | Recorded provider outputs keyed by prompt hash (credential-free replay input). |
 | `canary_ledger.json` | The mechanically non-routable synthetic identifiers embedded in the docs. |
 | `checksums.sha256` | SHA-256 of the shippable data files. |
