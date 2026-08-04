@@ -46,6 +46,72 @@ _KNOWN_PROVIDERS = ("azure", "openai", "bedrock", "ollama")
 # selectable; the UI shows them as "local" rather than "needs credentials".
 _CREDENTIAL_FREE = {"ollama"}
 
+# ---------------------------------------------------------------------------
+# Upload hardening (single-node demo trust boundary; see docs/TRUST_AND_DATA.md).
+#
+# An uploaded PDF is streamed to a per-request temp dir in bounded chunks (never
+# read whole into memory), capped in size, and sniffed for the ``%PDF-``
+# signature so a wrong extension *or* a disguised non-PDF is rejected before any
+# heavy extraction runs. The temp dir is always removed in the handler's
+# ``finally`` (retention == request lifetime).
+# ---------------------------------------------------------------------------
+_UPLOAD_CHUNK = 1 << 20  # 1 MiB streamed-copy chunk (bounds peak memory)
+_DEFAULT_MAX_UPLOAD_MB = 25
+_PDF_MAGIC = b"%PDF-"
+
+
+def _max_upload_bytes() -> int:
+    """Upload size cap in bytes, read per request so it needs no restart.
+
+    ``PDFQA_MAX_UPLOAD_BYTES`` (exact byte count) overrides
+    ``PDFQA_MAX_UPLOAD_MB`` (default 25 MiB).
+    """
+    exact = os.environ.get("PDFQA_MAX_UPLOAD_BYTES")
+    if exact:
+        try:
+            return max(1, int(exact))
+        except ValueError:
+            pass
+    try:
+        mb = float(os.environ.get("PDFQA_MAX_UPLOAD_MB", _DEFAULT_MAX_UPLOAD_MB))
+    except ValueError:
+        mb = _DEFAULT_MAX_UPLOAD_MB
+    return max(1, int(mb * (1 << 20)))
+
+
+def _save_upload(upload: UploadFile, dest: str) -> int:
+    """Stream an uploaded PDF to ``dest`` under the size cap + a ``%PDF-`` sniff.
+
+    Raises ``413`` if the payload exceeds the cap, ``415`` if the content is not
+    a PDF, and ``400`` if the upload is empty. Returns the byte count written.
+    """
+    limit = _max_upload_bytes()
+    upload.file.seek(0)
+    total = 0
+    checked = False
+    with open(dest, "wb") as handle:
+        while True:
+            chunk = upload.file.read(_UPLOAD_CHUNK)
+            if not chunk:
+                break
+            if not checked:
+                if not chunk.startswith(_PDF_MAGIC) and _PDF_MAGIC not in chunk[:1024]:
+                    raise HTTPException(
+                        status_code=415,
+                        detail="PDF 형식이 아닙니다 (%PDF- 서명을 찾을 수 없습니다).",
+                    )
+                checked = True
+            total += len(chunk)
+            if total > limit:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"업로드가 최대 허용 크기({limit} bytes)를 초과했습니다.",
+                )
+            handle.write(chunk)
+    if not checked:
+        raise HTTPException(status_code=400, detail="빈 파일은 업로드할 수 없습니다.")
+    return total
+
 
 def _persona_payload() -> dict:
     """Persona keys + labels + a short one-line method summary for the UI."""
@@ -311,8 +377,7 @@ def create_app() -> FastAPI:
             if sample_path:
                 shutil.copyfile(sample_path, pdf_path)
             else:
-                with open(pdf_path, "wb") as handle:
-                    handle.write(file.file.read())
+                _save_upload(file, pdf_path)
 
             config = QAConfig(
                 domain=domain,

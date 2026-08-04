@@ -89,6 +89,48 @@ def test_extract_rejects_non_pdf():
     assert resp.status_code == 400
 
 
+def test_extract_rejects_non_pdf_content_by_magic():
+    # A ``.pdf`` name but non-PDF bytes is rejected by the content sniff (415),
+    # not just the extension check.
+    resp = client.post(
+        "/api/extract",
+        files={"file": ("x.pdf", b"<html>not a pdf</html>", "application/pdf")},
+        data={"mode": "preview"},
+    )
+    assert resp.status_code == 415
+
+
+def test_extract_rejects_oversize_upload(monkeypatch):
+    # A tiny byte cap makes even a small valid-magic payload exceed the limit.
+    monkeypatch.setenv("PDFQA_MAX_UPLOAD_BYTES", "8")
+    resp = client.post(
+        "/api/extract",
+        files={"file": ("x.pdf", b"%PDF-1.4 " + b"a" * 64, "application/pdf")},
+        data={"mode": "preview"},
+    )
+    assert resp.status_code == 413
+
+
+def test_extract_rejects_empty_upload():
+    resp = client.post(
+        "/api/extract",
+        files={"file": ("x.pdf", b"", "application/pdf")},
+        data={"mode": "preview"},
+    )
+    assert resp.status_code == 400
+
+
+def test_extract_accepts_valid_pdf_magic_past_guards():
+    # A well-formed small PDF clears the input guards; whatever happens next
+    # (extraction, or a missing-dep 5xx) must not be a guard rejection.
+    resp = client.post(
+        "/api/extract",
+        files={"file": ("x.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf")},
+        data={"mode": "preview"},
+    )
+    assert resp.status_code not in (400, 413, 415)
+
+
 def test_extract_rejects_unknown_persona():
     resp = client.post(
         "/api/extract",

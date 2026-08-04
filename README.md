@@ -301,6 +301,17 @@ Unsloth와 LoRA 어댑터로 메모리 효율적 파인튜닝을 수행합니다
 > - [PDF Q&A 추출 가이드](./pdf_qa_extraction/README.md)
 > - [LLM 파인튜닝 가이드](./fine_tuning/README.md)
 
+## 🔐 보안 · 데이터 · 라이선스
+
+- [`SECURITY.md`](./SECURITY.md) — 취약점 신고 경로, 지원 버전, 공개 정책
+- [`docs/TRUST_AND_DATA.md`](./docs/TRUST_AND_DATA.md) — 런타임 신뢰 경계(로컬 단일 노드 데모),
+  업로드 제한(크기·`%PDF-` 서명·메모리 바운드), provider egress, PII 게이트, 보존/텔레메트리, 위협 모델
+- [`docs/DATA_AND_LICENSES.md`](./docs/DATA_AND_LICENSES.md) — 데이터셋·모델·샘플 PDF의 출처와
+  라이선스(루트 MIT는 **코드에만** 적용), known unknowns
+
+> 이 프로젝트는 인증·테넌트 격리·컴플라이언스 인증이 **없는** 로컬 단일 노드 데모입니다 —
+> 지원/미지원 위협 경계는 위 문서에 명시되어 있습니다.
+
 ## 📚 참고 자료
 
 - [Azure AI Foundry Documentation](https://learn.microsoft.com/azure/ai-foundry/)
