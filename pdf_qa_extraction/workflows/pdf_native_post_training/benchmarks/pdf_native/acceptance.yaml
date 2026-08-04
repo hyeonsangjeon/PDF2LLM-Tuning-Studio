@@ -1,0 +1,88 @@
+# Pre-registered acceptance criteria — PDF-native benchmark (spec P1-5)
+#
+# These success thresholds are FROZEN BEFORE any experiment arm is run (pre-registration).
+# No arm has been evaluated yet, so every criterion below is `pending`. Editing a threshold
+# after seeing results would invalidate pre-registration — add a new versioned criterion set
+# instead. The workflow README stays `planned` until real per-example results exist.
+
+benchmark_set_id: pdf_native_public_regression/v1
+pre_registered: true
+frozen_before_run: true
+evaluation_status: pending          # no arm run yet; all criteria below are un-evaluated
+eval_slice: dev + regression (public frozen regression); protected final = planned
+
+# Deterministic owner-reviewed criteria are PRIMARY. An LLM judge may be used only as a
+# fixed secondary diagnostic (frozen revision), never as the primary signal.
+primary_signal: deterministic_owner_reviewed
+secondary_signal: {type: llm_judge, role: diagnostic_only, revision: frozen}
+
+# ------------------------------------------------------------------ hard gates (publish blockers)
+hard_gates:
+  leakage_zero_overlap:
+    metric: leakage_audit.intersection_size
+    threshold: {eq: 0}
+    rationale: publish fails unless family + source-span 0-overlap is proven.
+  no_final_pre_read:
+    metric: final_access_log.pre_read_events
+    threshold: {eq: 0}
+    rationale: any pre-read of protected input/label before the release job fails publish.
+  pii_leakage:
+    metric: pii_leakage_rate
+    threshold: {eq: 0.0}
+    rationale: canary PII must never surface in any arm's output.
+  schema_validity:
+    metric: schema_validity_rate
+    threshold: {gte: 0.99}
+  no_sealed_claim_without_protected_label:
+    metric: claims.uses_sealed_or_unseen
+    threshold: {eq: false}
+    rationale: cannot claim `sealed`/`unseen` without a real protected label store.
+
+# ------------------------------------------------------------------ quality criteria (per arm)
+# Compared on the SAME set/contract; reported as 3-seed mean±std + paired bootstrap CI.
+quality_criteria:
+  sft_improves_over_base:
+    compare: [sft_bf16, base_bf16]
+    metric: token_f1
+    threshold: {delta_gte: 0.03}     # SFT BF16 must beat untuned Base by >= 3 F1
+    status: pending
+  qat_recovers_ptq_gap:
+    compare: [sft_int4_qat, sft_int4_ptq, sft_bf16]
+    metric: token_f1
+    threshold: {recovered_fraction_gte: 0.5}  # QAT recovers >=50% of the PTQ->BF16 F1 gap
+    status: pending
+  abstention_on_unanswerable:
+    arm: sft_bf16
+    metric: abstention_recall
+    threshold: {gte: 0.90}
+    status: pending
+  citation_span_accuracy:
+    arm: sft_bf16
+    metric: citation_span_accuracy
+    threshold: {gte: 0.80}
+    status: pending
+  groundedness:
+    arm: sft_bf16
+    metric: groundedness_rate
+    threshold: {gte: 0.85}
+    status: pending
+
+# ------------------------------------------------------------------ retrieval necessity (spec)
+# A retrieval baseline is not optional. The "practical PDF fine-tuning effect" claim is only
+# allowed if these show whether closed-book SFT beats reading the latest source.
+retrieval_criteria:
+  mutable_fact_retrieval_beats_closed_book:
+    compare: [base_bf16_retrieval, sft_bf16]
+    metric: numeric_exact_rate
+    slice: regression   # mutable finance_facts (effective_from/until, supersedes)
+    threshold: {delta_gte: 0.0}   # if closed-book SFT does NOT beat Base+retrieval on mutable
+                                  # facts, do NOT claim a practical fine-tuning effect.
+    status: pending
+  practical_effect_claim_allowed:
+    requires: [mutable_fact_retrieval_beats_closed_book, sft_improves_over_base]
+    status: pending
+
+# ------------------------------------------------------------------ regression tolerance
+regression_tolerance:
+  dev_vs_historical_final_max_f1_drop: 0.02   # once a historical_final/v1 is published
+  status: pending

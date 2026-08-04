@@ -1,0 +1,128 @@
+# PDF-native post-training benchmark — same-contract comparison (spec P1-5)
+#
+# Purpose: a second, workflow-native benchmark that starts from synthetic finance
+# PDFs and connects extraction -> dataset -> SFT -> PTQ/QAT -> serving, scored on ONE
+# shared metric contract. This is SEPARATE from the KorQuAD quantization benchmark
+# (that stays a fixed external controlled comparison); the two are never mixed.
+#
+# STATUS: public frozen regression fixture. Input + label + evidence are all committed,
+# so this set is deliberately NOT called "sealed" or "unseen". A protected current-final
+# store is not operated here -> per spec it is downgraded to "public frozen regression".
+# Model-comparison arms are `planned` (they require the GPU workflow); until real results
+# exist the workflow README keeps this benchmark `planned`.
+
+benchmark_set_id: pdf_native_public_regression/v1
+role: public_frozen_regression
+review_status: owner_review_pending   # agent must NOT fake human review; >=60 owner-reviewed
+                                      # labels/evidence required before `human_reviewed`.
+license: CC-BY-4.0
+generation_policy: >-
+  Fully synthetic corpus (public_finance_demo/build_fixture.py). No customer or private
+  business data, no credentials. Only self-generated or redistributable public sources.
+
+source_corpus: workflows/pdf_native_post_training/public_finance_demo
+built_by: workflows/pdf_native_post_training/benchmarks/pdf_native/build_benchmark.py
+raw_files:
+  regression_set: public_regression.jsonl        # aggregate auto-generated from this raw set
+  manifest: final_manifest.json
+  splits: splits/
+  checksums: checksums.sha256
+
+# ------------------------------------------------------------------ split principle
+# document_family_id / context group is fixed BEFORE Q&A rows so a family (its v1/v2
+# document versions, same tables/charts, identical source spans, exact/near duplicates)
+# never crosses a split. v1/v2 needed for version-selection eval stay in the SAME split.
+splits:
+  dev:        {family: finance_report, role: public}   # 26 QA (single/table/numeric/cross-page/unanswerable/injection)
+  regression: {family: finance_facts,  role: public}   # 10 version-selection facts (v1/v2 together)
+  final:
+    status: planned
+    role: protected
+    note: >-
+      Not operated. A future protected current-final would live in an access-controlled
+      CI/evaluation store outside public Git; the repo would record only set ID, schema,
+      category counts, generation policy/license, input hash and protected asset hash —
+      never labels — and be evaluated once by an authorized release job after acceptance
+      is frozen. On publish it becomes historical_final/v1 and immediately loses final
+      eligibility (next improvement is judged only on a new protected v2).
+leakage_audit:
+  method: evaluation.pdf_native.assert_no_split_leakage
+  guarantees: [document_family disjoint across splits, exact source-span disjoint across splits,
+               v1/v2 versions of a family kept together]
+  publish_gate: benchmark publish FAILS if 0-overlap is not proven or the final access log
+                shows any pre-read of protected input/label.
+
+# ------------------------------------------------------------------ evaluation categories
+# Minimum categories from spec. `present` = covered by the committed corpus; `planned`
+# = not yet in the corpus (extend build_fixture.py before claiming coverage).
+categories:
+  single_evidence_fact:          {status: present, source_category: single_fact}
+  table_or_chart_lookup:         {status: present, source_category: table_lookup}
+  numeric_currency_date_unit:    {status: present, source_category: numeric_exact}
+  deterministic_calculation:     {status: planned}
+  cross_page_evidence:           {status: present, source_category: cross_page}
+  document_version_effective_date: {status: present, source: versioned_facts (finance_facts)}
+  unanswerable_refusal:          {status: present, source_category: unanswerable}
+  ocr_noise:                     {status: planned}
+  prompt_injection_document:     {status: present, source_category: prompt_injection}
+  abstention_on_conflicting_evidence: {status: partial,
+                                       note: unanswerable + revoked/superseded facts exercise
+                                             abstention; a dedicated conflicting-evidence pair
+                                             is planned.}
+
+# ------------------------------------------------------------------ metric contract
+# Implemented by evaluation.pdf_native.score_dataset; aggregate auto-generated from the
+# raw per-example records (never hand-written).
+metrics:
+  - exact_match
+  - token_f1
+  - numeric_exact_rate
+  - unit_exact_rate
+  - date_exact_rate
+  - citation_page_accuracy
+  - citation_span_accuracy
+  - retrieval_recall_at_k
+  - no_answer_retrieval_rate
+  - abstention_precision
+  - abstention_recall
+  - schema_validity_rate
+  - groundedness_rate
+  - pii_leakage_rate
+  - per_category_accuracy
+  - failure_taxonomy            # wrong examples + reason visible directly in the report
+
+# ------------------------------------------------------------------ experiment arms
+# Same protected/current-final set, same contract. ALL arms are `planned` (GPU workflow).
+# A retrieval baseline is NOT optional: if we cannot show whether closed-book SFT beats
+# reading the latest source (esp. for mutable facts), we do NOT claim a practical
+# "PDF fine-tuning effect".
+experiment_arms:
+  - {id: base_bf16,              desc: untuned Base BF16,                 status: planned}
+  - {id: sft_bf16,               desc: SFT BF16,                          status: planned}
+  - {id: sft_int4_ptq,           desc: SFT INT4 PTQ,                      status: planned}
+  - {id: sft_int4_qat,           desc: SFT INT4 QAT,                      status: planned}
+  - {id: base_bf16_retrieval,    desc: Base BF16 + identical retrieval,   status: planned}
+  - {id: sft_bf16_retrieval,     desc: SFT BF16 + identical retrieval,    status: planned}
+
+# ------------------------------------------------------------------ fairness contract
+fairness_contract:
+  shared_across_all_arms: [current_final_set, prompt_contract, tokenizer, decode_parameters,
+                           max_tokens, hardware_class]
+  retrieval_arms_shared: [parser, corpus_version, chunker, embedding_or_ranker, top_k,
+                          evidence_budget]
+  record_revisions: true      # log the revision/hash of every shared component above
+  load_real_serving_artifact: >-
+    each model's actual serving artifact is loaded and evaluated at least once. Never assume
+    a QAT training checkpoint equals the PTQ serving artifact — convert and load it.
+  variance: 3-seed mean and standard deviation + paired bootstrap confidence interval.
+  raw_artifacts: commit raw per-example prediction/evidence/latency/error-code, or link an
+                 immutable release-asset hash when large.
+
+# ------------------------------------------------------------------ claim gates (spec)
+claim_gates:
+  - No base-model arm  -> do NOT call an SFT/PTQ/QAT table a "fine-tuning effect".
+  - Aggregate table MUST be auto-generated from the raw per-example artifacts.
+  - Wrong examples and their reject reason MUST be visible in the report.
+  - Claiming `sealed`/`unseen` without a real protected label store FAILS the claim check.
+  - Acceptance thresholds are frozen in acceptance.yaml BEFORE any arm is run; README stays
+    `planned` until real results exist.

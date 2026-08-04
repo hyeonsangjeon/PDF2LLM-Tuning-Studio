@@ -90,6 +90,9 @@ quantization = ["config.yaml", "requirements.txt"]
 "workflows.pdf_native_post_training.public_finance_demo" = [
     "docs/*.pdf", "*.jsonl", "*.json", "*.sha256", "*.md", "LICENSE",
 ]
+"workflows.pdf_native_post_training.benchmarks.pdf_native" = [
+    "*.yaml", "*.jsonl", "*.json", "*.sha256", "splits/*.json",
+]
 
 [tool.setuptools.packages.find]
 include = ["pdf_qa*", "evaluation*", "quantization*", "workflows*"]

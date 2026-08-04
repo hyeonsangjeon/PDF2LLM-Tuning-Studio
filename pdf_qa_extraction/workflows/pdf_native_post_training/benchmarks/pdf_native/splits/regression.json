@@ -1,0 +1,18 @@
+{
+  "document_family_ids": [
+    "finance_facts"
+  ],
+  "qa_ids": [
+    "vf001",
+    "vf002",
+    "vf003",
+    "vf004",
+    "vf005",
+    "vf006",
+    "vf007",
+    "vf008",
+    "vf009",
+    "vf010"
+  ],
+  "split": "regression"
+}

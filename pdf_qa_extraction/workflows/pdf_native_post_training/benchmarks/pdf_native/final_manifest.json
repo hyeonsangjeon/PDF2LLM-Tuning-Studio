@@ -1,0 +1,67 @@
+{
+  "benchmark_set_id": "pdf_native_public_regression/v1",
+  "category_counts": {
+    "cross_page": 1,
+    "numeric_exact": 12,
+    "prompt_injection": 1,
+    "single_fact": 8,
+    "table_lookup": 9,
+    "unanswerable": 5
+  },
+  "experiment_arms_status": "planned (Base/SFT/PTQ/QAT ± retrieval require the GPU workflow)",
+  "families": {
+    "dev": [
+      "finance_report"
+    ],
+    "regression": [
+      "finance_facts"
+    ]
+  },
+  "generation_policy": "fully synthetic (public_finance_demo/build_fixture.py); no private data or credentials",
+  "leakage_audit": {
+    "disjoint": true,
+    "intersection_size": 0,
+    "n_families": 2
+  },
+  "license": "CC-BY-4.0",
+  "n_examples": 36,
+  "n_human_reviewed": 0,
+  "note": "Public frozen regression: input+label+evidence are all committed, so this set is NOT 'sealed' or 'unseen'. A protected current-final store is not operated here.",
+  "protected_final": {
+    "note": "Not operated. Per spec, without a real protected input/label store the 'sealed final'/'unseen final' framing is removed and this stays a public frozen regression set. A future protected v2 would record only set ID, schema, category counts, policy/license, input hash and protected asset hash — never labels — in the repo.",
+    "status": "planned"
+  },
+  "role": "public_frozen_regression",
+  "schema_fields": [
+    "qa_id",
+    "question",
+    "answer",
+    "answerable",
+    "category",
+    "fact_volatility",
+    "document_version",
+    "source_status",
+    "effective_from",
+    "effective_until",
+    "supersedes",
+    "evidence",
+    "review_status",
+    "document_family_id",
+    "split",
+    "benchmark_set_id"
+  ],
+  "source_corpus": {
+    "gold_qa_sha256": "e926a9292b4d020b8e6ae7428572be37e763b40f95347ee4c046ffe269183ec5",
+    "input_pdf_sha256": {
+      "finance_report_v1.pdf": "49299ffdf7aaa2acd9e9b3ba5a531d34de38adeab66c43c6749e35260010df13",
+      "finance_report_v2.pdf": "8935a53008c4785e454e9800b52190cf359e88c1aa4ef1e37fc39d8f680f56f8"
+    },
+    "path": "workflows/pdf_native_post_training/public_finance_demo",
+    "versioned_facts_sha256": "583648d145385a52d9ba47064c6352ca9910598abb690280816122e4313af19b"
+  },
+  "splits": {
+    "dev": 26,
+    "regression": 10
+  },
+  "status": "owner_review_pending"
+}

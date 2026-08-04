@@ -250,6 +250,36 @@ python -m workflows.pdf_native_post_training.report \
 테스트: `tests/test_benchmark_pipeline.py`(스키마·데모 카운트·`not_measured` 전파),
 `tests/test_report.py`(Pareto·feasibility·`no_feasible_candidate`·rate-card 비용·10-section·README 일치).
 
+## 📐 PDF-native 동일-계약 벤치마크 (public frozen regression) — `planned`
+
+KorQuAD quantization 벤치마크(고정 외부 QA)와 **분리된**, 합성 금융 PDF에서 시작해
+extraction→dataset→SFT→PTQ/QAT→serving까지 **하나의 metric 계약**으로 비교하는 워크플로-네이티브
+벤치마크입니다. 입력·label·evidence를 모두 커밋한 **public frozen regression**이라 `sealed`·`unseen`으로
+부르지 않으며, 보호된 current-final 저장소는 운영하지 않아 `planned`로 남겨 둡니다. 모델 비교군(Base/SFT/
+PTQ/QAT ± retrieval)은 GPU 워크플로가 필요해 **전부 `planned`**이고, 실제 per-example 결과가 나오기 전까지
+README는 이 벤치마크를 `planned`로 유지합니다.
+
+- 위치: [`benchmarks/pdf_native/`](benchmarks/pdf_native/) — `benchmark.yaml`(10개 카테고리 coverage,
+  metric 계약, 6개 실험군, 공정비교 조건), `acceptance.yaml`(**실행 전 고정**된 pre-registered 임계값),
+  `public_regression.jsonl`(raw set), `final_manifest.json`(set ID·schema·category counts·license·input
+  hash·leakage audit·`owner_review_pending`), `splits/`.
+- metric 계약 구현: [`evaluation/pdf_native.py`](../../evaluation/pdf_native.py) — EM/F1, numeric/date/unit
+  exactness, citation page·span, retrieval recall@k·no-answer rate, abstention P/R, schema validity,
+  groundedness, PII leakage, category별 정확도 + failure taxonomy. **aggregate는 raw per-example에서 자동
+  생성**됩니다(수기 입력 없음).
+- split 원칙: `document_family_id`로 분리하고 v1/v2는 같은 split에 함께 둡니다. `assert_no_split_leakage`가
+  family·source-span 0-overlap을 증명해야 publish됩니다.
+
+```bash
+# 커밋된 합성 코퍼스에서 벤치마크 산출물을 결정적으로 재생성
+python -m workflows.pdf_native_post_training.benchmarks.pdf_native.build_benchmark
+```
+
+정직성 가드(spec P1-5): base 모델 arm 없이 SFT/PTQ/QAT 표를 "fine-tuning 효과"라 부르지 않고, retrieval
+baseline은 optional이 아니며, 보호 label 없이 `sealed`/`unseen`을 주장하면 claim check가 실패합니다. 테스트:
+`tests/test_pdf_native_benchmark.py`(코퍼스 일치·실 fixture leakage 0-overlap·claim-check·pre-registration·
+재생성 결정성), `evaluation/tests/test_pdf_native.py`(metric 계약 단위 테스트).
+
 ## 🧹 Cleanup
 
 - **로컬 실행물**: `runs/`는 `.gitignore`에 포함되어 커밋되지 않습니다. 삭제는 `rm -rf pdf_qa_extraction/runs`.
