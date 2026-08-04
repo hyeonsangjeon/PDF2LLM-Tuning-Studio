@@ -50,6 +50,8 @@ jobs:
         run: pdf2llm scan-secrets
       - name: Evidence index — README numbers vs raw JSON
         run: python scripts/build_evidence_index.py --check
+      - name: Benchmark tables reproduce from raw JSON
+        run: python -m quantization.v2_report --check-historical
 
   packaging:
     name: wheel install + packaged demo

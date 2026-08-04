@@ -21,6 +21,7 @@ python scripts/build_evidence_index.py --check   # every number below vs raw JSO
 | capability | status | command | raw artifact | value |
 |---|---|---|---|---|
 | PDF→auditable Q&A offline demo (evidence integrity + EM/F1) | ✅ ci_verified | `pdf2llm verify-demo` | [`workflows/pdf_native_post_training/public_finance_demo/gold_qa.jsonl`](../workflows/pdf_native_post_training/public_finance_demo/gold_qa.jsonl) | — |
+| Derived benchmark tables reproduce from raw JSON (no hand-edited numbers) | ✅ ci_verified | `python -m quantization.v2_report --check-historical` | [`quantization/results/vllm_throughput.json`](../quantization/results/vllm_throughput.json) | — |
 | A (BF16 LoRA) held-out F1, 3-seed mean | 🟢 recorded_hardware_run | `python -m quantization.v2_run agg` | [`quantization/results/three_way_table.json`](../quantization/results/three_way_table.json)`/aggregate/A_bf16/f1/mean` | **94.83** |
 | A (BF16 LoRA) held-out EM, 3-seed mean | 🟢 recorded_hardware_run | `python -m quantization.v2_run agg` | [`quantization/results/three_way_table.json`](../quantization/results/three_way_table.json)`/aggregate/A_bf16/exact_match/mean` | **87.80** |
 | A (BF16 LoRA) perplexity, 3-seed mean | 🟢 recorded_hardware_run | `python -m quantization.v2_run agg` | [`quantization/results/three_way_table.json`](../quantization/results/three_way_table.json)`/aggregate/A_bf16/perplexity/mean` | **9.05** |

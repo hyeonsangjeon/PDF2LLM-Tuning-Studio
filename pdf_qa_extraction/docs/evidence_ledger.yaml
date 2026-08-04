@@ -28,6 +28,17 @@ claims:
       Deterministic replay: recomputes EM/F1 against the shipped gold fixture and
       verifies run-bundle evidence integrity. Asserted green by the CI test gate.
 
+  - id: bench_tables_reproduce
+    capability: "Derived benchmark tables reproduce from raw JSON (no hand-edited numbers)"
+    status: ci_verified
+    command: "python -m quantization.v2_report --check-historical"
+    source: quantization/results/vllm_throughput.json
+    note: >-
+      three_way_table.json (EM/F1/ppl mean±std) and vllm_throughput.json (sweep +
+      crossover/ratios + clean VRAM) are regenerated from the read-only raw
+      results/*.json and hash-compared to the committed files. CI fails on any
+      mismatch, so a human can never hand-edit a derived number (spec P1-2).
+
   # ---- KorQuAD 3-seed A/B/C (recorded A100 run) ----------------------------
   - id: a_bf16_f1
     capability: "A (BF16 LoRA) held-out F1, 3-seed mean"

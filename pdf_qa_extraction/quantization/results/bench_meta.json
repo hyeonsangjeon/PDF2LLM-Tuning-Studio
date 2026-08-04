@@ -1,0 +1,17 @@
+{
+  "_note": "Raw serving-environment facts captured during the japaneast A100 (Spot) vLLM benchmark run. These are measurements (not derived): 'engine' is the live-imported package/GPU stack at serving time; 'weight_vram_gib' is vLLM's clean serving-only weight VRAM parsed from its 'Model loading took X GiB' log at load (W5). v2_report.py consumes this together with the read-only bench_*.json sweeps/latencies to regenerate results/vllm_throughput.json; it is a read-only historical input and must not be hand-edited.",
+  "engine": {
+    "name": "vllm",
+    "version": "0.23.0",
+    "torch": "2.11.0+cu130",
+    "torchao": "0.17.0",
+    "transformers": "4.57.6",
+    "gpu": "NVIDIA A100 80GB (Standard_NC24ads_A100_v4)",
+    "region": "japaneast",
+    "priority": "Spot"
+  },
+  "weight_vram_gib": {
+    "A_bf16": 15.27,
+    "BC_int4": 6.05
+  }
+}

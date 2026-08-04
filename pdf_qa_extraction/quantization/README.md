@@ -30,6 +30,7 @@ quantization/
   v2_pipeline.py       # v2 코어: chat-template 프롬프트 + completion-only 마스킹 + A/B/C 학습 + chat eval + QAT 자가검증
   v2_run.py            # v2 CLI: a/b/c/eval/agg/selftest — 서브프로세스별 격리, per-seed 아티팩트
   v2_bench.py          # vLLM 배치 스윕 처리량 + 단일스트림 TTFT/e2e p50/p99
+  v2_report.py         # 파생표 집계 자동화: 원시 JSON → three_way_table/vllm_throughput 재생성 + --check-historical(CI 게이트)
   eval_qa.py           # 공용 지표: KorQuAD 공식 EM/F1 + ppl + 크기/VRAM/tok·s + int4 tile-packed config
   notebooks/           # 00 base-select, 01 BF16 LoRA, 02 INT4 PTQ, 03 INT4 QAT (모두 실행됨)
   artifacts/           # 산출물(미커밋·gitignore): {A_bf16,B_int4_ptq,C_int4_qat}_seed{42,43,44}/
@@ -55,6 +56,9 @@ python -m quantization.v2_run agg
 export VLLM_USE_FLASHINFER_SAMPLER=0
 python quantization/v2_bench.py --model-dir quantization/artifacts/A_bf16_seed42     --method A_bf16     --precision bf16 --max-model-len 4096 --mode both --out quantization/results/bench_A.json
 python quantization/v2_bench.py --model-dir quantization/artifacts/B_int4_ptq_seed42 --method B_int4_ptq --precision int4 --max-model-len 4096 --mode both --out quantization/results/bench_int4.json
+# 파생 표(집계) 재생성 — 원시 JSON → three_way_table.json + vllm_throughput.json (사람이 손으로 수정하지 않음)
+python -m quantization.v2_report --check-historical    # 커밋된 파생표가 원시 JSON에서 재생성되는지 검증(CI 게이트, read-only)
+python -m quantization.v2_report --emit                # runs/<run_id>/quantization/report/ 아래에 재생성(+ 입력 hash·argument provenance)
 ```
 > 스모크(무-GPU 코드 점검): 각 서브커맨드에 `--subset 200 --max-steps 12 --eval-size 20` 오버라이드.
 
