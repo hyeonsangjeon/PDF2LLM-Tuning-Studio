@@ -32,6 +32,67 @@ make verify-demo           # == pdf2llm verify-demo
 
 ---
 
+## 🎬 따라 하기: 클론 → 학습 → 질문 (딱 3단계)
+
+> **"입력 데이터 → 학습 → 실험 문장을 넣으면 짠! 하고 답이 나오는"** 전 과정을 한 줄씩 재현합니다.
+> 3단계(질문하기)는 **실제 A100에서 학습·측정한 6개 모델의 답이 이미 커밋돼 있어**, GPU·키·네트워크 없이 바로 실행됩니다.
+
+```bash
+git clone https://github.com/hyeonsangjeon/PDF2LLM-Tuning-Studio
+cd PDF2LLM-Tuning-Studio && make install-workflow      # 최초 1회 (pip install -e ...[workflow,train])
+```
+
+### 1단계 — 입력 데이터 보기 (합성 금융 PDF + 근거 달린 정답)
+
+```bash
+ls pdf_qa_extraction/workflows/pdf_native_post_training/public_finance_demo/docs/   # 원본 PDF 2개
+make ask ARGS="--list"                                                              # 36개 질문 + 카테고리 미리보기
+```
+
+입력은 커밋된 **합성 한국어 금융 PDF**와, 페이지·인용문까지 추적되는 **정답 Q&A**입니다. 실제 데이터·자격 증명이 필요 없습니다.
+
+### 2단계 — 학습 (둘 중 택1)
+
+```bash
+# (A) 몇 초 만에 '진짜 파인튜닝'을 아주 작은 모델로 체험 (CPU만)
+make demo-train-smoke
+
+# (B) 논문급 6종 정주행: 실제 A100에서 Base/SFT/PTQ/QAT ± 검색 (GPU, 유료)
+python -m workflows.pdf_native_post_training.benchmarks.pdf_native.run_arms --help
+```
+
+> (B)의 결과는 [`historical_final/v1/`](benchmarks/pdf_native/historical_final/v1)에 **이미 커밋**돼 있어, GPU 없이 3단계로 바로 확인할 수 있습니다.
+
+### 3단계 — 질문하면 답이 "짠!" (GPU·키·네트워크 불필요)
+
+```bash
+make ask                              # 기본 질문 — 6개 모델의 실제 A100 답을 나란히
+make ask ARGS="-q 영업이익은 얼마"      # 원하는 질문(부분 문자열 매칭)
+make ask ARGS="--qa-id q014"          # 문서에 없는 질문 → '기권'이 정답인 예
+# (설치했다면 `pdf2llm ask ...` 로도 동일 실행)
+```
+
+성공 시 출력(요약):
+
+```
+❓ 질문 : 2024년 연간 매출액은 얼마입니까?
+✅ 정답 : 1,250억 원입니다.
+🔒 Closed-book  Base/SFT/PTQ/QAT → "문서에서 확인할 수 없습니다." (기권)
+🔎 Open-book    Base + 검색      → "…1,250억 원입니다."   (F1 0.62)
+               SFT + 검색 🏆    → "1,250억 원입니다."    (F1 1.00) ← 정확
+💡 짠! — 같은 질문도 '검색(retrieval)'을 켜야 정답이 나옵니다. 이게 이 벤치마크의 교훈입니다.
+```
+
+**아무 문장이나** 직접 물어보고 싶다면 — 로컬 실시간 생성(Ollama, GPU 불필요):
+
+```bash
+ollama serve &                        # 별도 터미널
+ollama pull qwen2.5:7b-instruct
+make ask ARGS='--live -q "4분기 매출이 가장 높았나요?"'
+```
+
+---
+
 ## ✅ Good fit / ⛔ Not a good fit
 
 **Good fit**
@@ -94,6 +155,7 @@ runs/<run_id>/
 |---|---|---|
 | `demo-replay` | `stages: {... 'report': 'completed'}` (8단계) | `runs/<id>/report.json`, `artifacts/train_sft.jsonl`(26행) |
 | `verify-demo` | `[verify-demo] PASS` | 임시 run-dir(무결성 assert 후 정리) |
+| `ask` | `💡 짠! …`(질문·정답·6개 arm 답 비교) | 없음(커밋된 A100 per-example 결과를 읽어 출력) |
 | `demo-train-smoke` | 9단계(`train_smoke` 포함) 완료 요약 | `runs/<id>/artifacts/`에 학습 모델 |
 | `build-fixture` | 체크섬·gold 개수 출력 | `public_finance_demo/`의 PDF·`gold_qa.jsonl` 재생성 |
 
@@ -298,6 +360,9 @@ raw per-example·자동 summary가 [`historical_final/v1/`](benchmarks/pdf_nativ
 # 커밋된 합성 코퍼스에서 벤치마크 산출물을 결정적으로 재생성
 python -m workflows.pdf_native_post_training.benchmarks.pdf_native.build_benchmark
 ```
+
+> 💬 **결과를 직접 물어보기**: 위 표의 근거가 되는 실제 per-example 답을 `make ask`(=`pdf2llm ask`)로
+> 질문별·arm별로 나란히 볼 수 있습니다 — GPU·키·네트워크 불필요. 예: `make ask ARGS="--qa-id q000"`.
 
 정직성 가드(spec P1-5): base 모델 arm 없이 SFT/PTQ/QAT 표를 "fine-tuning 효과"라 부르지 않고, retrieval
 baseline은 optional이 아니며, 보호 label 없이 `sealed`/`unseen`을 주장하면 claim check가 실패합니다. 테스트:

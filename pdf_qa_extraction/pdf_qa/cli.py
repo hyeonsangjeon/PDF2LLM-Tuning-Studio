@@ -9,6 +9,7 @@ Subcommands:
     pdf2llm run --config <cfg.yaml> [--run-dir DIR]
     pdf2llm demo-replay | demo-live-ollama | demo-train-smoke
     pdf2llm verify-demo                # run the replay demo and assert integrity
+    pdf2llm ask [-q "질문"]            # replay the real A100 answers for a question
     pdf2llm build-fixture              # regenerate the synthetic demo fixture
     pdf2llm parse <file.pdf>           # parse a PDF into provenance elements
     pdf2llm scan-secrets [paths...]    # run the secret/PII scanner
@@ -91,6 +92,24 @@ def _cmd_build_fixture(args) -> int:
                            cwd=_FIXTURE, env=_subenv())
 
 
+def _cmd_ask(args) -> int:
+    # Delegated to the workflow via subprocess (core never imports workflows).
+    cmd = [sys.executable, "-m", "workflows.pdf_native_post_training.ask_demo"]
+    if args.question:
+        cmd += ["--question", args.question]
+    if args.qa_id:
+        cmd += ["--qa-id", args.qa_id]
+    if args.seed is not None:
+        cmd += ["--seed", str(args.seed)]
+    if args.list:
+        cmd += ["--list"]
+    if args.live:
+        cmd += ["--live"]
+    if args.model:
+        cmd += ["--model", args.model]
+    return subprocess.call(cmd, cwd=_PKG_ROOT, env=_subenv())
+
+
 def _cmd_parse(args) -> int:
     from pdf_qa.provenance import parse_pdf
 
@@ -126,6 +145,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     v = sub.add_parser("verify-demo", help="run demo-replay and assert integrity")
     v.set_defaults(func=_cmd_verify_demo)
+
+    ak = sub.add_parser("ask", help="학습된 모델에 질문 → 답이 짠! (실제 A100 결과 오프라인 재생)")
+    ak.add_argument("-q", "--question", default=None, help="질문(부분 문자열) 또는 qa_id")
+    ak.add_argument("--qa-id", dest="qa_id", default=None, help="정확한 qa_id (예: q000)")
+    ak.add_argument("--seed", type=int, default=42, help="표시할 seed (기본 42)")
+    ak.add_argument("--list", action="store_true", help="사용 가능한 질문 목록")
+    ak.add_argument("--live", action="store_true", help="로컬 Ollama로 임의 문장 실시간 답변")
+    ak.add_argument("--model", default="qwen2.5:7b-instruct", help="--live 시 Ollama 모델 태그")
+    ak.set_defaults(func=_cmd_ask)
 
     b = sub.add_parser("build-fixture", help="regenerate the synthetic demo fixture")
     b.set_defaults(func=_cmd_build_fixture)
