@@ -31,7 +31,6 @@ import random
 import statistics
 import tempfile
 import time
-from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from evaluation import pdf_native as PN
@@ -61,7 +60,7 @@ EVAL_SYSTEM = ("당신은 금융 문서 질의응답 어시스턴트입니다. �
 # --------------------------------------------------------------------------- data
 def _load_jsonl(path: str) -> List[Dict[str, Any]]:
     with open(path, encoding="utf-8") as fh:
-        return [json.loads(l) for l in fh if l.strip()]
+        return [json.loads(line) for line in fh if line.strip()]
 
 
 def load_eval_rows() -> List[Dict[str, Any]]:
@@ -307,9 +306,22 @@ def _measure(model_dir: Optional[str]) -> Dict[str, Any]:
             "peak_vram_gb": round(vram, 4) if vram is not None else "not_measured"}
 
 
+def _maybe_publish(model_dir: str, repo_id: str) -> None:
+    """Publish a trained arm dir to HF; any failure is logged and swallowed so a
+    publish problem can never break the (expensive, primary) benchmark run."""
+    try:
+        from workflows.pdf_native_post_training.publish_hf import publish
+        rc = publish(model_dir, repo_id, base_model="", arm="sft_bf16_retrieval",
+                     summary_path=os.path.join(OUT_ROOT, "summary.json"))
+        print(f"[run_arms] push_to_hub {repo_id} rc={rc}")
+    except Exception as exc:  # noqa: BLE001 - publishing must never abort the run
+        print(f"[run_arms] push_to_hub failed (benchmark unaffected): {exc}")
+
+
 # --------------------------------------------------------------------------- orchestration
 def run(base_model: str, seeds: Sequence[int], *, smoke: bool, artifacts_dir: str,
-        out_dir: str = OUT_ROOT, keep_artifacts: bool = False) -> Dict[str, Any]:
+        out_dir: str = OUT_ROOT, keep_artifacts: bool = False,
+        push_to_hub: Optional[str] = None) -> Dict[str, Any]:
     os.makedirs(out_dir, exist_ok=True)
     per_ex_dir = os.path.join(out_dir, "per_example")
     os.makedirs(per_ex_dir, exist_ok=True)
@@ -378,6 +390,10 @@ def run(base_model: str, seeds: Sequence[int], *, smoke: bool, artifacts_dir: st
         V.train_method_a(cfg, seed, a_dir)
         _eval_arm("sft_bf16", a_dir, seed, False)
         _eval_arm("sft_bf16_retrieval", a_dir, seed, True)
+
+        # Optional: publish the first seed's fine-tuned weights to HF (never breaks the run).
+        if push_to_hub and seed == seeds[0]:
+            _maybe_publish(a_dir, push_to_hub)
 
         b_dir = os.path.join(artifacts_dir, f"sft_int4_ptq_seed{seed}")
         V.build_method_b(cfg, a_dir, b_dir)
@@ -533,6 +549,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--out-dir", default=OUT_ROOT)
     ap.add_argument("--keep-artifacts", action="store_true",
                     help="keep per-seed model weights (default: delete after each seed to bound disk).")
+    ap.add_argument("--push-to-hub", dest="push_to_hub", default=None, metavar="REPO_ID",
+                    help="after training, upload the first seed's SFT weights to this HF repo "
+                         "(needs $HF_TOKEN; never aborts the benchmark on failure).")
     args = ap.parse_args(argv)
 
     base = args.base_model or (SMOKE_BASE if args.smoke else DEFAULT_BASE)
@@ -540,7 +559,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ((0,) if args.smoke else DEFAULT_SEEDS)
     os.makedirs(args.artifacts_dir, exist_ok=True)
     m = run(base, seeds, smoke=args.smoke, artifacts_dir=args.artifacts_dir, out_dir=args.out_dir,
-            keep_artifacts=args.keep_artifacts)
+            keep_artifacts=args.keep_artifacts, push_to_hub=args.push_to_hub)
     measured = [a for a, v in m["arms"].items() if v.get("status") == "measured"]
     print(f"[run_arms] base={base} seeds={list(seeds)} cuda={m['cuda']} "
           f"measured_arms={measured}")

@@ -39,13 +39,16 @@ KorQuAD 기반 **BF16 LoRA(A) / INT4 PTQ(B) / INT4 QAT(C)** 3-way 비교 + vLLM 
 ```bash
 make install-workflow && make verify-demo      # 60초 오프라인 증명 → [verify-demo] PASS
 make ask                                        # 질문하면 실제 A100 학습 모델의 답이 "짠!" (오프라인)
+make ask-hf HF=your-name/pdf2llm-sft-qwen3-8b Q="2024년 연간 매출액은?"  # 파인튜닝 가중치를 실제 로드해 실시간 추론
 ```
 
 - **따라 하기(클론→학습→질문 3단계)** 와 `make ask`(실제 A100 6-arm 답 오프라인 재생)로
   "입력 → 학습 → 실험 문장 넣으면 짠!"을 GPU 없이 바로 체험 — 가이드의 🎬 섹션 참고.
+- **재현 3-tier**: `ask`(0-설정 재생) · `ask --hf`(HF/로컬 **파인튜닝 가중치 실로드→실시간 추론**) · `make bench`(내 GPU 처음부터) —
+  "목업/JSON 아냐?"에 대한 정직한 구분과 HF 업로드(`publish-hf`) recipe는 가이드의 🔬 섹션 참고.
 - 워크플로 가이드: [`workflows/pdf_native_post_training/README.md`](pdf_qa_extraction/workflows/pdf_native_post_training/README.md)
   (따라 하기 3단계 · 60초 proof · Good/Not-a-good fit · replay/live/smoke · 기대 출력 · 요구사항 · troubleshooting · cleanup)
-- 실행: `make demo-replay`(오프라인) · `make demo-live-ollama`(로컬 Ollama) · `make demo-train-smoke`(CPU SFT 스모크) · `make ask`(질문→답)
+- 실행: `make demo-replay`(오프라인) · `make demo-live-ollama`(로컬 Ollama) · `make demo-train-smoke`(CPU SFT 스모크) · `make ask`(질문→답) · `make ask-hf`(HF 가중치 실로드) · `make bench`(처음부터 재현) · `make publish-hf`(HF 업로드)
 - 기대 기준값(합성 코퍼스): evidence_address_integrity **1.0** · policy_quarantined **0** · train_rows **26** ·
   replay EM/F1 **1.0** · 실행마다 동일한 재현 지문.
 - 신뢰 게이트: [`.github/workflows/test.yml`](.github/workflows/test.yml)(pytest + `verify-demo` + secret 스캔 +

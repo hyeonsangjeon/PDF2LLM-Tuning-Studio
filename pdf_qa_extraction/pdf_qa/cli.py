@@ -103,10 +103,37 @@ def _cmd_ask(args) -> int:
         cmd += ["--seed", str(args.seed)]
     if args.list:
         cmd += ["--list"]
+    if getattr(args, "hf", None):
+        cmd += ["--hf", args.hf]
+    if getattr(args, "no_retrieval", False):
+        cmd += ["--no-retrieval"]
+    if getattr(args, "max_new_tokens", None) is not None:
+        cmd += ["--max-new-tokens", str(args.max_new_tokens)]
     if args.live:
         cmd += ["--live"]
     if args.model:
         cmd += ["--model", args.model]
+    return subprocess.call(cmd, cwd=_PKG_ROOT, env=_subenv())
+
+
+def _cmd_publish_hf(args) -> int:
+    # Delegated to the workflow via subprocess (core never imports workflows).
+    cmd = [sys.executable, "-m", "workflows.pdf_native_post_training.publish_hf",
+           "--model-dir", args.model_dir, "--repo-id", args.repo_id]
+    if args.arm:
+        cmd += ["--arm", args.arm]
+    if args.base_model:
+        cmd += ["--base-model", args.base_model]
+    if args.summary:
+        cmd += ["--summary", args.summary]
+    if args.token:
+        cmd += ["--token", args.token]
+    if args.private:
+        cmd += ["--private"]
+    if args.dry_run:
+        cmd += ["--dry-run"]
+    if args.no_card:
+        cmd += ["--no-card"]
     return subprocess.call(cmd, cwd=_PKG_ROOT, env=_subenv())
 
 
@@ -151,9 +178,33 @@ def build_parser() -> argparse.ArgumentParser:
     ak.add_argument("--qa-id", dest="qa_id", default=None, help="정확한 qa_id (예: q000)")
     ak.add_argument("--seed", type=int, default=42, help="표시할 seed (기본 42)")
     ak.add_argument("--list", action="store_true", help="사용 가능한 질문 목록")
+    ak.add_argument("--hf", metavar="REPO_OR_DIR", default=None,
+                    help="파인튜닝 가중치를 실제 로드해 실시간 추론 (HF repo id 또는 로컬 경로)")
+    ak.add_argument("--no-retrieval", dest="no_retrieval", action="store_true",
+                    help="--hf 시 검색을 끄고 closed-book 추론")
+    ak.add_argument("--max-new-tokens", dest="max_new_tokens", type=int, default=64,
+                    help="--hf 생성 토큰 상한 (기본 64)")
     ak.add_argument("--live", action="store_true", help="로컬 Ollama로 임의 문장 실시간 답변")
     ak.add_argument("--model", default="qwen2.5:7b-instruct", help="--live 시 Ollama 모델 태그")
     ak.set_defaults(func=_cmd_ask)
+
+    ph = sub.add_parser("publish-hf",
+                        help="파인튜닝 가중치를 HuggingFace Hub에 업로드 (모델 카드 자동 생성)")
+    ph.add_argument("--model-dir", dest="model_dir", required=True,
+                    help="업로드할 학습 산출물 디렉터리 (예: artifacts/sft_bf16_seed42)")
+    ph.add_argument("--repo-id", dest="repo_id", required=True,
+                    help="대상 HF 저장소 (예: your-name/pdf2llm-sft-qwen3-8b)")
+    ph.add_argument("--arm", default=None, help="카드 점수 기준 arm (기본 sft_bf16_retrieval)")
+    ph.add_argument("--base-model", dest="base_model", default=None,
+                    help="베이스 모델 (기본: summary.json 값)")
+    ph.add_argument("--summary", default=None, help="점수 출처 summary.json 경로")
+    ph.add_argument("--token", default=None, help="HF write 토큰 (기본: $HF_TOKEN)")
+    ph.add_argument("--private", action="store_true", help="비공개 저장소로 생성")
+    ph.add_argument("--dry-run", dest="dry_run", action="store_true",
+                    help="업로드 없이 카드/파일 목록만 출력(토큰 불필요)")
+    ph.add_argument("--no-card", dest="no_card", action="store_true",
+                    help="README.md 모델 카드 작성/포함 생략")
+    ph.set_defaults(func=_cmd_publish_hf)
 
     b = sub.add_parser("build-fixture", help="regenerate the synthetic demo fixture")
     b.set_defaults(func=_cmd_build_fixture)

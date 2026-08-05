@@ -87,3 +87,72 @@ def test_launcher_exposes_ask_subcommand():
     args = build_parser().parse_args(["ask", "-q", "매출"])
     assert args.command == "ask"
     assert args.question == "매출"
+
+
+# ---------------------------------------------------------------- --hf (실제 가중치 로드) 경로
+
+def _inject_fake_ml(monkeypatch):
+    """torch/transformers 미설치 CI에서도 --hf 배선을 검증하도록 가짜 모듈 주입."""
+    import sys
+    import types
+
+    torch = types.ModuleType("torch")
+    torch.cuda = types.SimpleNamespace(is_available=lambda: False)
+    monkeypatch.setitem(sys.modules, "torch", torch)
+    tf = types.ModuleType("transformers")
+    tf.AutoModelForCausalLM = type("AutoModelForCausalLM", (), {})
+    tf.AutoTokenizer = type("AutoTokenizer", (), {})
+    monkeypatch.setitem(sys.modules, "transformers", tf)
+
+
+def test_ask_hf_requires_question():
+    # 질문 없이 --hf → rc 2 (무거운 import 이전에 반환).
+    assert ask_demo._ask_hf("", "any/repo", use_retrieval=True, max_new_tokens=8) == 2
+
+
+def test_retrieve_context_offline():
+    ctx, retrieved = ask_demo._retrieve_context("연간 매출액", 4)
+    assert ctx.strip()  # 실제 BM25 가 커밋된 문서 근거를 검색
+    assert 1 <= len(retrieved) <= 4
+
+
+def test_ask_hf_generates_via_mocked_model(monkeypatch, capsys):
+    """가짜 모델로 --hf 전 구간(검색→프롬프트→생성→추출→출력)을 검증. 재생 아님을 명시."""
+    _inject_fake_ml(monkeypatch)
+    import types
+
+    from workflows.pdf_native_post_training.benchmarks.pdf_native import run_arms as RA
+
+    fake_model = types.SimpleNamespace(config=types.SimpleNamespace(_name_or_path="fake/repo"))
+    monkeypatch.setattr(RA, "load_model_and_tok", lambda ref: (fake_model, object()))
+    monkeypatch.setattr(RA, "model_generate_fn",
+                        lambda cfg, m, t: (lambda items: ["1,250억 원입니다."]))
+
+    rc = ask_demo._ask_hf("연간 매출액", "fake/repo", use_retrieval=True, max_new_tokens=16)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "1,250억 원" in out          # 모델 생성 결과가 그대로 출력
+    assert "실제로 로드" in out          # 재생/JSON 아님을 사용자에게 명시
+    assert "ON" in out                   # 검색 켜짐 표시
+
+
+def test_ask_hf_load_failure_returns_1(monkeypatch):
+    _inject_fake_ml(monkeypatch)
+    from workflows.pdf_native_post_training.benchmarks.pdf_native import run_arms as RA
+
+    def _boom(ref):
+        raise RuntimeError("no such model")
+
+    monkeypatch.setattr(RA, "load_model_and_tok", _boom)
+    rc = ask_demo._ask_hf("질문", "bad/repo", use_retrieval=False, max_new_tokens=8)
+    assert rc == 1
+
+
+def test_launcher_forwards_hf_flags():
+    from pdf_qa.cli import build_parser
+
+    args = build_parser().parse_args(
+        ["ask", "--hf", "n/r", "--no-retrieval", "--max-new-tokens", "8", "-q", "x"])
+    assert args.hf == "n/r"
+    assert args.no_retrieval is True
+    assert args.max_new_tokens == 8

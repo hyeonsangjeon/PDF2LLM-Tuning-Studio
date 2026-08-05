@@ -57,11 +57,12 @@ make ask ARGS="--list"                                                          
 # (A) 몇 초 만에 '진짜 파인튜닝'을 아주 작은 모델로 체험 (CPU만)
 make demo-train-smoke
 
-# (B) 논문급 6종 정주행: 실제 A100에서 Base/SFT/PTQ/QAT ± 검색 (GPU, 유료)
-python -m workflows.pdf_native_post_training.benchmarks.pdf_native.run_arms --help
+# (B) 논문급 6종 정주행: 실제 A100(또는 내 GPU)에서 Base/SFT/PTQ/QAT ± 검색 (GPU, 유료)
+make bench                            # 처음부터 재현 → runs/bench (아래 "재현 3-tier" 참고)
 ```
 
 > (B)의 결과는 [`historical_final/v1/`](benchmarks/pdf_native/historical_final/v1)에 **이미 커밋**돼 있어, GPU 없이 3단계로 바로 확인할 수 있습니다.
+> 파인튜닝 파라미터를 **실제 로드**해 추론하려면 → 아래 **재현 3-tier**의 Tier 2(`ask --hf`)·Tier 3(`make bench`)를 보세요.
 
 ### 3단계 — 질문하면 답이 "짠!" (GPU·키·네트워크 불필요)
 
@@ -90,6 +91,70 @@ ollama serve &                        # 별도 터미널
 ollama pull qwen2.5:7b-instruct
 make ask ARGS='--live -q "4분기 매출이 가장 높았나요?"'
 ```
+
+---
+
+## 🔬 재현 3-tier: 재생(replay) vs HF-로드 vs 처음부터
+
+"이거 목업/JSON 아냐?"에 대한 정직한 답 — **재현 경로가 3개**이고, 목적에 따라 고르세요.
+**Tier 1은 실제 A100 출력의 '녹음 재생'**(지어낸 값 아님, 테스트가 화면=커밋된 raw 예측을 강제), **Tier 2·3은 파인튜닝 파라미터를 진짜 로드해 실시간 추론**합니다.
+
+| Tier | 명령 | 가중치 | 추론 | 필요 | 언제 |
+|---|---|---|---|---|---|
+| **1 재생** | `pdf2llm ask` | 실제 A100 출력(녹음) | 없음(조회) | 0-설정·오프라인 | 즉시 "짠" 체험 |
+| **2 HF-로드** | `pdf2llm ask --hf <repo\|dir>` | **실제 파인튜닝(HF/로컬)** | **실시간 `transformers`** | GPU 권장(또는 인내심) | "목업 아닌" 실추론 |
+| **3 처음부터** | `make bench` (+ `publish-hf`) | 내 GPU가 새로 학습 | 실시간 | 내 GPU(~A100) | 논문급 완전 재현 |
+
+### Tier 2 — 파인튜닝 가중치를 실제 로드해 아무 문장이나 물어보기
+
+`--hf` 는 HuggingFace 저장소 id **또는** 로컬 경로(`make bench` 산출물)를 받아 **그 가중치를 실제로 로드**하고,
+벤치마크와 **동일한** chat 프롬프트·BM25 검색·정답 추출로 **실시간 생성**합니다. 재생/JSON 아님:
+
+```bash
+# 공개된 파인튜닝 모델을 HF에서 바로 로드 (8B는 GPU 권장; 최초 1회 다운로드 후 캐시)
+make ask-hf HF=your-name/pdf2llm-sft-qwen3-8b Q="2024년 연간 매출액은 얼마입니까?"
+# 로컬 학습 산출물로도 동일 (HF 계정 불필요):
+make ask-hf HF=runs/bench/../sft_bf16_seed42 Q="영업이익률은 몇 퍼센트입니까?"
+# closed-book 로 보고 싶으면:
+pdf2llm ask --hf your-name/pdf2llm-sft-qwen3-8b -q "…" --no-retrieval
+```
+
+출력(실측 예 — 작은 모델 CPU 로 실제 생성):
+
+```
+🤖 실시간 추론 — 파인튜닝 가중치를 **실제로 로드**합니다 (재생/JSON 아님)
+📦 모델    : your-name/pdf2llm-sft-qwen3-8b
+🔎 검색    : ON — 관련 문단 4개 주입
+❓ 질문    : 2024년 연간 매출액은 얼마입니까?
+✅ 답변    : 2024년 연간 매출액은 1,250억 원입니다.   (실시간 생성 4.3s)
+📄 근거    : p1-b3(p1), p3-b1(p3), p1-b4(p1), p2-b6(p2)
+```
+
+### Tier 3 — `make bench` 로 처음부터 재현 (내 GPU에서 학습→평가→가중치 생성)
+
+```bash
+make install-workflow                 # 최초 1회
+make bench                            # 6-arm 정주행 → 결과는 runs/bench 에 기록(커밋본 안 건드림)
+#   • 6개 arm 전체(SFT/PTQ/QAT ± 검색)는 CUDA GPU 필요(~A100 1장, 대략 30분).
+#   • GPU 없으면 학습 불가 arm 은 정직하게 not_measured, base 계열만 실행.
+make bench ARGS="--seeds 42 --keep-artifacts"   # 가중치를 지우지 않고 보존(공유용)
+```
+
+### Tier 2를 남들도 쓰게: 파인튜닝 가중치를 HF에 올리기
+
+```bash
+export HF_TOKEN=hf_xxx                 # write 권한 토큰
+# (1) 학습 산출물을 그대로 업로드 (모델 카드는 summary.json 실측값에서 자동 생성)
+make publish-hf MODEL_DIR=<artifacts>/sft_bf16_seed42 REPO=your-name/pdf2llm-sft-qwen3-8b
+#     └ 토큰 없이 미리보기: ARGS="--dry-run"
+# (2) 또는 학습과 동시에 업로드:
+make bench ARGS="--keep-artifacts --push-to-hub your-name/pdf2llm-sft-qwen3-8b"
+# 이후 누구나:  pdf2llm ask --hf your-name/pdf2llm-sft-qwen3-8b -q "…"
+```
+
+> **정직한 참고 (왜 Tier 1이 '녹음 재생'인가):** 최초 A100 정주행의 8B 파인튜닝 체크포인트는 **저장소에 보관돼 있지 않습니다**
+> (VM 반납 + 디스크 절약을 위해 seed별 산출물을 삭제). 그래서 0-설정 경로는 그때의 **실제 출력**을 재생하고,
+> 파라미터를 실제 로드하는 Tier 2를 쓰려면 위 recipe로 **한 번 학습→업로드**하면 됩니다(1회성). 8B 로딩은 GPU(또는 넉넉한 RAM)를 권장합니다.
 
 ---
 
@@ -156,6 +221,9 @@ runs/<run_id>/
 | `demo-replay` | `stages: {... 'report': 'completed'}` (8단계) | `runs/<id>/report.json`, `artifacts/train_sft.jsonl`(26행) |
 | `verify-demo` | `[verify-demo] PASS` | 임시 run-dir(무결성 assert 후 정리) |
 | `ask` | `💡 짠! …`(질문·정답·6개 arm 답 비교) | 없음(커밋된 A100 per-example 결과를 읽어 출력) |
+| `ask --hf <repo\|dir>` | `✅ 답변 : …`(실시간 생성 Ns) | 없음(파인튜닝 가중치를 실제 로드해 실시간 추론) |
+| `publish-hf` | `✅ 업로드 완료 → https://huggingface.co/…` | HF 저장소(가중치 + 자동 모델 카드). `--dry-run` 은 미리보기만 |
+| `bench` | `[run_arms] … measured_arms=[…]` | `runs/bench/`(per_example·summary·report). GPU 필요 |
 | `demo-train-smoke` | 9단계(`train_smoke` 포함) 완료 요약 | `runs/<id>/artifacts/`에 학습 모델 |
 | `build-fixture` | 체크섬·gold 개수 출력 | `public_finance_demo/`의 PDF·`gold_qa.jsonl` 재생성 |
 

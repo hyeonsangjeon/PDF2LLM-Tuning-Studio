@@ -7,7 +7,13 @@
    답을 그대로 **재생(replay)** 해, 같은 질문을 *closed-book* vs *retrieval* 로 나란히 보여줍니다.
    GPU·API 키·네트워크가 전혀 필요 없습니다(커밋된 raw 예측을 읽을 뿐입니다).
 
-2. ``--live`` — 로컬 Ollama로 **임의의 문장**을 실시간 답변(합성 PDF를 근거로). Ollama 데몬만 있으면
+2. ``--hf <repo|dir>`` — **파인튜닝된 가중치를 실제로 로드**해 **임의의 문장**을 실시간 추론합니다.
+   ``<repo|dir>`` 는 HuggingFace 저장소 id(예: ``your-name/pdf2llm-sft-qwen3-8b``) 또는 로컬 경로
+   (예: ``make bench`` 산출물 ``artifacts/sft_bf16_seed42``)입니다. **재생(replay)이 아니라** ``transformers``
+   로 진짜 생성합니다 — 벤치마크와 동일한 chat 프롬프트·BM25 검색·정답 추출을 그대로 씁니다.
+   8B는 GPU(또는 넉넉한 RAM) 권장. 이게 "목업/JSON이 아닌" 경로입니다.
+
+3. ``--live`` — 로컬 Ollama로 **임의의 문장**을 실시간 답변(합성 PDF를 근거로). Ollama 데몬만 있으면
    되고 클라우드·GPU는 필요 없습니다. CI에서는 실행하지 않는 선택 경로입니다.
 
 데이터 출처(1번 경로):
@@ -220,6 +226,8 @@ def _print_answer(qid: str, all_arms: Dict[str, Dict[str, dict]], seed: int) -> 
     print(
         "\n👉 다른 질문:  pdf2llm ask --list   |   "
         "임의 문장 실시간 답변:  pdf2llm ask --live -q \"...\"  (로컬 Ollama)"
+        "\n🤖 파인튜닝 가중치를 실제 로드해 추론:  "
+        "pdf2llm ask --hf <repo|dir> -q \"...\"   (재생 아님)"
     )
     return 0
 
@@ -232,7 +240,7 @@ def _ask_live(question: str, model: str) -> int:
         return 2
     try:
         from pdf_qa.provenance import parse_pdf  # noqa: WPS433
-        from .providers import LiveOllamaProvider, ProviderError
+        from .providers import LiveOllamaProvider
     except Exception as exc:  # noqa: BLE001
         print(f"[ask --live] 의존성 로드 실패: {exc}", file=sys.stderr)
         return 1
@@ -258,6 +266,100 @@ def _ask_live(question: str, model: str) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- --hf (실제 가중치 로드 → 실시간 추론)
+
+def _retrieve_context(question: str, k: int) -> Tuple[str, List[Tuple[object, str]]]:
+    """벤치마크와 동일한 지식베이스(공개 회귀셋의 문서 근거)에서 BM25로 문맥을 검색."""
+    from workflows.pdf_native_post_training.benchmarks.pdf_native import run_arms as RA
+    from pdf_qa.retrieval import BM25Index, Retriever
+
+    eval_rows = RA.load_eval_rows()
+    corpus = RA.build_eval_corpus(eval_rows)
+    by_id = {c["element_id"]: c for c in corpus}
+    retriever = Retriever(BM25Index.build(corpus))
+    hits = retriever.search(question, k)
+    parts, retrieved = [], []
+    for h in hits:
+        el = by_id.get(h.element_id, {})
+        txt = el.get("text", "")
+        parts.append(txt)
+        retrieved.append((el.get("page"), h.element_id))
+    return "\n".join(f"- {p}" for p in parts), retrieved
+
+
+def _ask_hf(question: str, model_ref: str, *, use_retrieval: bool, max_new_tokens: int) -> int:
+    """HF 저장소(또는 로컬 경로)에서 파인튜닝 가중치를 로드해 질문에 **실시간 추론**으로 답한다.
+
+    재생이 아니라 실제 ``model.generate`` — 벤치마크와 동일한 프롬프트/검색/추출을 재사용한다.
+    """
+    if not question:
+        print("[ask --hf] -q/--question 으로 질문을 주세요.", file=sys.stderr)
+        return 2
+    try:
+        import torch  # noqa: WPS433
+        from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: F401,WPS433
+    except Exception as exc:  # noqa: BLE001
+        print(f"[ask --hf] transformers/torch 가 필요합니다: {exc}", file=sys.stderr)
+        print('  → pip install -e ".[workflow,train]"  로 설치하세요.', file=sys.stderr)
+        return 1
+
+    from workflows.pdf_native_post_training.benchmarks.pdf_native import run_arms as RA
+    from quantization.v2_pipeline import extract_answer
+
+    context, retrieved = ("", [])
+    if use_retrieval:
+        try:
+            context, retrieved = _retrieve_context(question, RA.RETRIEVAL_K)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[ask --hf] 검색 준비 실패(무맥락으로 진행): {exc}", file=sys.stderr)
+
+    on_cuda = torch.cuda.is_available()
+    bar = "═" * 66
+    print(bar)
+    print("🤖 실시간 추론 — 파인튜닝 가중치를 **실제로 로드**합니다 (재생/JSON 아님)")
+    print(f"📦 모델    : {model_ref}  (HF 저장소 또는 로컬 경로)")
+    print(f"🖥  장치    : {'GPU/CUDA' if on_cuda else 'CPU (8B는 매우 느릴 수 있음)'}")
+    print(f"🔎 검색    : {'ON — 관련 문단 %d개 주입' % len(retrieved) if use_retrieval else 'OFF (closed-book)'}")
+    print("⏳ 가중치 로딩 중… (8B는 최초 1회 다운로드로 수 분 소요될 수 있음)")
+    try:
+        model, tok = RA.load_model_and_tok(model_ref)
+    except Exception as exc:  # noqa: BLE001
+        print(f"\n[ask --hf] 모델 로드 실패: {exc}", file=sys.stderr)
+        print("  → --hf 값이 올바른 HF repo id(예: your-name/pdf2llm-sft-qwen3-8b) 또는", file=sys.stderr)
+        print("     로컬 경로(예: artifacts/sft_bf16_seed42)인지, 접근 권한/네트워크를 확인하세요.", file=sys.stderr)
+        return 1
+
+    cfg = RA.make_config(getattr(model.config, "_name_or_path", model_ref) or model_ref, smoke=False)
+    cfg["eval"]["max_new_tokens"] = int(max_new_tokens)
+    cfg["eval"]["batch_size"] = 1
+    gfn = RA.model_generate_fn(cfg, model, tok)
+
+    import time as _time
+    t0 = _time.time()
+    try:
+        raw = gfn([{"question": question, "context": context}])[0]
+    except Exception as exc:  # noqa: BLE001
+        print(f"\n[ask --hf] 생성 실패: {exc}", file=sys.stderr)
+        print("  → instruct 계열(예: Qwen) 모델인지(=chat_template 존재) 확인하세요.", file=sys.stderr)
+        return 1
+    dt = _time.time() - t0
+    answer = extract_answer(raw or "")
+
+    print(bar)
+    print(f"❓ 질문    : {question}")
+    print(f"✅ 답변    : {answer or '(빈 응답)'}")
+    print(f"   (실시간 생성 {dt:.1f}s · max_new_tokens={max_new_tokens})")
+    if use_retrieval and retrieved:
+        cites = ", ".join(f"{eid}(p{pg})" if pg is not None else str(eid) for pg, eid in retrieved)
+        print(f"📄 근거    : {cites}")
+    print(bar)
+    print(
+        "\n(이 경로는 파인튜닝 파라미터를 로드한 **실제 추론**입니다. "
+        "0-설정 오프라인 재생은 `pdf2llm ask`, 처음부터 재현은 `make bench` 를 보세요.)"
+    )
+    return 0
+
+
 # ---------------------------------------------------------------- main
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -269,9 +371,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--qa-id", help="정확한 qa_id (예: q000)")
     ap.add_argument("--seed", type=int, default=42, help="표시할 seed (기본 42)")
     ap.add_argument("--list", action="store_true", help="사용 가능한 질문 목록 출력")
+    ap.add_argument("--hf", metavar="REPO_OR_DIR", default=None,
+                    help="파인튜닝 가중치를 실제 로드해 실시간 추론 (HF repo id 또는 로컬 경로)")
+    ap.add_argument("--no-retrieval", action="store_true",
+                    help="--hf 시 검색을 끄고 closed-book 로 추론")
+    ap.add_argument("--max-new-tokens", type=int, default=64, help="--hf 생성 토큰 상한 (기본 64)")
     ap.add_argument("--live", action="store_true", help="로컬 Ollama로 임의 문장 실시간 답변")
     ap.add_argument("--model", default="qwen2.5:7b-instruct", help="--live 시 Ollama 모델 태그")
     args = ap.parse_args(argv)
+
+    if args.hf:
+        return _ask_hf(args.question or "", args.hf,
+                       use_retrieval=not args.no_retrieval,
+                       max_new_tokens=args.max_new_tokens)
 
     if args.live:
         return _ask_live(args.question or "", args.model)
