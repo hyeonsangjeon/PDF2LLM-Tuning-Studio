@@ -1,0 +1,41 @@
+{
+  "category_counts": {
+    "numeric_exact": 140,
+    "prompt_injection": 20,
+    "table_lookup": 20,
+    "unanswerable": 20
+  },
+  "corpus_id": "pdf_native_train_corpus/v1",
+  "families": [
+    "train_corp_00",
+    "train_corp_01",
+    "train_corp_02",
+    "train_corp_03",
+    "train_corp_04",
+    "train_corp_05",
+    "train_corp_06",
+    "train_corp_07",
+    "train_corp_08",
+    "train_corp_09",
+    "train_corp_10",
+    "train_corp_11",
+    "train_corp_12",
+    "train_corp_13",
+    "train_corp_14",
+    "train_corp_15",
+    "train_corp_16",
+    "train_corp_17",
+    "train_corp_18",
+    "train_corp_19"
+  ],
+  "generator_seed": 20240805,
+  "leakage_audit_vs_eval": {
+    "disjoint": true,
+    "intersection_size": 0,
+    "n_families": 22
+  },
+  "license": "CC-BY-4.0 (fully synthetic; no private data)",
+  "n_answerable": 180,
+  "n_examples": 200,
+  "purpose": "Teach stable behaviors (citation, concise numeric/unit answers, abstention on missing facts, prompt-injection resistance). Mutable eval facts are NOT taught — retrieval owns those."
+}
