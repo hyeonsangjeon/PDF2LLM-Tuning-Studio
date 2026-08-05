@@ -118,15 +118,35 @@ def test_review_status_not_faked_human():
 
 
 # --------------------------------------------------------------------------- benchmark.yaml contract
-def test_benchmark_yaml_arms_all_planned():
+def test_benchmark_yaml_arms_all_measured_and_backed_by_raw():
+    """Arms are now `measured` (real A100 run). Guard against *fabricated* results: every arm
+    must be backed by committed raw per_example data, and summary.json must be a real
+    (non-smoke) run whose aggregate regenerates from that raw data."""
+    import glob, json
+    from evaluation import pdf_native as PN
     with open(os.path.join(_DIR, "benchmark.yaml"), encoding="utf-8") as fh:
         b = yaml.safe_load(fh)
     arms = {a["id"]: a for a in b["experiment_arms"]}
     assert set(arms) == {"base_bf16", "sft_bf16", "sft_int4_ptq", "sft_int4_qat",
                          "base_bf16_retrieval", "sft_bf16_retrieval"}
-    assert all(a["status"] == "planned" for a in arms.values())  # no fabricated results
+    assert all(a["status"] == "measured" for a in arms.values())
     # retrieval baseline present (spec: not optional)
     assert "base_bf16_retrieval" in arms and "sft_bf16_retrieval" in arms
+    # every arm is backed by committed raw per_example data (not fabricated numbers)
+    v1 = os.path.join(_DIR, "historical_final", "v1")
+    summary = json.load(open(os.path.join(v1, "summary.json"), encoding="utf-8"))
+    assert summary["smoke"] is False and summary["base_model"] == "Qwen/Qwen3-8B"
+    n_rows = len(_regression())
+    for arm in arms:
+        files = sorted(glob.glob(os.path.join(v1, "per_example", f"{arm}_seed*.jsonl")))
+        assert files, f"arm {arm} has no committed raw per_example data"
+        recs = [json.loads(l) for l in open(files[0], encoding="utf-8")]
+        assert len(recs) == n_rows, f"{arm}: {len(recs)} records != {n_rows} eval rows"
+        assert summary["arms"][arm]["status"] == "measured"
+    # summary aggregate must regenerate from raw (honesty contract: never hand-typed)
+    recs = [json.loads(l) for l in
+            open(os.path.join(v1, "per_example", "sft_bf16_retrieval_seed42.jsonl"), encoding="utf-8")]
+    assert abs(PN.aggregate(recs, k=4)["f1"] - 0.4442) < 0.02
 
 
 def test_benchmark_yaml_metric_contract_complete():
@@ -164,18 +184,32 @@ def test_fairness_contract_present():
 
 
 # --------------------------------------------------------------------------- acceptance pre-registration
-def test_acceptance_is_preregistered_and_pending():
+def test_acceptance_preregistered_thresholds_unchanged_after_eval():
+    """After the run, evaluation_status flips to `evaluated` but the pre-registered THRESHOLDS
+    must be byte-for-byte unchanged (moving a goalpost after seeing results is forbidden)."""
     with open(os.path.join(_DIR, "acceptance.yaml"), encoding="utf-8") as fh:
         acc = yaml.safe_load(fh)
     assert acc["pre_registered"] is True
     assert acc["frozen_before_run"] is True
-    assert acc["evaluation_status"] == "pending"   # no arm run yet
-    # hard gates include leakage-zero-overlap and pii==0
+    assert acc["evaluation_status"] == "evaluated"   # arms have been run
+    # the frozen thresholds must be exactly the pre-registered values (not edited post-hoc)
+    assert acc["quality_criteria"]["sft_improves_over_base"]["threshold"] == {"delta_gte": 0.03}
+    assert acc["quality_criteria"]["abstention_on_unanswerable"]["threshold"] == {"gte": 0.90}
+    assert acc["quality_criteria"]["citation_span_accuracy"]["threshold"] == {"gte": 0.80}
+    assert acc["quality_criteria"]["groundedness"]["threshold"] == {"gte": 0.85}
+    # honest verdicts recorded (including FAILs) — no fabricated all-pass
+    verdicts = {k: v.get("status") for k, v in acc["quality_criteria"].items()}
+    assert verdicts["sft_improves_over_base"] == "fail"       # closed-book SFT != fact injection
+    assert verdicts["groundedness"] == "pass"
+    # hard gates include leakage-zero-overlap and pii==0, and passed on real data
     hg = acc["hard_gates"]
     assert hg["leakage_zero_overlap"]["threshold"] == {"eq": 0}
     assert hg["pii_leakage"]["threshold"] == {"eq": 0.0}
+    assert hg["pii_leakage"]["status"] == "pass"
     # retrieval necessity gate exists (spec: not optional)
     assert "mutable_fact_retrieval_beats_closed_book" in acc["retrieval_criteria"]
+    # the practical closed-book fine-tuning effect is NOT claimed (honest)
+    assert acc["retrieval_criteria"]["practical_effect_claim_allowed"]["status"] == "not_allowed"
 
 
 # --------------------------------------------------------------------------- checksums integrity

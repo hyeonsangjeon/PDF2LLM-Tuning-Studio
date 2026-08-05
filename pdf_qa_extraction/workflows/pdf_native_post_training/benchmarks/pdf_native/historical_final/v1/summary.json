@@ -1,0 +1,378 @@
+{
+  "arms": {
+    "base_bf16": {
+      "metrics": {
+        "citation_span_accuracy": {
+          "mean": 0.0,
+          "n": 1,
+          "std": 0.0
+        },
+        "em": {
+          "mean": 0.0,
+          "n": 1,
+          "std": 0.0
+        },
+        "f1": {
+          "mean": 0.2146,
+          "n": 1,
+          "std": 0.0
+        },
+        "groundedness_rate": {
+          "mean": 1.0,
+          "n": 1,
+          "std": 0.0
+        },
+        "peak_vram_gb": {
+          "mean": 15.8127,
+          "n": 1,
+          "std": 0.0
+        },
+        "pii_leakage_rate": {
+          "mean": 0.0,
+          "n": 1,
+          "std": 0.0
+        },
+        "schema_validity_rate": {
+          "mean": 1.0,
+          "n": 1,
+          "std": 0.0
+        },
+        "size_gb": "not_measured"
+      },
+      "n_seeds": 1,
+      "status": "measured"
+    },
+    "base_bf16_retrieval": {
+      "metrics": {
+        "citation_span_accuracy": {
+          "mean": 0.4516,
+          "n": 1,
+          "std": 0.0
+        },
+        "em": {
+          "mean": 0.0,
+          "n": 1,
+          "std": 0.0
+        },
+        "f1": {
+          "mean": 0.3332,
+          "n": 1,
+          "std": 0.0
+        },
+        "groundedness_rate": {
+          "mean": 0.9167,
+          "n": 1,
+          "std": 0.0
+        },
+        "peak_vram_gb": {
+          "mean": 16.0972,
+          "n": 1,
+          "std": 0.0
+        },
+        "pii_leakage_rate": {
+          "mean": 0.0,
+          "n": 1,
+          "std": 0.0
+        },
+        "schema_validity_rate": {
+          "mean": 1.0,
+          "n": 1,
+          "std": 0.0
+        },
+        "size_gb": "not_measured"
+      },
+      "n_seeds": 1,
+      "status": "measured"
+    },
+    "sft_bf16": {
+      "metrics": {
+        "citation_span_accuracy": {
+          "mean": 0.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "em": {
+          "mean": 0.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "f1": {
+          "mean": 0.2176,
+          "n": 3,
+          "std": 0.0036
+        },
+        "groundedness_rate": {
+          "mean": 0.9722,
+          "n": 3,
+          "std": 0.0
+        },
+        "peak_vram_gb": {
+          "mean": 32.2371,
+          "n": 3,
+          "std": 0.9461
+        },
+        "pii_leakage_rate": {
+          "mean": 0.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "schema_validity_rate": {
+          "mean": 1.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "size_gb": {
+          "mean": 15.2713,
+          "n": 3,
+          "std": 0.0
+        }
+      },
+      "n_seeds": 3,
+      "status": "measured"
+    },
+    "sft_bf16_retrieval": {
+      "metrics": {
+        "citation_span_accuracy": {
+          "mean": 0.4516,
+          "n": 3,
+          "std": 0.0
+        },
+        "em": {
+          "mean": 0.2258,
+          "n": 3,
+          "std": 0.0
+        },
+        "f1": {
+          "mean": 0.4442,
+          "n": 3,
+          "std": 0.0011
+        },
+        "groundedness_rate": {
+          "mean": 0.8611,
+          "n": 3,
+          "std": 0.0
+        },
+        "peak_vram_gb": {
+          "mean": 32.5221,
+          "n": 3,
+          "std": 0.9461
+        },
+        "pii_leakage_rate": {
+          "mean": 0.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "schema_validity_rate": {
+          "mean": 1.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "size_gb": {
+          "mean": 15.2713,
+          "n": 3,
+          "std": 0.0
+        }
+      },
+      "n_seeds": 3,
+      "status": "measured"
+    },
+    "sft_int4_ptq": {
+      "metrics": {
+        "citation_span_accuracy": {
+          "mean": 0.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "em": {
+          "mean": 0.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "f1": {
+          "mean": 0.2222,
+          "n": 3,
+          "std": 0.0032
+        },
+        "groundedness_rate": {
+          "mean": 0.9537,
+          "n": 3,
+          "std": 0.0131
+        },
+        "peak_vram_gb": {
+          "mean": 26.2104,
+          "n": 3,
+          "std": 0.9441
+        },
+        "pii_leakage_rate": {
+          "mean": 0.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "schema_validity_rate": {
+          "mean": 1.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "size_gb": {
+          "mean": 5.7705,
+          "n": 3,
+          "std": 0.0
+        }
+      },
+      "n_seeds": 3,
+      "status": "measured"
+    },
+    "sft_int4_qat": {
+      "metrics": {
+        "citation_span_accuracy": {
+          "mean": 0.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "em": {
+          "mean": 0.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "f1": {
+          "mean": 0.2146,
+          "n": 3,
+          "std": 0.0
+        },
+        "groundedness_rate": {
+          "mean": 1.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "peak_vram_gb": {
+          "mean": 26.2183,
+          "n": 3,
+          "std": 0.9441
+        },
+        "pii_leakage_rate": {
+          "mean": 0.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "schema_validity_rate": {
+          "mean": 1.0,
+          "n": 3,
+          "std": 0.0
+        },
+        "size_gb": {
+          "mean": 5.7705,
+          "n": 3,
+          "std": 0.0
+        }
+      },
+      "n_seeds": 3,
+      "status": "measured"
+    }
+  },
+  "base_model": "Qwen/Qwen3-8B",
+  "benchmark_set_id": "pdf_native_public_regression/v1",
+  "comparisons": {
+    "retrieval_effect_on_base": {
+      "arms": [
+        "base_bf16_retrieval",
+        "base_bf16"
+      ],
+      "em": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "delta": 0.0,
+        "metric": "em",
+        "n_pairs": 31,
+        "significant": false
+      },
+      "f1": {
+        "ci95": [
+          0.0514,
+          0.1983
+        ],
+        "delta": 0.1186,
+        "metric": "f1",
+        "n_pairs": 31,
+        "significant": true
+      }
+    },
+    "sft_retrieval_vs_base_retrieval": {
+      "arms": [
+        "sft_bf16_retrieval",
+        "base_bf16_retrieval"
+      ],
+      "em": {
+        "ci95": [
+          0.0968,
+          0.3871
+        ],
+        "delta": 0.2258,
+        "metric": "em",
+        "n_pairs": 31,
+        "significant": true
+      },
+      "f1": {
+        "ci95": [
+          0.0558,
+          0.1804
+        ],
+        "delta": 0.1117,
+        "metric": "f1",
+        "n_pairs": 31,
+        "significant": true
+      }
+    },
+    "sft_vs_base_closed_book": {
+      "arms": [
+        "sft_bf16",
+        "base_bf16"
+      ],
+      "em": {
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "delta": 0.0,
+        "metric": "em",
+        "n_pairs": 31,
+        "significant": false
+      },
+      "f1": {
+        "ci95": [
+          0.0,
+          0.0242
+        ],
+        "delta": 0.0081,
+        "metric": "f1",
+        "n_pairs": 31,
+        "significant": false
+      }
+    }
+  },
+  "cuda": true,
+  "eval_set_sha256": "ad419f5fe3115aebb804645a017746838ac1b5bd4c4dc39a04f15926a0a38a07",
+  "eval_system_prompt_sha256": "42f5761463e325203f4ea6a6b48087688db8e77f3a4ed412cc8557945bc06fa5",
+  "generated_by": "run_arms.py",
+  "honesty_notes": [
+    "Aggregate is regenerated from per_example/*.jsonl (never hand-typed).",
+    "Public frozen regression fixture (small N); confidence intervals are wide by design.",
+    "Closed-book arms receive NO document context -> low answerability is expected and honest.",
+    "'fine-tuning effect' is only claimed if the base arm is present AND the paired CI excludes 0."
+  ],
+  "retriever": {
+    "config_hash": "4b1db1efbde540b02ee144641baad30255cffa8f82504fddeb27dc71631e381f",
+    "k": 4,
+    "kind": "bm25",
+    "n_docs": 15
+  },
+  "role": "historical_final/v1 (public once published)",
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "smoke": false,
+  "train_corpus_sha256": "8474895dd1c5e236eb2b5e0a6defd21470bb767949b6daeaa7b4602832ae9a54"
+}

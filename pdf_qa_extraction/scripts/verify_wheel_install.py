@@ -56,7 +56,11 @@ def main() -> int:
         venv.create(env_dir, with_pip=True, system_site_packages=True)
         vpy = os.path.join(env_dir, "bin", "python")
         vbin = os.path.join(env_dir, "bin")
-        _run([vpy, "-m", "pip", "install", "-q", "--no-deps", wheel])
+        # Install under the same neutral env used for the checks below: a stray
+        # PYTHONPATH pointing at the source tree would make pip treat the source
+        # (or its egg-info) as "already satisfied" and silently no-op the wheel
+        # install, so the fixture/schema checks would then fail confusingly.
+        _run([vpy, "-m", "pip", "install", "-q", "--no-deps", wheel], env=child_env)
 
         # 3) schemas + fixture are packaged (loaded from site-packages, not source).
         workdir = os.path.join(tmp, "work")

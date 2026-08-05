@@ -8,8 +8,9 @@
 # STATUS: public frozen regression fixture. Input + label + evidence are all committed,
 # so this set is deliberately NOT called "sealed" or "unseen". A protected current-final
 # store is not operated here -> per spec it is downgraded to "public frozen regression".
-# Model-comparison arms are `planned` (they require the GPU workflow); until real results
-# exist the workflow README keeps this benchmark `planned`.
+# Model-comparison arms are now `measured`: all 6 arms were run for real on an A100 (Qwen3-8B,
+# 3 seeds) and the raw per-example results are committed under historical_final/v1/. The
+# `final` protected slice stays `planned` (never operated).
 
 benchmark_set_id: pdf_native_public_regression/v1
 role: public_frozen_regression
@@ -92,17 +93,32 @@ metrics:
   - failure_taxonomy            # wrong examples + reason visible directly in the report
 
 # ------------------------------------------------------------------ experiment arms
-# Same protected/current-final set, same contract. ALL arms are `planned` (GPU workflow).
-# A retrieval baseline is NOT optional: if we cannot show whether closed-book SFT beats
-# reading the latest source (esp. for mutable facts), we do NOT claim a practical
-# "PDF fine-tuning effect".
+# Same protected/current-final set, same contract. All 6 arms are `measured` — run for real
+# on an A100 (Qwen3-8B, seeds 42/43/44); raw per-example + auto summary live in
+# historical_final/v1/. A retrieval baseline is NOT optional: if we cannot show whether
+# closed-book SFT beats reading the latest source (esp. for mutable facts), we do NOT claim
+# a practical "PDF fine-tuning effect". (Result: closed-book SFT did NOT beat Base — the
+# significant gains come from retrieval; see historical_final/v1/report.md.)
 experiment_arms:
-  - {id: base_bf16,              desc: untuned Base BF16,                 status: planned}
-  - {id: sft_bf16,               desc: SFT BF16,                          status: planned}
-  - {id: sft_int4_ptq,           desc: SFT INT4 PTQ,                      status: planned}
-  - {id: sft_int4_qat,           desc: SFT INT4 QAT,                      status: planned}
-  - {id: base_bf16_retrieval,    desc: Base BF16 + identical retrieval,   status: planned}
-  - {id: sft_bf16_retrieval,     desc: SFT BF16 + identical retrieval,    status: planned}
+  - {id: base_bf16,              desc: untuned Base BF16,                 status: measured}
+  - {id: sft_bf16,               desc: SFT BF16,                          status: measured}
+  - {id: sft_int4_ptq,           desc: SFT INT4 PTQ,                      status: measured}
+  - {id: sft_int4_qat,           desc: SFT INT4 QAT,                      status: measured}
+  - {id: base_bf16_retrieval,    desc: Base BF16 + identical retrieval,   status: measured}
+  - {id: sft_bf16_retrieval,     desc: SFT BF16 + identical retrieval,    status: measured}
+
+# ------------------------------------------------------------------ committed results
+results:
+  store: historical_final/v1/                 # raw per_example/*.jsonl + auto summary.json + report.md
+  base_model: Qwen/Qwen3-8B
+  seeds: [42, 43, 44]                          # base arms are seed-invariant (greedy) -> measured once
+  hardware: 1x A100 80GB (Standard_NC24ads_A100_v4, japaneast); released after the run
+  aggregate_source: per_example/*.jsonl        # summary.json is regenerated from raw, never hand-typed
+  headline:
+    - closed-book SFT vs Base: ΔF1 +0.003 (95% CI [0.0, 0.024]) -> NOT significant.
+    - retrieval effect on Base: ΔF1 +0.119 (95% CI [0.051, 0.198]) -> significant.
+    - SFT+retrieval vs Base+retrieval: ΔF1 +0.112 (95% CI [0.056, 0.180]) -> significant.
+    - INT4 (PTQ/QAT) F1 ~= BF16 at 5.77GB vs 15.27GB (2.65x smaller); PII-leak 0, schema 1.0.
 
 # ------------------------------------------------------------------ fairness contract
 fairness_contract:

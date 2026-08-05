@@ -41,7 +41,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _CORPUS = os.path.normpath(os.path.join(_HERE, "..", "..", "public_finance_demo"))
 OUT_ROOT = os.path.join(_HERE, "historical_final", "v1")
 
-DEFAULT_BASE = "Qwen/Qwen2.5-7B-Instruct"
+DEFAULT_BASE = "Qwen/Qwen3-8B"  # 8B-class, single-A100 trainable; validated on Korean QA
 SMOKE_BASE = "Qwen/Qwen2.5-0.5B-Instruct"
 DEFAULT_SEEDS = (42, 43, 44)
 RETRIEVAL_K = 4
@@ -237,7 +237,9 @@ def make_config(base_model: str, *, smoke: bool) -> Dict[str, Any]:
         "ptq": {"group_size": 128},
         "qat": {"group_size": 128, "max_steps": 2 if smoke else 80, "learning_rate": 2e-5,
                 "per_device_batch_size": 8, "grad_accum": 2, "save_steps": 100000,
-                "optim": "adamw_torch", "gradient_checkpointing": True},
+                "save_strategy": "no",
+                "optim": "adamw_torch" if smoke else "adamw_8bit",
+                "gradient_checkpointing": True},
         "eval": {"max_new_tokens": 40, "batch_size": 8 if smoke else 16, "ppl_samples": 0},
     }
 
@@ -307,7 +309,7 @@ def _measure(model_dir: Optional[str]) -> Dict[str, Any]:
 
 # --------------------------------------------------------------------------- orchestration
 def run(base_model: str, seeds: Sequence[int], *, smoke: bool, artifacts_dir: str,
-        out_dir: str = OUT_ROOT) -> Dict[str, Any]:
+        out_dir: str = OUT_ROOT, keep_artifacts: bool = False) -> Dict[str, Any]:
     os.makedirs(out_dir, exist_ok=True)
     per_ex_dir = os.path.join(out_dir, "per_example")
     os.makedirs(per_ex_dir, exist_ok=True)
@@ -384,6 +386,14 @@ def run(base_model: str, seeds: Sequence[int], *, smoke: bool, artifacts_dir: st
         c_dir = os.path.join(artifacts_dir, f"sft_int4_qat_seed{seed}")
         V.train_method_c(cfg, a_dir, c_dir, seed)
         _eval_arm("sft_int4_qat", c_dir, seed, False)
+
+        # model weights are never committed (only per_example/summary/report are);
+        # drop this seed's artifacts so peak disk stays ~one seed, not all seeds.
+        if not keep_artifacts:
+            import glob as _glob
+            import shutil as _shutil
+            for d in _glob.glob(os.path.join(artifacts_dir, f"*seed{seed}*")):
+                _shutil.rmtree(d, ignore_errors=True)
 
     return _finalize(out_dir, base_model, seeds, results, per_example_store,
                      index, cfg, smoke=smoke, cuda=True)
@@ -521,13 +531,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="where trained/quantized model weights are written (NEVER committed; "
                          "defaults to a temp dir outside the repo).")
     ap.add_argument("--out-dir", default=OUT_ROOT)
+    ap.add_argument("--keep-artifacts", action="store_true",
+                    help="keep per-seed model weights (default: delete after each seed to bound disk).")
     args = ap.parse_args(argv)
 
     base = args.base_model or (SMOKE_BASE if args.smoke else DEFAULT_BASE)
     seeds = tuple(int(s) for s in args.seeds.split(",")) if args.seeds else \
         ((0,) if args.smoke else DEFAULT_SEEDS)
     os.makedirs(args.artifacts_dir, exist_ok=True)
-    m = run(base, seeds, smoke=args.smoke, artifacts_dir=args.artifacts_dir, out_dir=args.out_dir)
+    m = run(base, seeds, smoke=args.smoke, artifacts_dir=args.artifacts_dir, out_dir=args.out_dir,
+            keep_artifacts=args.keep_artifacts)
     measured = [a for a, v in m["arms"].items() if v.get("status") == "measured"]
     print(f"[run_arms] base={base} seeds={list(seeds)} cuda={m['cuda']} "
           f"measured_arms={measured}")

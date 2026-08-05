@@ -1,14 +1,18 @@
 # Pre-registered acceptance criteria — PDF-native benchmark (spec P1-5)
 #
-# These success thresholds are FROZEN BEFORE any experiment arm is run (pre-registration).
-# No arm has been evaluated yet, so every criterion below is `pending`. Editing a threshold
-# after seeing results would invalidate pre-registration — add a new versioned criterion set
-# instead. The workflow README stays `planned` until real per-example results exist.
+# These success thresholds were FROZEN BEFORE any experiment arm was run (pre-registration).
+# The arms have now been evaluated (Qwen3-8B, seeds 42/43/44, 1x A100). Per pre-registration
+# rules we DID NOT edit any threshold after seeing results — we only record the observed value
+# and a pass/fail verdict below. Some criteria FAIL honestly (that is the point of
+# pre-registration): closed-book SFT did not inject facts, and closed-book arms cannot cite a
+# context they were never given. The real signal is the retrieval comparison. Full numbers:
+# historical_final/v1/{summary.json,report.md}.
 
 benchmark_set_id: pdf_native_public_regression/v1
 pre_registered: true
 frozen_before_run: true
-evaluation_status: pending          # no arm run yet; all criteria below are un-evaluated
+evaluation_status: evaluated         # arms run; thresholds unchanged, observed values recorded below
+evaluated_on: {base_model: Qwen/Qwen3-8B, seeds: [42, 43, 44], hardware: 1x A100 80GB, released: true}
 eval_slice: dev + regression (public frozen regression); protected final = planned
 
 # Deterministic owner-reviewed criteria are PRIMARY. An LLM judge may be used only as a
@@ -22,21 +26,28 @@ hard_gates:
     metric: leakage_audit.intersection_size
     threshold: {eq: 0}
     rationale: publish fails unless family + source-span 0-overlap is proven.
+    status: pass                     # proven by evaluation.pdf_native.assert_no_split_leakage (test).
   no_final_pre_read:
     metric: final_access_log.pre_read_events
     threshold: {eq: 0}
     rationale: any pre-read of protected input/label before the release job fails publish.
+    status: not_applicable           # no protected `final` slice is operated (it stays `planned`).
   pii_leakage:
     metric: pii_leakage_rate
     threshold: {eq: 0.0}
     rationale: canary PII must never surface in any arm's output.
+    observed: {pii_leakage_rate_all_arms: 0.0}
+    status: pass
   schema_validity:
     metric: schema_validity_rate
     threshold: {gte: 0.99}
+    observed: {schema_validity_rate_all_arms: 1.0}
+    status: pass
   no_sealed_claim_without_protected_label:
     metric: claims.uses_sealed_or_unseen
     threshold: {eq: false}
     rationale: cannot claim `sealed`/`unseen` without a real protected label store.
+    status: pass                     # benchmark is labeled public_frozen_regression, never sealed/unseen.
 
 # ------------------------------------------------------------------ quality criteria (per arm)
 # Compared on the SAME set/contract; reported as 3-seed mean±std + paired bootstrap CI.
@@ -45,27 +56,35 @@ quality_criteria:
     compare: [sft_bf16, base_bf16]
     metric: token_f1
     threshold: {delta_gte: 0.03}     # SFT BF16 must beat untuned Base by >= 3 F1
-    status: pending
+    observed: {delta_f1: 0.003, ci95: [0.0, 0.024], significant: false}
+    status: fail                     # closed-book SFT on disjoint train families does NOT inject
+                                     # eval facts; the real effect appears only WITH retrieval.
   qat_recovers_ptq_gap:
     compare: [sft_int4_qat, sft_int4_ptq, sft_bf16]
     metric: token_f1
     threshold: {recovered_fraction_gte: 0.5}  # QAT recovers >=50% of the PTQ->BF16 F1 gap
-    status: pending
+    observed: {bf16_f1: 0.2176, ptq_f1: 0.2222, qat_f1: 0.2146}
+    status: not_applicable           # PTQ F1 >= BF16 F1 here (no measurable PTQ degradation on
+                                     # this small closed-book slice), so there is no gap to recover.
   abstention_on_unanswerable:
     arm: sft_bf16
     metric: abstention_recall
     threshold: {gte: 0.90}
-    status: pending
+    observed: {abstention_recall: 1.0}
+    status: pass
   citation_span_accuracy:
     arm: sft_bf16
     metric: citation_span_accuracy
     threshold: {gte: 0.80}
-    status: pending
+    observed: {citation_span_accuracy: 0.0, on_retrieval_arm_sft_bf16_retrieval: 0.4516}
+    status: fail                     # closed-book arm has NO context to cite by design; this metric
+                                     # is only meaningful on the retrieval arms (0.45 there).
   groundedness:
     arm: sft_bf16
     metric: groundedness_rate
     threshold: {gte: 0.85}
-    status: pending
+    observed: {groundedness_rate: 0.9722}
+    status: pass
 
 # ------------------------------------------------------------------ retrieval necessity (spec)
 # A retrieval baseline is not optional. The "practical PDF fine-tuning effect" claim is only
@@ -77,12 +96,18 @@ retrieval_criteria:
     slice: regression   # mutable finance_facts (effective_from/until, supersedes)
     threshold: {delta_gte: 0.0}   # if closed-book SFT does NOT beat Base+retrieval on mutable
                                   # facts, do NOT claim a practical fine-tuning effect.
-    status: pending
+    observed: {base_retrieval_numeric_exact: 0.0, sft_closed_book_numeric_exact: 0.0, delta: 0.0}
+    status: pass_but_uninformative  # tie at 0.0: the mutable-fact numeric slice (N=10, recall@k~0.42)
+                                    # is unsolved by ALL arms, so this tie carries little signal.
   practical_effect_claim_allowed:
     requires: [mutable_fact_retrieval_beats_closed_book, sft_improves_over_base]
-    status: pending
+    status: not_allowed             # sft_improves_over_base FAILED (closed-book) -> we do NOT claim
+                                    # a practical closed-book "PDF fine-tuning effect". The honest,
+                                    # supported claim is: retrieval + SFT (open-book) beats Base+
+                                    # retrieval significantly (ΔF1 +0.112, CI [0.056, 0.180]).
 
 # ------------------------------------------------------------------ regression tolerance
 regression_tolerance:
   dev_vs_historical_final_max_f1_drop: 0.02   # once a historical_final/v1 is published
-  status: pending
+  status: baseline_established   # historical_final/v1 is now the reference; future runs are
+                                # compared against it (a >0.02 F1 drop on dev fails the gate).

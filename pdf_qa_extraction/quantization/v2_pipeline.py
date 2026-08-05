@@ -320,6 +320,7 @@ def train_method_c(cfg: Dict[str, Any], a_dir: str, c_dir: str, seed: int,
         gradient_accumulation_steps=int(qcfg["grad_accum"]), learning_rate=float(qcfg["learning_rate"]),
         max_steps=int(qcfg["max_steps"]), warmup_ratio=0.03, logging_steps=20, seed=int(seed),
         bf16=True, optim=qcfg.get("optim", "adamw_8bit"), gradient_checkpointing=False,
+        save_strategy=qcfg.get("save_strategy", "steps"),
         save_steps=int(qcfg.get("save_steps", 150)), save_total_limit=2,
         report_to="none", logging_first_step=True)
     trainer = Trainer(model=model, args=args, train_dataset=train_ds,

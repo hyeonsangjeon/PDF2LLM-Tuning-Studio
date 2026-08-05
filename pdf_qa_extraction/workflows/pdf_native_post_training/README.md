@@ -250,14 +250,38 @@ python -m workflows.pdf_native_post_training.report \
 테스트: `tests/test_benchmark_pipeline.py`(스키마·데모 카운트·`not_measured` 전파),
 `tests/test_report.py`(Pareto·feasibility·`no_feasible_candidate`·rate-card 비용·10-section·README 일치).
 
-## 📐 PDF-native 동일-계약 벤치마크 (public frozen regression) — `planned`
+## 📐 PDF-native 동일-계약 벤치마크 (public frozen regression) — `results`
 
 KorQuAD quantization 벤치마크(고정 외부 QA)와 **분리된**, 합성 금융 PDF에서 시작해
 extraction→dataset→SFT→PTQ/QAT→serving까지 **하나의 metric 계약**으로 비교하는 워크플로-네이티브
 벤치마크입니다. 입력·label·evidence를 모두 커밋한 **public frozen regression**이라 `sealed`·`unseen`으로
-부르지 않으며, 보호된 current-final 저장소는 운영하지 않아 `planned`로 남겨 둡니다. 모델 비교군(Base/SFT/
-PTQ/QAT ± retrieval)은 GPU 워크플로가 필요해 **전부 `planned`**이고, 실제 per-example 결과가 나오기 전까지
-README는 이 벤치마크를 `planned`로 유지합니다.
+부르지 않으며, 보호된 current-final 저장소는 운영하지 않아 `final` 슬라이스만 `planned`로 남겨 둡니다.
+모델 비교군 6개(Base/SFT/PTQ/QAT ± retrieval)는 **실제 A100에서 정주행**했고(Qwen3-8B, seeds 42/43/44),
+raw per-example·자동 summary가 [`historical_final/v1/`](benchmarks/pdf_native/historical_final/v1)에
+커밋돼 있습니다. VM은 실행 직후 해제했습니다.
+
+**결과 요약 (mean±std, 3-seed; aggregate는 per_example/*.jsonl에서 자동 재생성):**
+
+| arm | EM | F1 | cite-span | grounded | PII-leak | size GB |
+|---|---|---|---|---|---|---|
+| base_bf16 (closed-book) | 0.00 | 0.215 | 0.00 | 1.00 | 0.0 | — |
+| sft_bf16 (closed-book) | 0.00 | 0.218 | 0.00 | 0.972 | 0.0 | 15.27 |
+| sft_int4_ptq (closed-book) | 0.00 | 0.222 | 0.00 | 0.954 | 0.0 | **5.77** |
+| sft_int4_qat (closed-book) | 0.00 | 0.215 | 0.00 | 1.00 | 0.0 | **5.77** |
+| base_bf16 + retrieval | 0.00 | 0.333 | 0.452 | 0.917 | 0.0 | — |
+| **sft_bf16 + retrieval** | **0.226** | **0.444** | 0.452 | 0.861 | 0.0 | 15.27 |
+
+**정직한 해석 (paired bootstrap 95% CI):**
+- **Closed-book fine-tuning 효과는 없음**: SFT − Base(둘 다 무맥락) ΔF1 **+0.003**, CI [0.0, 0.024] →
+  유의하지 않음. disjoint train family로 SFT해도 eval 사실이 파라미터에 주입되지 않습니다.
+- **retrieval이 필요·유효**: Base+retrieval − Base ΔF1 **+0.119**, CI [0.051, 0.198] → **유의**.
+- **SFT의 가치는 retrieval과 함께 실현**: SFT+retrieval − Base+retrieval ΔF1 **+0.112**,
+  CI [0.056, 0.180] → **유의**. 즉 "실용적 PDF fine-tuning 효과"는 **open-book(검색 포함)에서만** 주장 가능.
+- **INT4 양자화는 사실상 무손실 압축**: PTQ/QAT F1 ≈ BF16, 크기 15.27GB→**5.77GB (2.65× 축소)**,
+  PII 유출 0, schema 유효율 1.0.
+- 작은 N(answerable 31)이라 CI가 넓게 설계돼 있고, mutable 숫자 슬라이스(vf*, N=10)는 모든 arm이 미해결
+  (retrieval recall@k≈0.42)입니다. 사전등록 임계값은 결과를 본 뒤에도 **수정하지 않았고**, closed-book
+  citation·sft_improves 기준은 설계상 **정직하게 fail**로 기록했습니다(`acceptance.yaml` 참조).
 
 - 위치: [`benchmarks/pdf_native/`](benchmarks/pdf_native/) — `benchmark.yaml`(10개 카테고리 coverage,
   metric 계약, 6개 실험군, 공정비교 조건), `acceptance.yaml`(**실행 전 고정**된 pre-registered 임계값),
