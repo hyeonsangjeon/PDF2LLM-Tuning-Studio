@@ -116,6 +116,27 @@ def _cmd_ask(args) -> int:
     return subprocess.call(cmd, cwd=_PKG_ROOT, env=_subenv())
 
 
+def _cmd_cook_demo(args) -> int:
+    # Delegated to the workflow via subprocess (core never imports workflows/torch).
+    cmd = [sys.executable, "-m", "workflows.pdf_native_post_training.cook_demo",
+           "--model", args.model, "--out", args.out]
+    if args.train:
+        cmd += ["--train", args.train]
+    if args.max_steps is not None:
+        cmd += ["--max-steps", str(args.max_steps)]
+    if args.max_seq_len is not None:
+        cmd += ["--max-seq-len", str(args.max_seq_len)]
+    if args.lr is not None:
+        cmd += ["--lr", str(args.lr)]
+    if args.limit is not None:
+        cmd += ["--limit", str(args.limit)]
+    if args.device:
+        cmd += ["--device", args.device]
+    if getattr(args, "dry_run", False):
+        cmd += ["--dry-run"]
+    return subprocess.call(cmd, cwd=_PKG_ROOT, env=_subenv())
+
+
 def _cmd_publish_hf(args) -> int:
     # Delegated to the workflow via subprocess (core never imports workflows).
     cmd = [sys.executable, "-m", "workflows.pdf_native_post_training.publish_hf",
@@ -130,6 +151,8 @@ def _cmd_publish_hf(args) -> int:
         cmd += ["--token", args.token]
     if args.private:
         cmd += ["--private"]
+    if getattr(args, "reference_scores", False):
+        cmd += ["--reference-scores"]
     if args.dry_run:
         cmd += ["--dry-run"]
     if args.no_card:
@@ -188,6 +211,21 @@ def build_parser() -> argparse.ArgumentParser:
     ak.add_argument("--model", default="qwen2.5:7b-instruct", help="--live 시 Ollama 모델 태그")
     ak.set_defaults(func=_cmd_ask)
 
+    ck = sub.add_parser("cook-demo",
+                        help="GPU 없이 소형 chat 모델을 실제 SFT 파인튜닝 → ask --hf 로 로드")
+    ck.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct",
+                    help="베이스 chat 모델 (기본 Qwen/Qwen2.5-0.5B-Instruct)")
+    ck.add_argument("--out", default="runs/cook_demo", help="출력 디렉터리 (기본 runs/cook_demo)")
+    ck.add_argument("--train", default=None, help="학습 코퍼스 train.jsonl 경로")
+    ck.add_argument("--max-steps", dest="max_steps", type=int, default=None, help="SFT 스텝 수")
+    ck.add_argument("--max-seq-len", dest="max_seq_len", type=int, default=None, help="토큰 상한")
+    ck.add_argument("--lr", type=float, default=None, help="학습률")
+    ck.add_argument("--limit", type=int, default=None, help="사용할 학습 예시 수")
+    ck.add_argument("--device", default=None, help="cpu / cuda (기본: 자동)")
+    ck.add_argument("--dry-run", dest="dry_run", action="store_true",
+                    help="학습 없이 변환된 학습 행 수만 출력(토치 불필요)")
+    ck.set_defaults(func=_cmd_cook_demo)
+
     ph = sub.add_parser("publish-hf",
                         help="파인튜닝 가중치를 HuggingFace Hub에 업로드 (모델 카드 자동 생성)")
     ph.add_argument("--model-dir", dest="model_dir", required=True,
@@ -200,6 +238,9 @@ def build_parser() -> argparse.ArgumentParser:
     ph.add_argument("--summary", default=None, help="점수 출처 summary.json 경로")
     ph.add_argument("--token", default=None, help="HF write 토큰 (기본: $HF_TOKEN)")
     ph.add_argument("--private", action="store_true", help="비공개 저장소로 생성")
+    ph.add_argument("--reference-scores", dest="reference_scores", action="store_true",
+                    help="점수표를 '8B 벤치마크 참조값'으로 라벨 (소형 데모 업로드용; "
+                         "베이스가 8B와 다르면 자동)")
     ph.add_argument("--dry-run", dest="dry_run", action="store_true",
                     help="업로드 없이 카드/파일 목록만 출력(토큰 불필요)")
     ph.add_argument("--no-card", dest="no_card", action="store_true",

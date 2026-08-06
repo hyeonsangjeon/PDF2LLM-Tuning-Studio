@@ -29,6 +29,34 @@ def test_model_card_is_honest_and_actionable():
     assert "합성" in card  # synthetic-data caveat
 
 
+def test_reference_scores_card_relabels_for_small_model():
+    # Uploading a non-8B model (e.g. CPU demo) must NOT present 8B scores as its own.
+    card = PH.build_model_card(_summary(), repo_id="me/pdf2llm-cook-demo",
+                               base_model="Qwen/Qwen2.5-0.5B-Instruct",
+                               arm="sft_bf16_retrieval", reference_scores=True)
+    assert "base_model: Qwen/Qwen2.5-0.5B-Instruct" in card
+    # scores explicitly disowned + labelled as the 8B reference
+    assert "이 업로드 모델 자체의 점수가 아닙니다" in card
+    assert "이 모델의 점수가 아님" in card
+    assert "소형 데모" in card
+    # default (8B) card must NOT carry the disclaimer
+    d = PH.build_model_card(_summary(), repo_id="me/pdf2llm-sft-qwen3-8b",
+                            base_model="Qwen/Qwen3-8B", arm="sft_bf16_retrieval")
+    assert "이 모델의 점수가 아님" not in d
+
+
+def test_reference_scores_auto_enabled_on_base_mismatch(tmp_path, capsys):
+    # publish() must auto-detect a non-8B base and relabel the card (dry-run, no token).
+    d = tmp_path / "m"
+    d.mkdir()
+    (d / "config.json").write_text("{}")
+    rc = PH.publish(str(d), "me/cook-demo", base_model="Qwen/Qwen2.5-0.5B-Instruct",
+                    arm="sft_bf16_retrieval", summary_path=PH._DEFAULT_SUMMARY, dry_run=True)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "이 모델의 점수가 아님" in out
+
+
 def test_dry_run_prints_card_without_upload(tmp_path, capsys):
     d = tmp_path / "sft"
     d.mkdir()

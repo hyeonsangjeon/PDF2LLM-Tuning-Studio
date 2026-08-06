@@ -6,7 +6,7 @@ PKG := pdf_qa_extraction
 PY  ?= python3
 RUN := cd $(PKG) && PYTHONPATH=. $(PY) -m pdf_qa.cli
 
-.PHONY: help demo-replay demo-live-ollama demo-train-smoke verify-demo ask ask-hf bench publish-hf build-fixture test scan-secrets install install-workflow
+.PHONY: help demo-replay demo-live-ollama demo-train-smoke verify-demo ask ask-hf cook-demo bench publish-hf build-fixture test scan-secrets install install-workflow
 
 help:
 	@echo "PDF2LLM-Tuning-Studio targets:"
@@ -16,6 +16,7 @@ help:
 	@echo "  make verify-demo        Run the replay demo and assert evidence/eval integrity"
 	@echo "  make ask                Ask the benchmark's real A100-trained models a question (offline replay)"
 	@echo "  make ask-hf HF=<repo|dir> Q=\"...\"  Load REAL fine-tuned weights (HF/local) and infer live"
+	@echo "  make cook-demo               Cook a REAL small fine-tuned model on CPU (no GPU/token) → ask --hf"
 	@echo "  make bench              Reproduce the 6-arm benchmark from scratch on YOUR GPU (writes runs/bench)"
 	@echo "  make publish-hf MODEL_DIR=<dir> REPO=<id>  Upload fine-tuned weights to HuggingFace Hub"
 	@echo "  make build-fixture      Regenerate the synthetic demo fixture (PDFs + gold Q&A)"
@@ -44,6 +45,13 @@ HF ?=
 Q  ?= 2024년 연간 매출액은 얼마입니까?
 ask-hf:
 	$(RUN) ask --hf "$(HF)" -q "$(Q)" $(ARGS)
+
+# Cook a REAL small fine-tuned model on CPU — no GPU, no HF token. Produces a self-contained
+# model dir that `ask --hf` loads for genuine live inference (not a replay / not a mockup).
+#   make cook-demo && make ask-hf HF=runs/cook_demo
+COOK_OUT ?= runs/cook_demo
+cook-demo:
+	$(RUN) cook-demo --out "$(COOK_OUT)" $(ARGS)
 
 # Reproduce the 6-arm benchmark FROM SCRATCH on your own GPU (trains real fine-tuned weights).
 # Writes to runs/bench so it never overwrites the committed historical_final results.

@@ -103,6 +103,7 @@ make ask ARGS='--live -q "4분기 매출이 가장 높았나요?"'
 |---|---|---|---|---|---|
 | **1 재생** | `pdf2llm ask` | 실제 A100 출력(녹음) | 없음(조회) | 0-설정·오프라인 | 즉시 "짠" 체험 |
 | **2 HF-로드** | `pdf2llm ask --hf <repo\|dir>` | **실제 파인튜닝(HF/로컬)** | **실시간 `transformers`** | GPU 권장(또는 인내심) | "목업 아닌" 실추론 |
+| **2b CPU-cook** | `make cook-demo` → `ask --hf runs/cook_demo` | **실제 파인튜닝(소형·로컬)** | **실시간 `transformers`** | GPU·토큰 불필요(CPU 수 분~십수 분) | GPU 없이 진짜 가중치 |
 | **3 처음부터** | `make bench` (+ `publish-hf`) | 내 GPU가 새로 학습 | 실시간 | 내 GPU(~A100) | 논문급 완전 재현 |
 
 ### Tier 2 — 파인튜닝 가중치를 실제 로드해 아무 문장이나 물어보기
@@ -129,6 +130,23 @@ pdf2llm ask --hf your-name/pdf2llm-sft-qwen3-8b -q "…" --no-retrieval
 ✅ 답변    : 2024년 연간 매출액은 1,250억 원입니다.   (실시간 생성 4.3s)
 📄 근거    : p1-b3(p1), p3-b1(p3), p1-b4(p1), p2-b6(p2)
 ```
+
+#### Tier 2를 **GPU·토큰 없이** 진짜로 — `make cook-demo` (실제 소형 파인튜닝)
+
+8B 를 학습할 GPU도, HF 계정도 없어도 **진짜 파인튜닝 가중치**를 얻는 지름길입니다.
+`cook-demo` 는 저장소의 합성 금융 코퍼스로 작은 chat 모델(`Qwen/Qwen2.5-0.5B-Instruct`)을
+**CPU에서 실제 SFT** 해 `config.json`+가중치+토크나이저가 담긴 자립형 디렉터리를 만듭니다.
+목업도 JSON 재생도 아니고 — 그 가중치를 그대로 `ask --hf` 가 로드해 실시간 추론합니다:
+
+```bash
+make cook-demo                                  # CPU 기본 6스텝 ≈ 수 분(코어 수에 따라 십수 분), 베이스만 다운로드
+make ask-hf HF=runs/cook_demo Q="2024년 연간 매출액은 얼마입니까?"   # 방금 구운 가중치를 실제 로드→추론
+```
+
+> 이건 **소형 데모**입니다(방법론·재현 경로 증명용). 논문급 점수는 8B(`make bench`)에서 나옵니다.
+> full-parameter CPU 학습이라 스텝당 수십 초입니다 — 더 굽고 싶으면 `ARGS="--max-steps 40"` 처럼 늘리세요.
+> tiny-gpt2 대신 0.5B 를 쓰는 이유: `ask --hf` 가 벤치마크와 동일한 chat 템플릿을 적용하기 때문입니다.
+> 이 데모 모델을 HF에 올리면 카드가 자동으로 점수를 **"8B 참조값(이 모델 점수 아님)"** 으로 라벨합니다.
 
 ### Tier 3 — `make bench` 로 처음부터 재현 (내 GPU에서 학습→평가→가중치 생성)
 
@@ -222,6 +240,7 @@ runs/<run_id>/
 | `verify-demo` | `[verify-demo] PASS` | 임시 run-dir(무결성 assert 후 정리) |
 | `ask` | `💡 짠! …`(질문·정답·6개 arm 답 비교) | 없음(커밋된 A100 per-example 결과를 읽어 출력) |
 | `ask --hf <repo\|dir>` | `✅ 답변 : …`(실시간 생성 Ns) | 없음(파인튜닝 가중치를 실제 로드해 실시간 추론) |
+| `cook-demo` | `✅ 완료: {…"loss_last"…}` | `runs/cook_demo/`(실제 소형 파인튜닝 모델; CPU·GPU 자동). `--dry-run` 은 행 수만 |
 | `publish-hf` | `✅ 업로드 완료 → https://huggingface.co/…` | HF 저장소(가중치 + 자동 모델 카드). `--dry-run` 은 미리보기만 |
 | `bench` | `[run_arms] … measured_arms=[…]` | `runs/bench/`(per_example·summary·report). GPU 필요 |
 | `demo-train-smoke` | 9단계(`train_smoke` 포함) 완료 요약 | `runs/<id>/artifacts/`에 학습 모델 |
